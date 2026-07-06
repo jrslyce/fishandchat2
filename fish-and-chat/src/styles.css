@@ -55,6 +55,33 @@ body {
 /* Title screen                                                            */
 /* ---------------------------------------------------------------------- */
 
+@keyframes sway {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(1.5deg);
+  }
+}
+
+@keyframes sway-rope-left {
+  0%, 100% {
+    transform: rotateZ(-0.5deg);
+  }
+  50% {
+    transform: rotateZ(0.5deg);
+  }
+}
+
+@keyframes sway-rope-right {
+  0%, 100% {
+    transform: rotateZ(0.5deg);
+  }
+  50% {
+    transform: rotateZ(-0.5deg);
+  }
+}
+
 #title-screen {
   position: absolute;
   inset: 0;
@@ -68,14 +95,49 @@ body {
   background: radial-gradient(circle at 50% 30%, rgba(255, 236, 200, 0.55), rgba(191, 227, 216, 0.92));
   backdrop-filter: blur(2px);
   text-align: center;
+  perspective: 1000px;
+  overflow: visible;
+}
+
+/* Rope extensions using pseudo-elements on title-screen */
+#title-screen::before {
+  content: '';
+  position: absolute;
+  top: max(24px, env(safe-area-inset-top));
+  left: calc(50% - 180px);
+  width: 8px;
+  height: calc(50vh - 120px);
+  background: linear-gradient(180deg, #8B7355 0%, #A0826D 50%, #8B7355 100%);
+  border-radius: 4px;
+  z-index: 15;
+  animation: sway-rope-left 3s ease-in-out infinite;
+  transform-origin: center bottom;
+  box-shadow: 1px 2px 3px rgba(0, 0, 0, 0.3);
+}
+
+#title-screen::after {
+  content: '';
+  position: absolute;
+  top: max(24px, env(safe-area-inset-top));
+  right: calc(50% - 180px);
+  width: 8px;
+  height: calc(50vh - 120px);
+  background: linear-gradient(180deg, #8B7355 0%, #A0826D 50%, #8B7355 100%);
+  border-radius: 4px;
+  z-index: 15;
+  animation: sway-rope-right 3s ease-in-out infinite;
+  transform-origin: center bottom;
+  box-shadow: -1px 2px 3px rgba(0, 0, 0, 0.3);
 }
 
 #title-logo {
   max-width: min(420px, 82vw);
   width: 100%;
   height: auto;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-panel);
+  position: relative;
+  z-index: 16;
+  animation: sway 3s ease-in-out infinite;
+  transform-origin: center top;
 }
 
 #title-tagline {
