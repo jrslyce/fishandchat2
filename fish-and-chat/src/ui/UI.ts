@@ -539,6 +539,14 @@ export class UI {
 
   private renderCraft(): void {
     const state = this.economy.snapshot;
+    const canAffordMaterials = (cost: Partial<Record<string, number>>): boolean => {
+      return Object.entries(cost).every(([mat, needed]) => {
+        if (!needed) return true;
+        return (state.materials[(mat as any) as keyof typeof state.materials] ?? 0) >= needed;
+      });
+    };
+
+    // Materials section at top
     const materialEntries = Object.entries(state.materials).filter(([, amount]) => amount > 0);
     const materialsLine = materialEntries.length
       ? materialEntries.map(([id, amount]) => {
@@ -547,10 +555,16 @@ export class UI {
         }).join('')
       : '<span class="modal-note">No materials yet — recycle trash below.</span>';
 
+    const trashCount = state.basket.filter((item) => item.isTrash).length;
+
+    // Upgrade rows with material availability checks
     const upgradeRows = UPGRADE_CATALOG.map((upgrade) => {
       const tier = state.upgrades[upgrade.id] ?? 0;
       const maxed = tier >= upgrade.maxTier;
       const cost = upgrade.costPerTier[Math.min(tier, upgrade.maxTier - 1)];
+      const hasCoins = state.coins >= cost.coins;
+      const hasMaterials = canAffordMaterials(cost.materials);
+      const canCraft = !maxed && hasCoins && hasMaterials;
       const costLabel = Object.entries(cost.materials)
         .map(([m, a]) => `${a} ${m}`)
         .join(', ');
@@ -563,12 +577,13 @@ export class UI {
             <span class="row-meta">${maxed ? 'Maxed' : `${cost.coins}🪙${costLabel ? `, ${costLabel}` : ''}`}</span>
           </div>
           <div class="row-actions">
-            <button class="btn-small" data-action="buy-upgrade" data-id="${upgrade.id}" ${maxed ? 'disabled' : ''}>${maxed ? 'Maxed' : 'Craft'}</button>
+            <button class="btn-small ${!canCraft && !maxed ? 'btn-disabled' : ''}" data-action="buy-upgrade" data-id="${upgrade.id}" ${!canCraft && !maxed ? 'disabled' : maxed ? 'disabled' : ''}>${maxed ? 'Maxed' : 'Craft'}</button>
           </div>
         </li>`;
     }).join('');
 
-    const trashCount = state.basket.filter((item) => item.isTrash).length;
+    // Lucky Ducky
+    const duckyCanCraft = (state.materials.rubber ?? 0) >= 2 && (state.materials.fabric ?? 0) >= 1;
 
     const duckyActive = this.economy.isLuckyDuckyActive();
     const duckySec = this.economy.luckyDuckyTimeRemainingSec();
@@ -584,10 +599,23 @@ export class UI {
     this.modalHost.innerHTML = this.modalShell(
       'Crafting Bench',
       `
+        <div class="craft-header">
+          <div class="craft-materials-section">
+            <strong>Materials stash:</strong>
+            <div class="materials-chips-list">${materialsLine}</div>
+          </div>
+          <div class="craft-actions-row">
+            <span class="craft-trash-count">Trash in basket: ${trashCount}</span>
+            <button class="btn-small" data-action="recycle-all" ${trashCount === 0 ? 'disabled' : ''}>Recycle All</button>
+            <button class="btn-small" id="btn-debug-garbage">+5 Trash (Debug)</button>
+          </div>
+        </div>
+
         ${duckyTimerMarkup}
+
         <h4 class="modal-subhead">Upgrades</h4>
         <ul class="modal-list">${upgradeRows}</ul>
-        
+
         <h4 class="modal-subhead">Consumables</h4>
         <ul class="modal-list">
           <li class="row">
@@ -598,20 +626,11 @@ export class UI {
               <span class="row-meta">Cost: 2 rubber, 1 fabric</span>
             </div>
             <div class="row-actions">
-              <button class="btn-small" data-action="craft-ducky" ${((state.materials.rubber ?? 0) < 2 || (state.materials.fabric ?? 0) < 1) ? 'disabled' : ''}>Craft</button>
+              <button class="btn-small ${!duckyCanCraft ? 'btn-disabled' : ''}" data-action="craft-ducky" ${!duckyCanCraft ? 'disabled' : ''}>Craft</button>
               <button class="btn-small" data-action="use-ducky" ${(state.luckyDuckyCount ?? 0) === 0 ? 'disabled' : ''}>Use</button>
             </div>
           </li>
         </ul>
-        
-        <div class="craft-materials-row">
-          <strong>Materials stash:</strong>
-          <div class="materials-chips-list">${materialsLine}</div>
-        </div>
-        <p class="modal-note">Trash in basket: ${trashCount} 
-          <button class="btn-small" data-action="recycle-all" ${trashCount === 0 ? 'disabled' : ''}>Recycle All</button>
-          <button class="btn-small" id="btn-debug-garbage" style="margin-left: 8px;">+5 Trash (Debug)</button>
-        </p>
       `,
     );
     this.bindModalActions();

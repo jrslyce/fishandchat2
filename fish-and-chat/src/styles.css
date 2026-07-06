@@ -869,6 +869,52 @@ body {
   color: #ffdd00;
 }
 
+.craft-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  background: var(--paper-dark);
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+}
+
+.craft-materials-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.craft-materials-section strong {
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+.materials-chips-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.craft-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.craft-trash-count {
+  font-size: 0.85rem;
+  color: var(--ink);
+  flex-grow: 1;
+}
+
+.btn-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .ducky-timer-banner {
   background: #fff9db;
   border: 1px solid #ffd43b;
