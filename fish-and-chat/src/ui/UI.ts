@@ -9,6 +9,7 @@ import {
   type UpgradeId,
 } from '../game/data';
 import type { Economy, RecycleResult } from '../game/Economy';
+import { SPRITE_MANIFEST } from '../assets/spriteManifest';
 import type { AudioEngine } from '../core/AudioEngine';
 import type { CraftingSystem } from '../systems/CraftingSystem';
 import type { FishbotSystem } from '../systems/FishbotSystem';
@@ -38,6 +39,16 @@ function catchName(catchId: string): string {
 
 function icon(src: string, alt: string, cls = 'icon-img'): string {
   return `<img class="${cls}" src="${src}" alt="${alt}" />`;
+}
+
+function spriteFor(id: string): string | null {
+  return SPRITE_MANIFEST[id] ?? null;
+}
+
+function rowIcon(spriteId: string, alt: string, fallback = ''): string {
+  const sprite = spriteFor(spriteId);
+  if (!sprite) return fallback ? `<div class="row-icon">${fallback}</div>` : '';
+  return `<div class="row-icon">${icon(sprite, alt)}</div>`;
 }
 
 /**
@@ -230,7 +241,7 @@ export class UI {
     setTimeout(() => fw.remove(), 3000);
   }
 
-  private showRecycleRollText(result: RecycleResult, catchId: string): void {
+  private showRecycleRollText(result: RecycleResult, _catchId: string): void {
     const el = document.createElement('div');
     el.className = 'recycle-roll-anim';
     
@@ -392,8 +403,10 @@ export class UI {
 
   private showCatchCard(result: CatchResult): void {
     const rarityLabel = result.rarity.toUpperCase();
+    const sprite = spriteFor(result.catchId);
     this.catchCard.innerHTML = `
       <div class="catch-card-inner rarity-${result.rarity}">
+        ${sprite ? icon(sprite, result.name, 'catch-sprite') : ''}
         <div class="catch-rarity">${rarityLabel}</div>
         <div class="catch-name">${result.name}</div>
         <div class="catch-weight">${result.weightKg.toFixed(2)} kg</div>
@@ -439,7 +452,7 @@ export class UI {
       const equipped = state.equippedBaitId === bait.id;
       return `
         <li class="row">
-          <div class="row-icon">${icon(ICON.bait, bait.name)}</div>
+          ${rowIcon(bait.id, bait.name, icon(ICON.bait, bait.name))}
           <div class="row-body">
             <strong>${bait.name}</strong>
             <span class="row-meta">${bait.free ? 'always available' : `${bait.costPerTen}🪙 / 10`} &middot; have ${bait.free ? '&infin;' : owned}</span>
@@ -455,6 +468,7 @@ export class UI {
       const owned = state.fishbots[bot.id]?.owned;
       return `
         <li class="row">
+          ${rowIcon(bot.id, bot.name)}
           <div class="row-body">
             <strong>${bot.name}</strong>
             <span class="row-meta">${bot.cost}🪙 &middot; ${bot.baseIntervalSeconds}s cycle</span>
@@ -490,12 +504,13 @@ export class UI {
 
     const rows = state.basket.map((item, index) => {
       if (item.isTrash) {
-        return `<li class="row"><div class="row-body"><strong>${catchName(item.catchId)}</strong><span class="row-meta">trash — recycle at the Crafting Bench instead</span></div></li>`;
+        return `<li class="row">${rowIcon(item.catchId, catchName(item.catchId))}<div class="row-body"><strong>${catchName(item.catchId)}</strong><span class="row-meta">trash — recycle at the Crafting Bench instead</span></div></li>`;
       }
       const species = FISH_CATALOG.find((f) => f.id === item.catchId);
       const value = species ? Math.round(species.baseValue * this.economy.saleMultiplier()) : 0;
       return `
         <li class="row">
+          ${rowIcon(item.catchId, catchName(item.catchId))}
           <div class="row-body">
             <strong>${catchName(item.catchId)}</strong>
             <span class="row-meta">${item.weightKg.toFixed(2)}kg &middot; ${value} ${icon(ICON.coin, 'coins', 'inline-icon')}</span>
@@ -526,7 +541,10 @@ export class UI {
     const state = this.economy.snapshot;
     const materialEntries = Object.entries(state.materials).filter(([, amount]) => amount > 0);
     const materialsLine = materialEntries.length
-      ? materialEntries.map(([id, amount]) => `<span class="material-chip">${amount} ${id}</span>`).join('')
+      ? materialEntries.map(([id, amount]) => {
+          const sprite = spriteFor(id);
+          return `<span class="material-chip">${sprite ? icon(sprite, id, 'inline-icon') : ''}${amount} ${id}</span>`;
+        }).join('')
       : '<span class="modal-note">No materials yet — recycle trash below.</span>';
 
     const upgradeRows = UPGRADE_CATALOG.map((upgrade) => {
@@ -538,7 +556,7 @@ export class UI {
         .join(', ');
       return `
         <li class="row">
-          <div class="row-icon">${icon(ICON.hammer, upgrade.name)}</div>
+          ${rowIcon(upgrade.id, upgrade.name, icon(ICON.hammer, upgrade.name))}
           <div class="row-body">
             <strong>${upgrade.name}</strong> <span class="tier-badge">${tier}/${upgrade.maxTier}</span>
             <span class="row-meta">${upgrade.description}</span>
@@ -573,7 +591,7 @@ export class UI {
         <h4 class="modal-subhead">Consumables</h4>
         <ul class="modal-list">
           <li class="row">
-            <div class="row-icon">🦆</div>
+            ${rowIcon('lucky-ducky', 'Lucky Rubber Ducky', '🦆')}
             <div class="row-body">
               <strong>Lucky Rubber Ducky</strong>
               <span class="row-meta">Boosts salvage rate to 85% for 5 minutes &middot; have ${state.luckyDuckyCount ?? 0}</span>
@@ -608,8 +626,13 @@ export class UI {
           : FISH_CATALOG.filter((f) => f.rarity === rarity).map((f) => ({ id: f.id, name: f.name, flavor: f.flavor }));
       const rows = entries.map((entry) => {
         const known = discovered.has(entry.id);
+        const sprite = spriteFor(entry.id);
+        const spriteMarkup = sprite
+          ? `<div class="row-icon">${icon(sprite, known ? entry.name : 'undiscovered', known ? 'icon-img' : 'icon-img sprite-silhouette')}</div>`
+          : '';
         return `
           <li class="row collection-row ${known ? '' : 'collection-unknown'}">
+            ${spriteMarkup}
             <div class="row-body">
               <strong>${known ? entry.name : '???'}</strong>
               <span class="row-meta">${known ? entry.flavor : 'Not yet discovered.'}</span>

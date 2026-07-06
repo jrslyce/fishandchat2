@@ -389,6 +389,13 @@ body {
 .catch-card-inner.rarity-epic { border-color: #b07de0; }
 .catch-card-inner.rarity-legendary { border-color: #f2b33a; }
 
+.catch-sprite {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto 6px;
+}
 .catch-rarity {
   font-size: 0.72rem;
   letter-spacing: 0.14em;
@@ -662,6 +669,11 @@ body {
 
 .collection-unknown strong {
   color: var(--ink-soft);
+}
+
+.sprite-silhouette {
+  filter: brightness(0);
+  opacity: 0.35;
 }
 
 /* Settings */

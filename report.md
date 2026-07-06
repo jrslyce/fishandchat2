@@ -503,3 +503,30 @@ Verification: `npm run build` clean, `npm run test` 2/2 passing (confirming the 
 - **Ripples bounding**: Constrained the expanding bobber ripples based on their distance to the pond center, fading them before they cross the boundary (fixing the "invisible edge" cutoff). Corrected `renderOrder` to prevent the water mesh drawing over them.
 - **Barnaby Animation**: Scaled Barnaby down to `1.1`. Executed the Tripo `character-pipeline` to generate `idle` and `walk` FBX clips. Configured an `AnimationMixer` in `Game.ts` to play the clips on a procedural randomized patrol loop across the front of the stall.
 - **Ambience & Sky Dimming**: Regenerated the `ambience-forest.mp3` via ElevenLabs using a prompt tailored for frogs/crickets and actively excluding high-pitched whining. Dropped `scene.backgroundIntensity` to `0.65` and raised the post-processing bloom threshold from `0.82` to `0.9` to prevent the background sky plate from overpowering the scene.
+
+## Sprite Pass
+
+Generated real 2D sprites for every catalog item (fish, trash, bait, upgrades, fishbots, materials, and the two specials) and wired them into the UI, per `plan-sprites.md`.
+
+**Inventory**: derived fresh from `src/game/data.ts` at execution time — 25 fish (incl. the 5 make-believe, minSkill-gated species), 6 trash, 4 bait, 8 upgrades, 2 fishbots, 6 materials, plus `lucky-ducky` and `treasure` (Sunken Coin Purse) = 53 sprites total. Golden/Salvaged/Double-Catch variants were intentionally **not** given separate sprites — they're runtime name prefixes only.
+
+**Generation**: 9 sheets via Gemini (`threejs-image-generator`, 2K resolution, 2×3 grid layout, plain white background per sheet — not "transparent," which bakes a fake opaque checkerboard). A fixed style-prefix prompt (cozy flat-pastel, chunky rounded shapes, thick dark-brown outlines) kept all 53 sprites visually consistent. Every sheet was visually verified cell-by-cell against the intended manifest (`assets-src/sprites/manifest.md`) before slicing. Two sheets needed one regeneration each:
+- **Sheet 07** (`special-upgrades`): the `led-bobber` cell rendered with a center button and black banding that read as a Pokéball rather than a fishing bobber — re-prompted with explicit "no center button, no black band, not a toy ball" language.
+- **Sheet 08** (`upgrades2-fishbots-material`): Gemini ignored the 2×3 layout entirely and produced an 8-item 4×2 grid, including two items (a goldfish, a cat/otter) that map to no catalog id. Re-prompted with "EXACTLY 6... strict 2 rows by 3 columns... no extra items" — regeneration came back correct.
+
+Both regenerated sheets, and all 7 originally-correct sheets, were re-verified against the manifest before slicing.
+
+**Slicing**: wrote a reusable `fish-and-chat/scripts/slice_sprites.py` (PIL + numpy) — grid-splits each sheet, removes background via two-pass flood fill (border-connected regions, then a global pass for enclosed pockets like the basket handle gap), tight-crops with padding, downscales to ≤256px longest side (LANCZOS), and quantizes to a 256-color palette (`Image.Quantize.FASTOCTREE`) to control payload size. Verified every sprite's alpha channel is real (`getchannel('A').getextrema()` not `(255,255)` for all 53 files) and spot-checked several (duck, basket, chrono-carp's glow aura) for clean edges. Emitted `src/assets/spriteManifest.ts` (generated id→URL map).
+
+**Payload**: 53 PNGs, 684KB total (well under the ~1.5MB target) — quantization brought this down from an initial 3.3MB.
+
+**UI wiring** (`src/ui/UI.ts`, `src/styles.css`): added a `spriteFor(id)` lookup with graceful fallback to the existing generic icons (never a broken `<img>`).
+- Catch card: sprite (~72px, `.catch-sprite`) added above the name — verified via a live debug-perfect-cast catch (Lantern Catfish) that the correct sprite renders in the non-hidden card.
+- Shop: bait rows and fishbot rows now show real sprites in place of the generic bait-can icon.
+- Market: basket rows (both fish and trash) show per-item sprites.
+- Crafting Bench: upgrade rows, the Lucky Ducky consumable row, and material stash chips all show real sprites.
+- Collection: added sprites to every entry; undiscovered entries render the sprite as a silhouette (`filter: brightness(0); opacity: 0.35` via a new `.sprite-silhouette` class) instead of a bare "???" — verified visually (boot/can shapes recognizable but obscured, "???" label intact).
+
+**Verification**: `npm run build` clean (fixed one unrelated pre-existing `noUnusedParameters` TS error in `showRecycleRollText` while in the file). Playwright: mobile-safari passes 2/2 runs; **desktop-chrome fails on a cast-lock timeout (`state === 'waiting'` never reached) — confirmed via `git stash` that this reproduces identically on the pre-sprite-work code, so it's a pre-existing regression, not caused by this pass.** Flagging for the still-open Phase 6 QA task rather than fixing here (out of scope for sprite wiring). Manually verified every modal (Shop, Market, Craft, Collection) on desktop and a mobile-viewport spot-check via screenshots; zero console errors/warnings; zero failed network requests (checked via the network panel after opening every modal).
+
+**Gaps**: none of the 53 catalog ids are missing a sprite. `treasure`'s catch-card sprite works (confirmed the manifest has an entry and `CatchResult.catchId` flows straight to `spriteFor()`, bypassing the catalog-lookup gap that would otherwise miss it), though `treasure` still never reaches the basket/Market per existing `CatchResolver.ts` logic (`addedToBasket: false`, a pre-existing gap unrelated to sprites).
