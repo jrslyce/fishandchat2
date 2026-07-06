@@ -1,5 +1,5 @@
 import type { Economy } from '../game/Economy';
-import type { UpgradeId } from '../game/data';
+import type { ClothingSlot, UpgradeId } from '../game/data';
 import type { EventBus } from '../core/EventBus';
 import type { GameEventMap } from '../game/events';
 
@@ -95,5 +95,73 @@ export class CraftingSystem {
   addRandomGarbage(count: number): void {
     this.economy.addRandomGarbage(count);
     this.events.emit('upgradePurchased', { id: 'carbon-rod', ok: false }); // cheap way to refresh open modal
+  }
+
+  purchasePremiumItem(id: string): boolean {
+    const result = this.economy.buyPremiumItem(id);
+    this.events.emit('premiumItemPurchased', { id, ok: result.ok });
+    if (result.ok) this.events.emit('candyBarsChanged', {});
+    return result.ok;
+  }
+
+  purchaseMaterialBundle(id: string): boolean {
+    const result = this.economy.buyMaterialBundle(id);
+    this.events.emit('materialBundlePurchased', { id, ok: result.ok });
+    if (result.ok) this.events.emit('candyBarsChanged', {});
+    return result.ok;
+  }
+
+  purchaseBoxOfNotFish(): boolean {
+    const result = this.economy.buyBoxOfNotFish();
+    this.events.emit('boxOfNotFishOpened', { ok: result.ok, itemsGranted: result.itemsGranted });
+    if (result.ok) {
+      this.events.emit('candyBarsChanged', {});
+      this.events.emit('toast', { message: `Opened a Box of Not Fish — ${result.itemsGranted} items!` });
+    }
+    return result.ok;
+  }
+
+  /** Credits candy bars after a Muxy bits purchase completes. */
+  grantCandyBars(amount: number): void {
+    this.economy.addCandyBars(amount);
+    this.economy.persist();
+    this.events.emit('candyBarsChanged', {});
+    this.events.emit('toast', { message: `+${amount} Candy Bars!` });
+  }
+
+  // --- Player character: closet -------------------------------------------
+
+  purchaseClothing(id: string): boolean {
+    const result = this.economy.buyClothing(id);
+    this.events.emit('clothingPurchased', { id, ok: result.ok });
+    if (result.ok) {
+      this.events.emit('coinsChanged', {});
+      this.economy.persist();
+    }
+    return result.ok;
+  }
+
+  equipClothing(slot: ClothingSlot, id: string | null): boolean {
+    const ok = this.economy.equipClothing(slot, id);
+    if (ok) {
+      this.events.emit('clothingEquipped', { slot, id });
+      this.economy.persist();
+    }
+    return ok;
+  }
+
+  setBaseTone(id: string): boolean {
+    const ok = this.economy.setBaseTone(id);
+    if (ok) {
+      this.events.emit('baseToneChanged', { id });
+      this.economy.persist();
+    }
+    return ok;
+  }
+
+  setDisplayNameOverride(name: string | null): void {
+    this.economy.setDisplayNameOverride(name);
+    this.events.emit('displayNameChanged', { name: this.economy.displayName() });
+    this.economy.persist();
   }
 }

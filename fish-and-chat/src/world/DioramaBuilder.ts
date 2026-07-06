@@ -28,6 +28,8 @@ export interface DioramaResult {
   barnabySlot: THREE.Group;
   /** Empty anchor group where the fishbot's GLB is attached, positioned on the dock. */
   fishbotSlot: THREE.Group;
+  /** Empty anchor group where the player's voxel character is attached, on its own patch of bank. */
+  playerSlot: THREE.Group;
   /** Lilypad instances, animated with a gentle bob in the update loop. */
   lilypads: THREE.Object3D[];
   clouds: THREE.Object3D[];
@@ -53,6 +55,7 @@ const STRUCTURE_EXCLUSIONS: ExclusionZone[] = [
   { x: -3.4, z: 3.2, radius: 0.5 }, // lantern
   { x: 3.4, z: -2.6, radius: 0.5 }, // lantern
   { x: 2.1, z: 2.5, radius: 0.5 }, // shore boot
+  { x: 2.2, z: -2.3, radius: 1.0 }, // player character — own patch of bank, opposite side from Barnaby's stall
 ];
 
 function isExcluded(x: number, z: number, margin = 0): boolean {
@@ -146,6 +149,14 @@ export function buildDiorama(theme: ThemeId, materials: MaterialLibrary): Dioram
   fishbotSlot.name = 'fishbotSlot';
   fishbotSlot.position.set(1.4, 0.56, 2.05); // nudged landward to make room for lantern
   root.add(fishbotSlot);
+
+  // Own patch of bank, opposite side of the pond from Barnaby's stall — a
+  // quiet solo fishing spot rather than crowding the already-busy foreground.
+  const playerSlot = new THREE.Group();
+  playerSlot.name = 'playerSlot';
+  playerSlot.position.set(2.2, 0.5, -2.3);
+  playerSlot.rotation.y = Math.PI * 0.35; // facing roughly toward the pond
+  root.add(playerSlot);
 
   const lanternPositions: [number, number, number][] = [
     [-3.4, 3.2, 1.4],
@@ -271,6 +282,7 @@ export function buildDiorama(theme: ThemeId, materials: MaterialLibrary): Dioram
     root,
     barnabySlot,
     fishbotSlot,
+    playerSlot,
     lilypads,
     clouds,
     diagnostics: { meshCount, propTypeCount: propTypes.size },

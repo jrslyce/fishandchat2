@@ -8,10 +8,13 @@ import { Loop } from '../core/Loop';
 import { createRenderer, resizeRenderer } from '../core/Renderer';
 import { SaveManager } from '../core/SaveManager';
 import { Bobber } from '../entities/Bobber';
+import { PlayerCharacter } from '../entities/character/PlayerCharacter';
 import { loadImportedAsset, normalizedClone, type ImportedAsset } from '../assets/ImportedAssetRegistry';
 import { MODEL_SOURCE_MANIFEST_PUBLIC, SFX_MANIFEST } from '../assets/manifest';
 import { CraftingSystem } from '../systems/CraftingSystem';
 import { FishbotSystem } from '../systems/FishbotSystem';
+import { MuxySystem } from '../systems/MuxySystem';
+import { TwitchAuthSystem } from '../systems/TwitchAuthSystem';
 import { MarketSystem } from '../systems/MarketSystem';
 import { RenderPipeline } from '../systems/RenderPipeline';
 import { ThemeManager } from '../systems/ThemeManager';
@@ -19,7 +22,7 @@ import { VfxSystem } from '../systems/VfxSystem';
 import { WaterSystem } from '../systems/WaterSystem';
 import { THEME_PALETTES } from '../assets/MaterialLibrary';
 import { Economy } from './Economy';
-import { FishingStateMachine } from './GameState';
+import { FishingStateMachine, type FishingPhase } from './GameState';
 import { createDefaultSaveState, type GameSaveStateV1 } from './SaveState';
 import { WATER_DISC_RADIUS, type DioramaResult } from '../world/DioramaBuilder';
 import type { GameEventMap } from './events';
@@ -73,6 +76,8 @@ export class Game {
   private readonly marketSystem: MarketSystem;
   private readonly craftingSystem: CraftingSystem;
   private readonly fishbotSystem: FishbotSystem;
+  private readonly muxySystem: MuxySystem;
+  private readonly twitchAuthSystem: TwitchAuthSystem;
   private readonly fishingState: FishingStateMachine;
   private readonly ui: UI;
   private readonly bobber: Bobber;
@@ -96,6 +101,13 @@ export class Game {
   private barnabyWalkTimer = 2;
   private barnabyTargetPos: THREE.Vector3 | null = null;
 
+  private readonly playerCharacter = new PlayerCharacter();
+  private playerIsWalking = false;
+  private playerWalkTimer = 2 + Math.random() * 2;
+  private playerTargetLocal = new THREE.Vector3();
+  private playerFishingActive = false;
+  private readonly defaultCameraFocus = new THREE.Vector3(0, 0.3, 0.5);
+
   private readonly loop = new Loop(
     (delta, elapsed) => this.update(delta, elapsed),
     () => this.render(),
@@ -112,7 +124,7 @@ export class Game {
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.renderer = createRenderer(canvas);
     this.cameraRig = new CameraRig(this.camera, new THREE.Vector3(0, 6.5, 9));
-    this.cameraRig.focusOn(new THREE.Vector3(0, 0.3, 0.5));
+    this.cameraRig.focusOn(this.defaultCameraFocus);
 
     const actionSurface = this.getElement('#action-button');
     this.input = new InputController(actionSurface);
@@ -122,8 +134,17 @@ export class Game {
     this.marketSystem = new MarketSystem(this.economy, this.events);
     this.craftingSystem = new CraftingSystem(this.economy, this.events);
     this.fishbotSystem = new FishbotSystem(this.economy, this.events);
+    this.muxySystem = new MuxySystem(this.craftingSystem);
+    void this.muxySystem.init();
+    this.twitchAuthSystem = new TwitchAuthSystem(this.events);
+    void this.twitchAuthSystem.init();
+    this.events.on('twitchIdentityResolved', ({ displayName }) => {
+      this.ui.showWelcomeName(displayName);
+      this.economy.setTwitchDisplayName(displayName);
+      this.events.emit('displayNameChanged', { name: this.economy.displayName() });
+    });
     this.fishingState = new FishingStateMachine(this.economy, this.events);
-    this.ui = new UI(this.economy, this.fishingState, this.marketSystem, this.craftingSystem, this.fishbotSystem, this.audio, this.events);
+    this.ui = new UI(this.economy, this.fishingState, this.marketSystem, this.craftingSystem, this.fishbotSystem, this.muxySystem, this.audio, this.events);
 
     const initialTheme = this.economy.currentTheme();
     const initialPalette = THEME_PALETTES[initialTheme];
@@ -131,8 +152,23 @@ export class Game {
     this.water.mesh.position.y = WATER_Y;
     this.scene.add(this.water.mesh);
 
-    this.diorama = { root: new THREE.Group(), barnabySlot: new THREE.Group(), fishbotSlot: new THREE.Group(), lilypads: [], clouds: [], diagnostics: { meshCount: 0, propTypeCount: 0 } };
+    this.diorama = { root: new THREE.Group(), barnabySlot: new THREE.Group(), fishbotSlot: new THREE.Group(), playerSlot: new THREE.Group(), lilypads: [], clouds: [], diagnostics: { meshCount: 0, propTypeCount: 0 } };
     this.themeManager = new ThemeManager(this.scene, this.water, this.audio, initialTheme, (diorama) => this.onDioramaRebuilt(diorama));
+
+    this.diorama.playerSlot.add(this.playerCharacter.group);
+    void this.refreshPlayerSkin();
+    this.playerCharacter.setName(this.economy.displayName());
+    this.events.on('clothingEquipped', () => void this.refreshPlayerSkin());
+    this.events.on('baseToneChanged', () => void this.refreshPlayerSkin());
+    this.events.on('displayNameChanged', ({ name }) => this.playerCharacter.setName(name));
+    // Closet UI: dolly the (single, shared) main camera onto the player's own
+    // slot while customizing, rather than standing up a second WebGL context.
+    this.events.on('closetOpened', () => this.cameraRig.focusOn(this.diorama.playerSlot.position));
+    this.events.on('closetClosed', () => this.cameraRig.focusOn(this.defaultCameraFocus));
+    this.events.on('phaseChanged', ({ phase }) => this.onFishingPhaseChanged(phase));
+    this.events.on('catchResolved', ({ result }) => {
+      if (!result.isTrash) this.playerCharacter.setPose('wave');
+    });
 
     this.renderPipeline = new RenderPipeline(this.renderer, this.scene, this.camera);
 
@@ -232,7 +268,34 @@ export class Game {
     this.diorama = diorama;
     if (this.barnabyGroup) diorama.barnabySlot.add(this.barnabyGroup);
     if (this.fishbotGroup) diorama.fishbotSlot.add(this.fishbotGroup);
+    diorama.playerSlot.add(this.playerCharacter.group);
     this.updateFishbotVisibility();
+  }
+
+  private async refreshPlayerSkin(): Promise<void> {
+    await this.playerCharacter.refreshSkin(this.economy.baseTone(), this.economy.equippedClothing());
+  }
+
+  /** Keeps the player character's pose in sync with the real fishing state machine, not just decorative. */
+  private onFishingPhaseChanged(phase: FishingPhase): void {
+    switch (phase) {
+      case 'aiming':
+      case 'casting':
+      case 'waiting':
+      case 'bite':
+        this.playerFishingActive = true;
+        this.playerCharacter.setPose('fishing');
+        this.playerCharacter.setFishingSubPose(phase);
+        break;
+      case 'celebrating':
+        this.playerFishingActive = false;
+        this.playerCharacter.setPose('wave');
+        break;
+      default:
+        // idle / resolving / missed: hand control back to the wander loop.
+        this.playerFishingActive = false;
+        break;
+    }
   }
 
   private async loadHeroAssets(): Promise<void> {
@@ -414,6 +477,50 @@ export class Game {
     this.fishbotGroup.visible = this.economy.ownedFishbots().length > 0;
   }
 
+  /**
+   * Wanders the player character around their own patch of bank when no
+   * real fishing action is in progress; hands off to onFishingPhaseChanged's
+   * pose control (fishing/wave) otherwise. Pattern-matches Barnaby's
+   * hand-rolled walk-to-target loop, simplified since the player's slot
+   * already sits in a small pre-cleared exclusion zone (no bank-radius
+   * checks needed).
+   */
+  private updatePlayerCharacter(delta: number): void {
+    if (!this.playerFishingActive) {
+      this.playerWalkTimer -= delta;
+      if (this.playerWalkTimer <= 0) {
+        this.playerIsWalking = !this.playerIsWalking;
+        this.playerWalkTimer = this.playerIsWalking ? 2.5 + Math.random() * 2 : 2 + Math.random() * 3;
+
+        if (this.playerIsWalking) {
+          const angle = Math.random() * Math.PI * 2;
+          const radius = Math.random() * 0.6;
+          this.playerTargetLocal.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+        }
+      }
+
+      const group = this.playerCharacter.group;
+      if (this.playerIsWalking) {
+        const dist = group.position.distanceTo(this.playerTargetLocal);
+        if (dist > 0.05) {
+          const dir = new THREE.Vector3().subVectors(this.playerTargetLocal, group.position).normalize();
+          group.position.addScaledVector(dir, 0.25 * delta);
+          const targetAngle = Math.atan2(dir.x, dir.z);
+          const diff = ((targetAngle - group.rotation.y + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+          group.rotation.y += diff * 5 * delta;
+          this.playerCharacter.setPose('walking');
+        } else {
+          this.playerWalkTimer = 0;
+          this.playerCharacter.setPose('idle');
+        }
+      } else {
+        this.playerCharacter.setPose('idle');
+      }
+    }
+
+    this.playerCharacter.update(delta);
+  }
+
   private update(delta: number, elapsed: number): void {
     this.frame += 1;
     this.elapsed = elapsed;
@@ -521,6 +628,8 @@ export class Game {
         }
       }
     }
+
+    this.updatePlayerCharacter(delta);
 
     this.vfx.update(delta);
     this.ui.update();

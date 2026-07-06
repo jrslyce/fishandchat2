@@ -1,4 +1,4 @@
-import type { Rarity, ThemeId, UpgradeId } from './data';
+import type { ClothingSlot, Rarity, ThemeId, UpgradeId } from './data';
 import type { FishingPhase } from './GameState';
 import type { LevelUpResult } from './Economy';
 import type { RecycleResult } from './Economy';
@@ -32,6 +32,11 @@ export interface GameEventMap {
 
   xpGained: { amount: number } & LevelUpResult;
   coinsChanged: Record<string, never>;
+  candyBarsChanged: Record<string, never>;
+
+  premiumItemPurchased: { id: string; ok: boolean };
+  materialBundlePurchased: { id: string; ok: boolean };
+  boxOfNotFishOpened: { ok: boolean; itemsGranted: number };
 
   marketSold: { catchId: string; value: number; method: 'sell' | 'haggle' | 'desperate'; success: boolean };
   marketBonesDepleted: Record<string, never>;
@@ -45,4 +50,13 @@ export interface GameEventMap {
 
   themeChanged: { theme: ThemeId };
   toast: { message: string };
+
+  clothingPurchased: { id: string; ok: boolean };
+  clothingEquipped: { slot: ClothingSlot; id: string | null };
+  baseToneChanged: { id: string };
+  displayNameChanged: { name: string };
+  closetOpened: Record<string, never>;
+  closetClosed: Record<string, never>;
+
+  twitchIdentityResolved: { displayName: string };
 }

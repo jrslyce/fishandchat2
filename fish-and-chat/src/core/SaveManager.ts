@@ -3,7 +3,9 @@ const SAVE_KEY = 'fish-and-chat-save-v1';
 // placeholder {coins,level,xp} -> Phase 2's full economy state). A version
 // mismatch discards the old save rather than returning a partially-shaped
 // object that crashes downstream reads.
-const SAVE_VERSION = 2;
+// v3: added ownedClothingIds/equippedClothing/baseToneId/displayNameOverride
+// for the player voxel character.
+const SAVE_VERSION = 3;
 
 export interface SaveEnvelope<TState> {
   version: number;

@@ -765,6 +765,38 @@ body {
   accent-color: var(--accent-dark);
 }
 
+.settings-row input[type='text'] {
+  flex: 1;
+  max-width: 55%;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(44, 58, 48, 0.25);
+  background: var(--paper);
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.tone-swatch-row {
+  display: flex;
+  gap: 10px;
+  padding: 6px 0 16px;
+  flex-wrap: wrap;
+}
+
+.tone-swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid var(--paper-dark);
+  cursor: pointer;
+  padding: 0;
+}
+
+.tone-swatch-active {
+  border-color: var(--accent-dark);
+  box-shadow: 0 0 0 2px var(--accent-dark);
+}
+
 /* ---------------------------------------------------------------------- */
 /* Shared states                                                            */
 /* ---------------------------------------------------------------------- */

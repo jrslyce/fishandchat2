@@ -1,12 +1,19 @@
 import {
   BAIT_CATALOG,
+  BASE_TONE_CATALOG,
   BASKET_BASE_CAPACITY,
+  BOX_OF_NOT_FISH_CONTENTS,
+  BOX_OF_NOT_FISH_COST_CANDY_BARS,
+  CLOTHING_CATALOG,
   FISHBOT_CATALOG,
+  MATERIAL_BUNDLE_CATALOG,
+  PREMIUM_CATALOG,
   TRASH_CATALOG,
   UPGRADE_CATALOG,
   themeForLevel,
   xpToNextLevel,
   type BaitDefinition,
+  type ClothingSlot,
   type FishbotDefinition,
   type MaterialId,
   type ThemeId,
@@ -24,7 +31,11 @@ export interface LevelUpResult {
 
 export interface UpgradePurchaseResult {
   ok: boolean;
-  reason?: 'max-tier' | 'insufficient-coins' | 'insufficient-materials';
+  reason?: 'max-tier' | 'insufficient-coins' | 'insufficient-materials' | 'insufficient-candy-bars' | 'already-owned' | 'unknown-item';
+}
+
+export interface BoxOpenResult extends UpgradePurchaseResult {
+  itemsGranted: number;
 }
 
 export interface RecycleResult {
@@ -205,6 +216,67 @@ export class Economy {
     this.state.materials[id] = (this.state.materials[id] ?? 0) + amount;
   }
 
+  // --- Candy bars (premium currency) --------------------------------------
+
+  addCandyBars(amount: number): void {
+    this.state.candyBars += amount;
+  }
+
+  spendCandyBars(amount: number): boolean {
+    if (this.state.candyBars < amount) return false;
+    this.state.candyBars -= amount;
+    return true;
+  }
+
+  ownsPremiumItem(id: string): boolean {
+    return this.state.ownedPremiumItemIds.includes(id);
+  }
+
+  buyPremiumItem(id: string): UpgradePurchaseResult {
+    const def = PREMIUM_CATALOG.find((p) => p.id === id);
+    if (!def) return { ok: false, reason: 'unknown-item' };
+    if (this.ownsPremiumItem(id)) return { ok: false, reason: 'already-owned' };
+    if (this.state.candyBars < def.costCandyBars) return { ok: false, reason: 'insufficient-candy-bars' };
+    this.state.candyBars -= def.costCandyBars;
+    this.state.ownedPremiumItemIds.push(id);
+    return { ok: true };
+  }
+
+  buyMaterialBundle(id: string): UpgradePurchaseResult {
+    const def = MATERIAL_BUNDLE_CATALOG.find((b) => b.id === id);
+    if (!def) return { ok: false, reason: 'unknown-item' };
+    if (this.state.candyBars < def.costCandyBars) return { ok: false, reason: 'insufficient-candy-bars' };
+    this.state.candyBars -= def.costCandyBars;
+    this.addMaterial(def.materialId, def.quantity);
+    return { ok: true };
+  }
+
+  /** Grants the exact, pre-disclosed BOX_OF_NOT_FISH_CONTENTS — no randomized item selection. */
+  buyBoxOfNotFish(): BoxOpenResult {
+    if (this.state.candyBars < BOX_OF_NOT_FISH_COST_CANDY_BARS) {
+      return { ok: false, reason: 'insufficient-candy-bars', itemsGranted: 0 };
+    }
+    this.state.candyBars -= BOX_OF_NOT_FISH_COST_CANDY_BARS;
+
+    let itemsGranted = 0;
+    for (const entry of BOX_OF_NOT_FISH_CONTENTS) {
+      const trash = TRASH_CATALOG.find((t) => t.id === entry.trashId);
+      if (!trash) continue;
+      for (let i = 0; i < entry.quantity; i++) {
+        if (this.basketFull()) break;
+        const [min, max] = trash.weightRangeKg;
+        this.addToBasket({
+          catchId: trash.id,
+          isTrash: true,
+          weightKg: min + (max - min) * Math.random(),
+          caughtAt: Date.now(),
+        });
+        itemsGranted += 1;
+      }
+    }
+    return { ok: true, itemsGranted };
+  }
+
   recycleTrash(catchId: string): RecycleResult | null {
     const def = TRASH_CATALOG.find((t) => t.id === catchId);
     if (!def) return null;
@@ -335,5 +407,85 @@ export class Economy {
   /** Wipes the save. Caller (UI) is responsible for reloading afterward. */
   resetSave(): void {
     this.saveManager.clear();
+  }
+
+  // --- Player character: clothing & appearance ----------------------------
+
+  ownsClothing(id: string): boolean {
+    const def = CLOTHING_CATALOG.find((c) => c.id === id);
+    if (!def) return false;
+    // Premium-sourced items (e.g. the candy-shop party hat) defer ownership
+    // to the existing premium-item system rather than this catalog's own
+    // owned-list, so there's one purchase flow per item, not two.
+    if (def.unlock.type === 'premium') return this.ownsPremiumItem(def.unlock.premiumId);
+    return this.state.ownedClothingIds.includes(id);
+  }
+
+  buyClothing(id: string): UpgradePurchaseResult {
+    const def = CLOTHING_CATALOG.find((c) => c.id === id);
+    if (!def) return { ok: false, reason: 'unknown-item' };
+    if (this.ownsClothing(id)) return { ok: false, reason: 'already-owned' };
+
+    if (def.unlock.type === 'premium') {
+      return this.buyPremiumItem(def.unlock.premiumId);
+    }
+
+    const { coins, materials = {} } = def.unlock;
+    if (this.state.coins < coins) return { ok: false, reason: 'insufficient-coins' };
+    for (const [material, amount] of Object.entries(materials) as [MaterialId, number][]) {
+      if ((this.state.materials[material] ?? 0) < amount) return { ok: false, reason: 'insufficient-materials' };
+    }
+
+    this.state.coins -= coins;
+    for (const [material, amount] of Object.entries(materials) as [MaterialId, number][]) {
+      this.state.materials[material] -= amount;
+    }
+    this.state.ownedClothingIds.push(id);
+    return { ok: true };
+  }
+
+  equippedClothing(): Record<ClothingSlot, string | null> {
+    return this.state.equippedClothing;
+  }
+
+  equipClothing(slot: ClothingSlot, id: string | null): boolean {
+    if (id !== null) {
+      const def = CLOTHING_CATALOG.find((c) => c.id === id);
+      if (!def || def.slot !== slot || !this.ownsClothing(id)) return false;
+    }
+    this.state.equippedClothing[slot] = id;
+    return true;
+  }
+
+  baseTone(): string {
+    return this.state.baseToneId;
+  }
+
+  setBaseTone(id: string): boolean {
+    if (!BASE_TONE_CATALOG.some((t) => t.id === id)) return false;
+    this.state.baseToneId = id;
+    return true;
+  }
+
+  /**
+   * A manually-set local override always wins (it's an explicit "rename my
+   * character" action, so it should stick even inside a real Twitch
+   * session), then the name TwitchAuthSystem resolved for this viewer, then
+   * a generic fallback for contexts with neither (local dev, Playwright).
+   */
+  displayName(): string {
+    return this.state.displayNameOverride?.trim() || this.twitchDisplayName || 'Angler';
+  }
+
+  /** Not persisted — re-resolved each session from TwitchAuthSystem's `twitchIdentityResolved` event. */
+  private twitchDisplayName: string | null = null;
+
+  setTwitchDisplayName(name: string): void {
+    this.twitchDisplayName = name;
+  }
+
+  setDisplayNameOverride(name: string | null): void {
+    const trimmed = name?.trim() || null;
+    this.state.displayNameOverride = trimmed && trimmed.length > 0 ? trimmed.slice(0, 24) : null;
   }
 }

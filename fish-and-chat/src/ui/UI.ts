@@ -1,11 +1,19 @@
 import {
   BAIT_CATALOG,
+  BASE_TONE_CATALOG,
+  BOX_OF_NOT_FISH_CONTENTS,
+  BOX_OF_NOT_FISH_COST_CANDY_BARS,
+  CANDY_BAR_PACKS,
+  CLOTHING_CATALOG,
   FISH_CATALOG,
   FISHBOT_CATALOG,
+  MATERIAL_BUNDLE_CATALOG,
+  PREMIUM_CATALOG,
   RARITY_ORDER,
   TRASH_CATALOG,
   UPGRADE_CATALOG,
   xpToNextLevel,
+  type ClothingSlot,
   type UpgradeId,
 } from '../game/data';
 import type { Economy, RecycleResult } from '../game/Economy';
@@ -13,12 +21,13 @@ import { SPRITE_MANIFEST } from '../assets/spriteManifest';
 import type { AudioEngine } from '../core/AudioEngine';
 import type { CraftingSystem } from '../systems/CraftingSystem';
 import type { FishbotSystem } from '../systems/FishbotSystem';
+import type { MuxySystem } from '../systems/MuxySystem';
 import type { FishingStateMachine } from '../game/GameState';
 import type { MarketSystem } from '../systems/MarketSystem';
 import type { EventBus } from '../core/EventBus';
 import type { CatchResult, GameEventMap } from '../game/events';
 
-type ModalId = 'shop' | 'market' | 'craft' | 'collection' | 'settings' | null;
+type ModalId = 'shop' | 'market' | 'craft' | 'collection' | 'settings' | 'candy' | 'closet' | null;
 
 const ICON = {
   coin: '/images/icons/coin.png',
@@ -28,6 +37,8 @@ const ICON = {
   scale: '/images/icons/scale.png',
   bone: '/images/icons/bone.png',
 } as const;
+
+const CANDY_EMOJI = '🍫';
 
 function catchName(catchId: string): string {
   return (
@@ -62,6 +73,7 @@ export class UI {
   private readonly hudLevel: HTMLElement;
   private readonly hudXpFill: HTMLElement;
   private readonly hudCoins: HTMLElement;
+  private readonly hudCandyBars: HTMLElement;
   private readonly hudBaitName: HTMLElement;
   private readonly hudBasketCount: HTMLElement;
   private readonly phaseIndicator: HTMLElement;
@@ -69,6 +81,7 @@ export class UI {
   private readonly catchCard: HTMLElement;
   private readonly modalHost: HTMLElement;
   private readonly titleScreen: HTMLElement;
+  private readonly titleWelcome: HTMLElement;
   private readonly actionButton: HTMLButtonElement;
 
   private openModal: ModalId = null;
@@ -83,6 +96,7 @@ export class UI {
     private readonly marketSystem: MarketSystem,
     private readonly craftingSystem: CraftingSystem,
     private readonly fishbotSystem: FishbotSystem,
+    private readonly muxySystem: MuxySystem,
     private readonly audio: AudioEngine,
     private readonly events: EventBus<GameEventMap>,
   ) {
@@ -99,6 +113,7 @@ export class UI {
         <div id="hud-pills">
           <div class="hud-pill hidden" id="hud-lucky-ducky-pill">🦆 <span id="hud-lucky-ducky-timer">0:00</span></div>
           <div class="hud-pill" id="hud-coins-pill">${icon(ICON.coin, 'Coins')}<span id="hud-coins">0</span></div>
+          <button class="hud-pill hud-pill-button" id="hud-candy-pill" type="button">${CANDY_EMOJI}<span id="hud-candy-bars">0</span></button>
           <button class="hud-pill hud-pill-button" id="hud-bait-pill" type="button">${icon(ICON.bait, 'Bait')}<span id="hud-bait-name">Pleb Bait</span></button>
         </div>
       </div>
@@ -107,6 +122,8 @@ export class UI {
         <button class="rail-btn" id="btn-shop" type="button" aria-label="Shop">${icon(ICON.bait, 'Shop')}</button>
         <button class="rail-btn" id="btn-market" type="button" aria-label="Market">${icon(ICON.coin, 'Market')}</button>
         <button class="rail-btn" id="btn-craft" type="button" aria-label="Crafting Bench">${icon(ICON.hammer, 'Craft')}</button>
+        <button class="rail-btn" id="btn-candy" type="button" aria-label="Candy Bar Shop">${CANDY_EMOJI}</button>
+        <button class="rail-btn" id="btn-closet" type="button" aria-label="Closet">&#128100;</button>
         <button class="rail-btn" id="btn-collection" type="button" aria-label="Collection">${icon(ICON.scale, 'Collection')}</button>
         <button class="rail-btn" id="btn-settings" type="button" aria-label="Settings"><span class="gear-glyph">&#9881;</span></button>
       </div>
@@ -125,6 +142,7 @@ export class UI {
     this.hudLevel = this.el('#hud-level');
     this.hudXpFill = this.el('#hud-xp-fill');
     this.hudCoins = this.el('#hud-coins');
+    this.hudCandyBars = this.el('#hud-candy-bars');
     this.hudBaitName = this.el('#hud-bait-name');
     this.hudBasketCount = this.el('#hud-basket-count');
     this.phaseIndicator = this.el('#phase-indicator');
@@ -132,14 +150,18 @@ export class UI {
     this.catchCard = document.querySelector<HTMLElement>('#catch-card')!;
     this.modalHost = document.querySelector<HTMLElement>('#modal-host')!;
     this.titleScreen = document.querySelector<HTMLElement>('#title-screen')!;
+    this.titleWelcome = document.querySelector<HTMLElement>('#title-welcome')!;
     this.actionButton = document.querySelector<HTMLButtonElement>('#action-button')!;
 
     this.el('#btn-shop').addEventListener('click', () => this.toggleModal('shop'));
     this.el('#btn-market').addEventListener('click', () => this.toggleModal('market'));
     this.el('#btn-craft').addEventListener('click', () => this.toggleModal('craft'));
+    this.el('#btn-candy').addEventListener('click', () => this.toggleModal('candy'));
+    this.el('#btn-closet').addEventListener('click', () => this.toggleModal('closet'));
     this.el('#btn-collection').addEventListener('click', () => this.toggleModal('collection'));
     this.el('#btn-settings').addEventListener('click', () => this.toggleModal('settings'));
     this.el('#hud-bait-pill').addEventListener('click', () => this.toggleModal('shop'));
+    this.el('#hud-candy-pill').addEventListener('click', () => this.toggleModal('candy'));
     this.el('#basket-badge').addEventListener('click', () => this.toggleModal('market'));
 
     document.querySelector('#title-start')?.addEventListener('click', () => this.dismissTitleScreen());
@@ -164,6 +186,12 @@ export class UI {
     this.titleScreen?.classList.add('hidden');
   }
 
+  /** Shown on the title screen once the viewer has shared their Twitch ID and the EBS resolved a display name. */
+  showWelcomeName(name: string): void {
+    this.titleWelcome.textContent = `Welcome, ${name}!`;
+    this.titleWelcome.classList.remove('hidden');
+  }
+
   private bindEvents(): void {
     this.events.on('toast', ({ message }) => this.showToast(message));
     // 'missed' needs no listener here: GameState already emits a toast for it.
@@ -174,6 +202,13 @@ export class UI {
     this.events.on('baitEquipped', () => this.refreshOpenModal());
     this.events.on('fishbotPurchased', () => this.refreshOpenModal());
     this.events.on('fishbotClaimed', () => this.refreshOpenModal());
+    this.events.on('candyBarsChanged', () => this.refreshOpenModal());
+    this.events.on('premiumItemPurchased', () => this.refreshOpenModal());
+    this.events.on('materialBundlePurchased', () => this.refreshOpenModal());
+    this.events.on('boxOfNotFishOpened', () => this.refreshOpenModal());
+    this.events.on('clothingPurchased', () => this.refreshOpenModal());
+    this.events.on('clothingEquipped', () => this.refreshOpenModal());
+    this.events.on('baseToneChanged', () => this.refreshOpenModal());
     this.events.on('marketSold', (event) => {
       this.refreshOpenModal();
       if (event.method === 'haggle') {
@@ -320,6 +355,7 @@ export class UI {
     const needed = xpToNextLevel(state.level);
     this.hudXpFill.style.width = `${Math.min(100, (state.xp / needed) * 100)}%`;
     this.hudCoins.textContent = String(state.coins);
+    this.hudCandyBars.textContent = String(state.candyBars);
     this.hudBaitName.textContent = this.economy.equippedBait().name;
     this.hudBasketCount.textContent = `${state.basket.length}/${this.economy.basketCapacity()}`;
 
@@ -421,8 +457,11 @@ export class UI {
   }
 
   private toggleModal(id: ModalId): void {
+    const previous = this.openModal;
     this.openModal = this.openModal === id ? null : id;
     if (this.openModal === 'market') this.marketSystem.onMarketOpened();
+    if (previous === 'closet' && this.openModal !== 'closet') this.events.emit('closetClosed', {});
+    if (this.openModal === 'closet' && previous !== 'closet') this.events.emit('closetOpened', {});
     this.resetArmed = false;
     this.renderModal();
   }
@@ -441,6 +480,8 @@ export class UI {
     if (this.openModal === 'shop') this.renderShop();
     else if (this.openModal === 'market') this.renderMarket();
     else if (this.openModal === 'craft') this.renderCraft();
+    else if (this.openModal === 'candy') this.renderCandyShop();
+    else if (this.openModal === 'closet') this.renderCloset();
     else if (this.openModal === 'collection') this.renderCollection();
     else if (this.openModal === 'settings') this.renderSettings();
   }
@@ -636,6 +677,144 @@ export class UI {
     this.bindModalActions();
   }
 
+  private renderCandyShop(): void {
+    const state = this.economy.snapshot;
+
+    const packRows = CANDY_BAR_PACKS.map((pack) => `
+      <li class="row">
+        <div class="row-body">
+          <strong>${pack.name}</strong>
+          <span class="row-meta">${pack.bitsCost} Bits &rarr; ${pack.candyBars} ${CANDY_EMOJI}</span>
+        </div>
+        <div class="row-actions">
+          <button class="btn-small" data-action="buy-candy-pack" data-id="${pack.id}">${this.muxySystem.isConfigured ? 'Buy with Bits' : 'Buy (Debug)'}</button>
+        </div>
+      </li>`).join('');
+
+    const premiumRows = PREMIUM_CATALOG.map((item) => {
+      const owned = this.economy.ownsPremiumItem(item.id);
+      const canAfford = state.candyBars >= item.costCandyBars;
+      return `
+        <li class="row">
+          <div class="row-body">
+            <strong>${item.name}</strong>
+            <span class="row-meta">${item.description}</span>
+            <span class="row-meta">${item.costCandyBars} ${CANDY_EMOJI}</span>
+          </div>
+          <div class="row-actions">
+            <button class="btn-small ${!canAfford && !owned ? 'btn-disabled' : ''}" data-action="buy-premium" data-id="${item.id}" ${owned || !canAfford ? 'disabled' : ''}>${owned ? 'Owned' : 'Buy'}</button>
+          </div>
+        </li>`;
+    }).join('');
+
+    const boxCanAfford = state.candyBars >= BOX_OF_NOT_FISH_COST_CANDY_BARS;
+    const boxContentsLabel = BOX_OF_NOT_FISH_CONTENTS.map((entry) => `${entry.quantity}&times; ${catchName(entry.trashId)}`).join(', ');
+
+    const bundleRows = MATERIAL_BUNDLE_CATALOG.map((bundle) => {
+      const canAfford = state.candyBars >= bundle.costCandyBars;
+      return `
+        <li class="row">
+          ${rowIcon(bundle.materialId, bundle.materialId)}
+          <div class="row-body">
+            <strong>${bundle.quantity}&times; ${bundle.materialId}</strong>
+            <span class="row-meta">${bundle.costCandyBars} ${CANDY_EMOJI}</span>
+          </div>
+          <div class="row-actions">
+            <button class="btn-small ${!canAfford ? 'btn-disabled' : ''}" data-action="buy-material-bundle" data-id="${bundle.id}" ${!canAfford ? 'disabled' : ''}>Buy</button>
+          </div>
+        </li>`;
+    }).join('');
+
+    this.modalHost.innerHTML = this.modalShell(
+      'Candy Bar Shop',
+      `
+        <h4 class="modal-subhead">Get Candy Bars</h4>
+        <ul class="modal-list">${packRows}</ul>
+
+        <h4 class="modal-subhead">Premium Items</h4>
+        <ul class="modal-list">${premiumRows}</ul>
+
+        <h4 class="modal-subhead">Box of Not Fish</h4>
+        <ul class="modal-list">
+          <li class="row">
+            <div class="row-body">
+              <strong>Box of Not Fish</strong>
+              <span class="row-meta">Contains exactly: ${boxContentsLabel}</span>
+              <span class="row-meta">${BOX_OF_NOT_FISH_COST_CANDY_BARS} ${CANDY_EMOJI}</span>
+            </div>
+            <div class="row-actions">
+              <button class="btn-small ${!boxCanAfford ? 'btn-disabled' : ''}" data-action="buy-box-of-not-fish" ${!boxCanAfford ? 'disabled' : ''}>Buy</button>
+            </div>
+          </li>
+        </ul>
+
+        <h4 class="modal-subhead">Material Bundles</h4>
+        <ul class="modal-list">${bundleRows}</ul>
+      `,
+    );
+    this.bindModalActions();
+  }
+
+  private renderCloset(): void {
+    const state = this.economy.snapshot;
+
+    const toneRow = BASE_TONE_CATALOG.map((tone) => {
+      const active = state.baseToneId === tone.id;
+      return `<button class="tone-swatch ${active ? 'tone-swatch-active' : ''}" data-action="set-base-tone" data-id="${tone.id}" style="background:${tone.color}" title="${tone.name}" aria-label="${tone.name}"></button>`;
+    }).join('');
+
+    const slots: ClothingSlot[] = ['hat', 'jacket', 'pants', 'shoes'];
+    const slotSections = slots.map((slot) => {
+      const items = CLOTHING_CATALOG.filter((item) => item.slot === slot);
+      const rows = items.map((item) => {
+        const owned = this.economy.ownsClothing(item.id);
+        const equipped = state.equippedClothing[slot] === item.id;
+        const unlock = item.unlock;
+        const costLabel =
+          unlock.type === 'premium'
+            ? `${PREMIUM_CATALOG.find((p) => p.id === unlock.premiumId)?.costCandyBars ?? '?'} ${CANDY_EMOJI}`
+            : `${unlock.coins}🪙${
+                unlock.materials
+                  ? `, ${Object.entries(unlock.materials).map(([m, a]) => `${a} ${m}`).join(', ')}`
+                  : ''
+              }`;
+        const canAfford =
+          unlock.type === 'premium'
+            ? state.candyBars >= (PREMIUM_CATALOG.find((p) => p.id === unlock.premiumId)?.costCandyBars ?? Infinity)
+            : state.coins >= unlock.coins &&
+              Object.entries(unlock.materials ?? {}).every(([m, a]) => (state.materials[m as keyof typeof state.materials] ?? 0) >= (a ?? 0));
+
+        return `
+          <li class="row">
+            ${rowIcon(item.id, item.name)}
+            <div class="row-body">
+              <strong>${item.name}</strong>
+              <span class="row-meta">${item.flavor}</span>
+              <span class="row-meta">${owned ? 'Owned' : costLabel}</span>
+            </div>
+            <div class="row-actions">
+              ${
+                owned
+                  ? `<button class="btn-small" data-action="${equipped ? 'unequip-clothing' : 'equip-clothing'}" data-slot="${slot}" data-id="${item.id}">${equipped ? 'Unequip' : 'Equip'}</button>`
+                  : `<button class="btn-small ${!canAfford ? 'btn-disabled' : ''}" data-action="buy-clothing" data-id="${item.id}" ${!canAfford ? 'disabled' : ''}>Buy</button>`
+              }
+            </div>
+          </li>`;
+      }).join('');
+      return `<h4 class="modal-subhead">${slot}</h4><ul class="modal-list">${rows}</ul>`;
+    }).join('');
+
+    this.modalHost.innerHTML = this.modalShell(
+      'Closet',
+      `
+        <h4 class="modal-subhead">Appearance</h4>
+        <div class="tone-swatch-row">${toneRow}</div>
+        ${slotSections}
+      `,
+    );
+    this.bindModalActions();
+  }
+
   private renderCollection(): void {
     const discovered = new Set(this.economy.snapshot.discoveredCatchIds);
     const groups = RARITY_ORDER.map((rarity) => {
@@ -675,6 +854,11 @@ export class UI {
       'Settings',
       `
         <div class="settings-row">
+          <label for="input-display-name">Display name</label>
+          <input type="text" id="input-display-name" maxlength="24" placeholder="${this.economy.displayName()}" value="${this.economy.snapshot.displayNameOverride ?? ''}" />
+        </div>
+        <p class="modal-note">Your character is named after your Twitch display name automatically when playing as a Twitch extension. Set a name here to override it (handy for testing).</p>
+        <div class="settings-row">
           <label for="vol-master">Master volume</label>
           <input type="range" id="vol-master" min="0" max="1" step="0.05" value="${mix.master}" />
         </div>
@@ -695,6 +879,10 @@ export class UI {
       `,
     );
 
+    this.el('#input-display-name').addEventListener('change', (e) => {
+      const value = (e.target as HTMLInputElement).value;
+      this.craftingSystem.setDisplayNameOverride(value.length > 0 ? value : null);
+    });
     this.el('#vol-master').addEventListener('input', (e) => this.onVolumeChange('master', e));
     this.el('#vol-sfx').addEventListener('input', (e) => this.onVolumeChange('sfx', e));
     this.el('#vol-ambience').addEventListener('input', (e) => this.onVolumeChange('ambience', e));
@@ -742,6 +930,7 @@ export class UI {
         const id = button.dataset.id ?? '';
         const index = button.dataset.index ? Number(button.dataset.index) : -1;
         const method = button.dataset.method as 'sell' | 'haggle' | 'desperate' | undefined;
+        const slot = button.dataset.slot as ClothingSlot | undefined;
 
         if (action === 'close') this.toggleModal(this.openModal);
         else if (action === 'equip-bait') this.craftingSystem.equipBait(id);
@@ -753,6 +942,14 @@ export class UI {
         else if (action === 'recycle-all') this.craftingSystem.recycleAllTrash();
         else if (action === 'craft-ducky') this.craftingSystem.craftLuckyDucky();
         else if (action === 'use-ducky') this.craftingSystem.useLuckyDucky();
+        else if (action === 'buy-candy-pack') this.muxySystem.purchaseCandyPack(id);
+        else if (action === 'buy-premium') this.craftingSystem.purchasePremiumItem(id);
+        else if (action === 'buy-material-bundle') this.craftingSystem.purchaseMaterialBundle(id);
+        else if (action === 'buy-box-of-not-fish') this.craftingSystem.purchaseBoxOfNotFish();
+        else if (action === 'buy-clothing') this.craftingSystem.purchaseClothing(id);
+        else if (action === 'equip-clothing' && slot) this.craftingSystem.equipClothing(slot, id);
+        else if (action === 'unequip-clothing' && slot) this.craftingSystem.equipClothing(slot, null);
+        else if (action === 'set-base-tone') this.craftingSystem.setBaseTone(id);
 
         this.renderHud();
         if (action !== 'close') this.renderModal();

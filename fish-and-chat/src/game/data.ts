@@ -235,3 +235,214 @@ export function rollRarity(weights: RarityWeights, roll = Math.random()): Rarity
   }
   return 'trash';
 }
+
+// --- Candy Bars: premium currency ------------------------------------------
+
+/** A Twitch Bits → Candy Bar exchange tier, sold through the Muxy extension. */
+export interface CandyBarPackDefinition {
+  id: string;
+  name: string;
+  bitsCost: number;
+  candyBars: number;
+}
+
+export const CANDY_BAR_PACKS: CandyBarPackDefinition[] = [
+  { id: 'pack-snack', name: 'Snack Pack', bitsCost: 100, candyBars: 10 },
+  { id: 'pack-value', name: 'Value Pack', bitsCost: 500, candyBars: 60 },
+  { id: 'pack-party', name: 'Party Box', bitsCost: 1000, candyBars: 140 },
+];
+
+export interface PremiumItemDefinition {
+  id: string;
+  name: string;
+  description: string;
+  costCandyBars: number;
+}
+
+export const PREMIUM_CATALOG: PremiumItemDefinition[] = [
+  { id: 'golden-rod-skin', name: 'Golden Rod Skin', description: 'A shimmering cosmetic finish for your rod.', costCandyBars: 40 },
+  { id: 'starlight-fishbot-skin', name: 'Starlight Fishbot Skin', description: 'Cosmic paint job for any owned fishbot.', costCandyBars: 60 },
+  { id: 'party-hat', name: 'Party Hat', description: 'A cosmetic hat for your angler.', costCandyBars: 20 },
+  { id: 'sparkle-trail', name: 'Sparkle Cast Trail', description: 'Your line sparkles as it casts.', costCandyBars: 30 },
+];
+
+export const BOX_OF_NOT_FISH_COST_CANDY_BARS = 15;
+
+export interface BoxContentEntry {
+  trashId: string;
+  quantity: number;
+}
+
+/**
+ * Fixed, fully-disclosed contents — no randomization. Twitch's Bits-in-Extensions
+ * guidelines (dev.twitch.tv/docs/extensions/guidelines-and-policies#6-bits-in-extensions,
+ * section 6.2) prohibit exchanging Bits for "loot boxes with unknown items that are
+ * determined randomly or by chance." Since candy bars are bought with Bits, every
+ * candy-bar purchase — including this box — must show exactly what the player gets
+ * before they buy it.
+ */
+export const BOX_OF_NOT_FISH_CONTENTS: BoxContentEntry[] = [
+  { trashId: 'tin-can', quantity: 4 },
+  { trashId: 'glass-bottle', quantity: 4 },
+  { trashId: 'old-boot', quantity: 3 },
+  { trashId: 'driftwood', quantity: 3 },
+  { trashId: 'soggy-hat', quantity: 3 },
+  { trashId: 'tangled-line', quantity: 3 },
+];
+
+export const BOX_OF_NOT_FISH_ITEM_COUNT = BOX_OF_NOT_FISH_CONTENTS.reduce((sum, e) => sum + e.quantity, 0);
+
+export interface MaterialBundleDefinition {
+  id: string;
+  materialId: MaterialId;
+  quantity: number;
+  costCandyBars: number;
+}
+
+/** Same price across the board; rarer materials pay out in smaller quantities. */
+export const MATERIAL_BUNDLE_CATALOG: MaterialBundleDefinition[] = [
+  { id: 'bundle-rubber', materialId: 'rubber', quantity: 10, costCandyBars: 5 },
+  { id: 'bundle-wood', materialId: 'wood', quantity: 10, costCandyBars: 5 },
+  { id: 'bundle-fabric', materialId: 'fabric', quantity: 6, costCandyBars: 5 },
+  { id: 'bundle-fiber', materialId: 'fiber', quantity: 6, costCandyBars: 5 },
+  { id: 'bundle-metal', materialId: 'metal', quantity: 3, costCandyBars: 5 },
+  { id: 'bundle-glass', materialId: 'glass', quantity: 3, costCandyBars: 5 },
+];
+
+// --- Player character: base tones & clothing --------------------------------
+
+export interface BaseToneDefinition {
+  id: string;
+  name: string;
+  /** CSS color used to flat-fill the base skin layer. */
+  color: string;
+}
+
+export const BASE_TONE_CATALOG: BaseToneDefinition[] = [
+  { id: 'sunfish-tan', name: 'Sunfish Tan', color: '#e0a860' },
+  { id: 'moonlit-pale', name: 'Moonlit Pale', color: '#f2dcc4' },
+  { id: 'river-otter-brown', name: 'River Otter Brown', color: '#8a5a3a' },
+  { id: 'driftwood-grey', name: 'Driftwood Grey', color: '#9c9088' },
+  { id: 'copper-carp', name: 'Copper Carp', color: '#b5652f' },
+];
+
+export type ClothingSlot = 'hat' | 'jacket' | 'pants' | 'shoes';
+
+/** Which body-part overlay regions (see entities/character/skinLayout.ts) an item's `textures` map may fill. */
+export type ClothingPart = 'head' | 'body' | 'rightArm' | 'leftArm' | 'rightLeg' | 'leftLeg';
+
+export interface ClothingDefinition {
+  id: string;
+  slot: ClothingSlot;
+  name: string;
+  flavor: string;
+  /** Per-body-part overlay texture URLs; only the parts relevant to `slot` need entries. */
+  textures: Partial<Record<ClothingPart, string>>;
+  /**
+   * How this item is unlocked. `craft` spends coins+materials directly (this
+   * catalog owns that purchase). `premium` defers entirely to the existing
+   * candy-bar premium system — `premiumId` must match a `PREMIUM_CATALOG`
+   * entry, and ownership/purchase goes through `Economy.ownsPremiumItem`/
+   * `buyPremiumItem` rather than this catalog's own owned-list, so we don't
+   * fork the premium-currency economy into a second parallel system.
+   */
+  unlock: { type: 'craft'; coins: number; materials?: Partial<Record<MaterialId, number>> } | { type: 'premium'; premiumId: string };
+}
+
+export const CLOTHING_CATALOG: ClothingDefinition[] = [
+  {
+    id: 'red-beanie',
+    slot: 'hat',
+    name: 'Red Beanie',
+    flavor: 'Keeps the ears warm on foggy mornings.',
+    textures: { head: '/images/clothing/red-beanie-head.png' },
+    unlock: { type: 'craft', coins: 40, materials: { fabric: 1 } },
+  },
+  {
+    id: 'straw-hat',
+    slot: 'hat',
+    name: 'Straw Hat',
+    flavor: 'Wide-brimmed and woven from old cattails.',
+    textures: { head: '/images/clothing/straw-hat-head.png' },
+    unlock: { type: 'craft', coins: 60, materials: { fiber: 2 } },
+  },
+  {
+    // Not a new catalog item — this equips the SaveState.ownedPremiumItemIds
+    // entry already sold in the candy shop, so it reuses that purchase flow
+    // rather than duplicating "party hat" as two unrelated unlockables.
+    id: 'party-hat',
+    slot: 'hat',
+    name: 'Party Hat',
+    flavor: 'A cosmetic hat for your angler.',
+    textures: { head: '/images/clothing/party-hat-head.png' },
+    unlock: { type: 'premium', premiumId: 'party-hat' },
+  },
+  {
+    id: 'flannel-jacket',
+    slot: 'jacket',
+    name: 'Flannel Jacket',
+    flavor: 'Classic plaid, smells faintly of campfire.',
+    textures: {
+      body: '/images/clothing/flannel-jacket-body.png',
+      rightArm: '/images/clothing/flannel-jacket-arm.png',
+      leftArm: '/images/clothing/flannel-jacket-arm.png',
+    },
+    unlock: { type: 'craft', coins: 90, materials: { fabric: 2 } },
+  },
+  {
+    id: 'rain-slicker',
+    slot: 'jacket',
+    name: 'Rain Slicker',
+    flavor: 'Bright yellow, in case the fish need a warning.',
+    textures: {
+      body: '/images/clothing/rain-slicker-body.png',
+      rightArm: '/images/clothing/rain-slicker-arm.png',
+      leftArm: '/images/clothing/rain-slicker-arm.png',
+    },
+    unlock: { type: 'craft', coins: 120, materials: { rubber: 2 } },
+  },
+  {
+    id: 'overalls',
+    slot: 'pants',
+    name: 'Overalls',
+    flavor: 'One big pocket for snacks and bobbers alike.',
+    textures: {
+      rightLeg: '/images/clothing/overalls-leg.png',
+      leftLeg: '/images/clothing/overalls-leg.png',
+    },
+    unlock: { type: 'craft', coins: 100, materials: { fabric: 2, metal: 1 } },
+  },
+  {
+    id: 'cargo-pants',
+    slot: 'pants',
+    name: 'Cargo Pants',
+    flavor: 'Every pocket holds a slightly different lure.',
+    textures: {
+      rightLeg: '/images/clothing/cargo-pants-leg.png',
+      leftLeg: '/images/clothing/cargo-pants-leg.png',
+    },
+    unlock: { type: 'craft', coins: 80, materials: { fabric: 2 } },
+  },
+  {
+    id: 'rubber-boots',
+    slot: 'shoes',
+    name: 'Rubber Boots',
+    flavor: 'Waterproof, mostly.',
+    textures: {
+      rightLeg: '/images/clothing/rubber-boots-leg.png',
+      leftLeg: '/images/clothing/rubber-boots-leg.png',
+    },
+    unlock: { type: 'craft', coins: 70, materials: { rubber: 2 } },
+  },
+  {
+    id: 'sneakers',
+    slot: 'shoes',
+    name: 'Sneakers',
+    flavor: 'Not really made for standing in mud, but here we are.',
+    textures: {
+      rightLeg: '/images/clothing/sneakers-leg.png',
+      leftLeg: '/images/clothing/sneakers-leg.png',
+    },
+    unlock: { type: 'craft', coins: 65, materials: { fabric: 1, rubber: 1 } },
+  },
+];

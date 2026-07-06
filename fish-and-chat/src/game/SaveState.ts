@@ -1,4 +1,4 @@
-import { FISHBOT_CATALOG, type MaterialId, type UpgradeId } from './data';
+import { FISHBOT_CATALOG, type ClothingSlot, type MaterialId, type UpgradeId } from './data';
 
 export interface BasketItem {
   /** FISH_CATALOG id, TRASH_CATALOG id, or a fishbot-caught species id. */
@@ -15,6 +15,7 @@ export interface FishbotState {
 
 export interface GameSaveStateV1 {
   coins: number;
+  candyBars: number;
   level: number;
   xp: number;
   basket: BasketItem[];
@@ -29,6 +30,11 @@ export interface GameSaveStateV1 {
   audio: { master: number; sfx: number; ambience: number; muted: boolean };
   luckyDuckyCount: number;
   luckyDuckyExpiresAtMs: number;
+  ownedPremiumItemIds: string[];
+  ownedClothingIds: string[];
+  equippedClothing: Record<ClothingSlot, string | null>;
+  baseToneId: string;
+  displayNameOverride: string | null;
 }
 
 export function createDefaultSaveState(): GameSaveStateV1 {
@@ -39,6 +45,7 @@ export function createDefaultSaveState(): GameSaveStateV1 {
 
   return {
     coins: 50,
+    candyBars: 0,
     level: 1,
     xp: 0,
     basket: [],
@@ -53,5 +60,10 @@ export function createDefaultSaveState(): GameSaveStateV1 {
     audio: { master: 1, sfx: 0.8, ambience: 0.6, muted: false },
     luckyDuckyCount: 0,
     luckyDuckyExpiresAtMs: 0,
+    ownedPremiumItemIds: [],
+    ownedClothingIds: [],
+    equippedClothing: { hat: null, jacket: null, pants: null, shoes: null },
+    baseToneId: 'sunfish-tan',
+    displayNameOverride: null,
   };
 }
