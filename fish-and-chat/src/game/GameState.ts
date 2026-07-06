@@ -1,0 +1,211 @@
+import {
+  CastGauge,
+  castPrecision,
+  gaugeValue,
+  precisionSkillBonus,
+  randomSweetSpot,
+} from '../systems/CastingSystem';
+import { isWithinReactionWindow, rollWaitSeconds } from '../systems/BiteSystem';
+import { resolveCatch } from '../systems/CatchResolver';
+import type { Economy } from './Economy';
+import type { EventBus } from '../core/EventBus';
+import type { GameEventMap, CatchResult } from './events';
+import type { InputController } from '../core/InputController';
+
+export type FishingPhase =
+  | 'idle'
+  | 'aiming'
+  | 'casting'
+  | 'waiting'
+  | 'bite'
+  | 'resolving'
+  | 'celebrating'
+  | 'missed';
+
+const CASTING_ANIM_SECONDS = 0.4;
+const CELEBRATING_SECONDS = 2.5;
+const MISSED_TOAST_SECONDS = 1.4;
+
+export interface FishingSnapshot {
+  phase: FishingPhase;
+  gaugeValue: number;
+  sweetSpot: number;
+  sweetSpotWidth: number;
+  waitProgress: number;
+  biteProgress: number;
+  lastCatch: CatchResult | null;
+}
+
+/**
+ * Owns the IDLE -> AIMING -> CASTING -> WAITING -> BITE -> RESOLVING ->
+ * CELEBRATING -> IDLE loop (plus MISSED). Consumes raw input edges directly
+ * so every phase can react to the same single action intent; Game.ts is
+ * responsible for calling `input.update()` once per frame after all systems
+ * have read the edges.
+ */
+export class FishingStateMachine {
+  private phase: FishingPhase = 'idle';
+  private phaseElapsed = 0;
+  private aimClock = 0;
+  private gauge: CastGauge = randomSweetSpot();
+  private lockedPrecision = 0;
+  private lockedRolls: { L: number; T: number; S: number } | null = null;
+  private waitDurationSeconds = 0;
+  private lastCatch: CatchResult | null = null;
+  
+  public debugPerfectCastMode = false;
+  public autoFishingEnabled = false;
+
+  constructor(
+    private readonly economy: Economy,
+    private readonly events: EventBus<GameEventMap>,
+  ) {}
+
+  getPhase(): FishingPhase {
+    return this.phase;
+  }
+
+  snapshot(): FishingSnapshot {
+    return {
+      phase: this.phase,
+      gaugeValue: this.phase === 'aiming' ? gaugeValue(this.aimClock) : 0,
+      sweetSpot: this.gauge.sweetSpot,
+      sweetSpotWidth: this.gauge.sweetSpotWidth,
+      waitProgress: this.phase === 'waiting' ? Math.min(1, this.phaseElapsed / this.waitDurationSeconds) : 0,
+      biteProgress:
+        this.phase === 'bite' ? Math.min(1, (this.phaseElapsed * 1000) / this.economy.reactionWindowMs()) : 0,
+      lastCatch: this.lastCatch,
+    };
+  }
+
+  update(delta: number, input: InputController): void {
+    this.phaseElapsed += delta;
+
+    switch (this.phase) {
+      case 'idle':
+        if (input.justPressed()) this.tryStartCast();
+        else if (this.autoFishingEnabled && !this.economy.basketFull() && this.phaseElapsed > 1.5) this.tryStartCast();
+        break;
+      case 'aiming':
+        this.aimClock += delta;
+        if (input.justPressed()) this.lockCast();
+        else if (this.autoFishingEnabled && this.aimClock > 0.5) this.lockCast();
+        break;
+      case 'casting':
+        if (this.phaseElapsed >= CASTING_ANIM_SECONDS) this.enterWaiting();
+        break;
+      case 'waiting':
+        if (this.phaseElapsed >= this.waitDurationSeconds) this.enterBite();
+        break;
+      case 'bite':
+        if (input.justPressed() || this.autoFishingEnabled) {
+          this.resolveBiteSuccess();
+        } else if (!isWithinReactionWindow(this.phaseElapsed, this.economy.reactionWindowMs())) {
+          this.enterMissed('no-react');
+        }
+        break;
+      case 'resolving':
+        // Transient: resolveBiteSuccess() moves straight through to 'celebrating'
+        // in the same tick, so this case should never be observed mid-frame.
+        break;
+      case 'celebrating':
+        if (this.phaseElapsed >= CELEBRATING_SECONDS || input.justPressed()) this.enterIdle();
+        break;
+      case 'missed':
+        if (this.phaseElapsed >= MISSED_TOAST_SECONDS) this.enterIdle();
+        break;
+    }
+  }
+
+  private tryStartCast(): void {
+    if (this.economy.basketFull()) {
+      this.events.emit('basketFull', {});
+      this.events.emit('toast', { message: 'Basket is full — visit the market to sell some catches!' });
+      return;
+    }
+    this.gauge = randomSweetSpot();
+    this.aimClock = 0;
+    this.setPhase('aiming');
+  }
+
+  private lockCast(): void {
+    const value = this.debugPerfectCastMode ? this.gauge.sweetSpot : gaugeValue(this.aimClock);
+    this.lockedPrecision = castPrecision(value, this.gauge);
+    
+    let L = 0, T = 0, S = 0;
+    if (this.lockedPrecision > 0.95) {
+      L = 7; T = 7; S = 7;
+    } else if (this.lockedPrecision > 0) {
+      L = Math.floor(Math.random() * 6) + 1;
+      T = Math.floor(Math.random() * 6) + 1;
+      S = Math.floor(Math.random() * 6) + 1;
+    }
+    this.lockedRolls = { L, T, S };
+    
+    this.events.emit('castLocked', { precision: this.lockedPrecision, rolls: this.lockedRolls });
+    
+    if (this.lockedRolls && (this.lockedRolls.L === 1 || this.lockedRolls.L === 7) && Math.random() < 0.25) {
+      this.events.emit('toast', { message: 'Bait Saver! Your bait was not consumed.' });
+    } else {
+      this.economy.consumeBaitForCast();
+    }
+    
+    this.setPhase('casting');
+  }
+
+  private enterWaiting(): void {
+    let waitMultiplier = this.economy.waitMultiplier();
+    if (this.lockedRolls && this.lockedRolls.T > 0) {
+      waitMultiplier *= (1 - this.lockedRolls.T * 0.1); 
+    }
+    this.waitDurationSeconds = rollWaitSeconds(waitMultiplier);
+    this.setPhase('waiting');
+  }
+
+  private enterBite(): void {
+    this.setPhase('bite');
+    this.events.emit('biteStarted', {});
+  }
+
+  private resolveBiteSuccess(): void {
+    this.events.emit('biteReacted', { success: true });
+    this.setPhase('resolving');
+
+    const precisionBonus = precisionSkillBonus(this.lockedPrecision);
+    const theme = this.economy.currentTheme();
+    
+    const L = this.lockedRolls ? this.lockedRolls.L : 0;
+    const S = this.lockedRolls ? this.lockedRolls.S : 0;
+    
+    const result = resolveCatch(this.economy, precisionBonus, theme, L, S);
+    const levelResult = this.economy.addXp(result.xpAwarded);
+    this.lastCatch = result;
+
+    if ((L === 6 || L === 7) && Math.random() < 0.25) {
+      this.events.emit('patienceBonusAwarded', {});
+    }
+
+    this.events.emit('catchResolved', { result });
+    this.events.emit('xpGained', { amount: result.xpAwarded, ...levelResult });
+    if (levelResult.themeChanged) this.events.emit('themeChanged', { theme: levelResult.newTheme });
+
+    this.setPhase('celebrating');
+  }
+
+  private enterMissed(reason: 'early' | 'late' | 'no-react'): void {
+    this.events.emit('biteReacted', { success: false });
+    this.events.emit('missed', { reason });
+    this.events.emit('toast', { message: 'It got away...' });
+    this.setPhase('missed');
+  }
+
+  private enterIdle(): void {
+    this.setPhase('idle');
+  }
+
+  private setPhase(phase: FishingPhase): void {
+    this.phase = phase;
+    this.phaseElapsed = 0;
+    this.events.emit('phaseChanged', { phase });
+  }
+}

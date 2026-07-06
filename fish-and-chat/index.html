@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#bfe3d8" />
+    <title>Fish and Chat</title>
+  </head>
+  <body>
+    <main id="app">
+      <canvas id="game-canvas" aria-label="Fish and Chat game canvas"></canvas>
+      <div style="position: absolute; left: max(20px, env(safe-area-inset-left)); top: max(20px, env(safe-area-inset-top)); z-index: 100;">
+        <button id="debug-perfect-cast" style="padding: 8px 12px; background: rgba(0,0,0,0.5); color: #fff; border: 1px solid #fff; border-radius: 4px; font-weight: bold; cursor: pointer; margin-bottom: 8px; display: block;">Perfect Cast (Debug)</button>
+        <button id="debug-auto-fish" style="padding: 8px 12px; background: rgba(0,0,0,0.5); color: #fff; border: 1px solid #fff; border-radius: 4px; font-weight: bold; cursor: pointer; display: block;">Auto-Fish (AFK)</button>
+      </div>
+      <button id="action-button" type="button" aria-label="Cast / React">Cast</button>
+      <section id="title-screen" role="dialog" aria-label="Fish and Chat title screen">
+        <img id="title-logo" src="/images/logo-title.png" alt="Fish and Chat" />
+        <p id="title-tagline">A cozy fishing afternoon awaits.</p>
+        <button id="title-start" type="button">Cast Off!</button>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

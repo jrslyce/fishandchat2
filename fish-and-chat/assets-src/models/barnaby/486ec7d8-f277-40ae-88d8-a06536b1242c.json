@@ -1,0 +1,39 @@
+{
+  "task_id": "486ec7d8-f277-40ae-88d8-a06536b1242c",
+  "type": "text_to_model",
+  "status": "success",
+  "input": {
+    "prompt": "voxel-style walrus fishmonger character, chunky cube-based low-poly body, wearing a simple apron, full body visible, T-pose, arms away from body, legs separated, front facing, symmetric, no props fused to body, game asset for cozy fishing game",
+    "model_version": "v3.1-20260211",
+    "texture": true,
+    "pbr": true,
+    "texture_quality": "detailed",
+    "texture_alignment": "geometry",
+    "smart_low_poly": true,
+    "export_uv": true,
+    "face_limit": 8000,
+    "geometry_quality": "standard"
+  },
+  "output": {
+    "pbr_model": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/486ec7d8-f277-40ae-88d8-a06536b1242c/tripo_pbr_model_486ec7d8-f277-40ae-88d8-a06536b1242c.glb?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvNDg2ZWM3ZDgtZjI3Ny00MGFlLTg4ZDgtYTA2NTM2YjEyNDJjL3RyaXBvX3Bicl9tb2RlbF80ODZlYzdkOC1mMjc3LTQwYWUtODhkOC1hMDY1MzZiMTI0MmMuZ2xiIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzgzMjk2MDAwfX19XX0_&Signature=NCAVQ9wY4yFAhXpqwJMspR0EtbkC7pDT~SeGM7eqdGxGVZpva1Tbagesuqx3UwRT87vjbl9O-8gjx4J8pSCREX7V~kC-gXfm4-vu4XQhhhhogQm566keUX4uFXlYlkgLrSaRwuVFsWx2Wd3AFwQHQ9xpRdusW93hDOLYl4mHXDTYTDe-wlpMwHysCH9KvryrYvm8bIBhLzcxGuMi-hQZgdTaj4GRDd0mCYG8iGnCeO0PoyIseio4X0j1PeEPzgnnORvE-83LWzWs30-dxLTTJoLblUCQA-gIOj3db9L2bHNbZWuBeqrY7zQWBL8EUePBJNMPzECIklhCrowRZzskpA__",
+    "generated_image": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/486ec7d8-f277-40ae-88d8-a06536b1242c/text2image_486ec7d8-f277-40ae-88d8-a06536b1242c.jpeg?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvNDg2ZWM3ZDgtZjI3Ny00MGFlLTg4ZDgtYTA2NTM2YjEyNDJjL3RleHQyaW1hZ2VfNDg2ZWM3ZDgtZjI3Ny00MGFlLTg4ZDgtYTA2NTM2YjEyNDJjLmpwZWciLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3ODMyOTYwMDB9fX1dfQ__&Signature=LEj6GMKE6A2SIJ-S9xELvfNH2Pawd3Zp4M74o6xhdWzlKCp-DRi2FmjwdPu5SFci1BDGB2DKGEQPbuaK1IGET06ml~xzVOTkmLIQAVYSW0UuOPBRL1ik~KCW7YtyZSkLleBz-89QNQxA~RyKEHFVUTXfKItqRCG~frq98dZGtYb67ex8NRKuPhb29zwmS-urgOhBdrMEX16RJ0W9fCfWqLu119ur6HiQT0P9JtEygDkDziqLfW-~6OSHzyGjr4UZxWcoHT4lnFreHkZzlU3XNjxlRxO9AzZ8GCnBbpoOz4NLqtfANzuNyuGRpJLH~fO5ErEOFoUhKC8VDqoop9tceg__",
+    "rendered_image": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/486ec7d8-f277-40ae-88d8-a06536b1242c/legacy_mesh.webp?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvNDg2ZWM3ZDgtZjI3Ny00MGFlLTg4ZDgtYTA2NTM2YjEyNDJjL2xlZ2FjeV9tZXNoLndlYnAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3ODMyOTYwMDB9fX1dfQ__&Signature=bcZHhZ48IVGSPV2jMKcUmk2tqg5eGelIR1MBpsOfQbLewV-nk7GLdcvb5wIxOuvx0cGCeBeQSaeHpCPTEiOGvy-~aU7VBb83jACdrfvykPjb1A8XnI-coThx-7MkXTgzFmrbs6lmYJ7BNPsn1B2De5bUgg3Gg5jWl-yXk2xcGU129jTuKFjp1L1UPHFdIlprS3G9nrhLYOkbuZOgLdbYZv5SD5-bZJjAFcYDaB7mEIRbKjynk0NWzqY8I4waJnztNcvRPP0T3qLQupRtViMFnfNWF2hKrdObbl6Utfry478iQu~KTFRALMVYhR~kj8o6Pd4rrOVJVhYQXw17psaJNQ__"
+  },
+  "progress": 100,
+  "create_time": 1783225777,
+  "consumed_credit": 40,
+  "prompt": "voxel-style walrus fishmonger character, chunky cube-based low-poly body, wearing a simple apron, full body visible, T-pose, arms away from body, legs separated, front facing, symmetric, no props fused to body, game asset for cozy fishing game",
+  "thumbnail": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/486ec7d8-f277-40ae-88d8-a06536b1242c/legacy_mesh.webp?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvNDg2ZWM3ZDgtZjI3Ny00MGFlLTg4ZDgtYTA2NTM2YjEyNDJjL2xlZ2FjeV9tZXNoLndlYnAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3ODMyOTYwMDB9fX1dfQ__&Signature=bcZHhZ48IVGSPV2jMKcUmk2tqg5eGelIR1MBpsOfQbLewV-nk7GLdcvb5wIxOuvx0cGCeBeQSaeHpCPTEiOGvy-~aU7VBb83jACdrfvykPjb1A8XnI-coThx-7MkXTgzFmrbs6lmYJ7BNPsn1B2De5bUgg3Gg5jWl-yXk2xcGU129jTuKFjp1L1UPHFdIlprS3G9nrhLYOkbuZOgLdbYZv5SD5-bZJjAFcYDaB7mEIRbKjynk0NWzqY8I4waJnztNcvRPP0T3qLQupRtViMFnfNWF2hKrdObbl6Utfry478iQu~KTFRALMVYhR~kj8o6Pd4rrOVJVhYQXw17psaJNQ__",
+  "queuing_num": -1,
+  "running_left_time": -1,
+  "result": {
+    "pbr_model": {
+      "url": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/486ec7d8-f277-40ae-88d8-a06536b1242c/tripo_pbr_model_486ec7d8-f277-40ae-88d8-a06536b1242c.glb?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvNDg2ZWM3ZDgtZjI3Ny00MGFlLTg4ZDgtYTA2NTM2YjEyNDJjL3RyaXBvX3Bicl9tb2RlbF80ODZlYzdkOC1mMjc3LTQwYWUtODhkOC1hMDY1MzZiMTI0MmMuZ2xiIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzgzMjk2MDAwfX19XX0_&Signature=NCAVQ9wY4yFAhXpqwJMspR0EtbkC7pDT~SeGM7eqdGxGVZpva1Tbagesuqx3UwRT87vjbl9O-8gjx4J8pSCREX7V~kC-gXfm4-vu4XQhhhhogQm566keUX4uFXlYlkgLrSaRwuVFsWx2Wd3AFwQHQ9xpRdusW93hDOLYl4mHXDTYTDe-wlpMwHysCH9KvryrYvm8bIBhLzcxGuMi-hQZgdTaj4GRDd0mCYG8iGnCeO0PoyIseio4X0j1PeEPzgnnORvE-83LWzWs30-dxLTTJoLblUCQA-gIOj3db9L2bHNbZWuBeqrY7zQWBL8EUePBJNMPzECIklhCrowRZzskpA__",
+      "type": "glb"
+    },
+    "rendered_image": {
+      "type": "webp",
+      "url": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/486ec7d8-f277-40ae-88d8-a06536b1242c/legacy_mesh.webp?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvNDg2ZWM3ZDgtZjI3Ny00MGFlLTg4ZDgtYTA2NTM2YjEyNDJjL2xlZ2FjeV9tZXNoLndlYnAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3ODMyOTYwMDB9fX1dfQ__&Signature=bcZHhZ48IVGSPV2jMKcUmk2tqg5eGelIR1MBpsOfQbLewV-nk7GLdcvb5wIxOuvx0cGCeBeQSaeHpCPTEiOGvy-~aU7VBb83jACdrfvykPjb1A8XnI-coThx-7MkXTgzFmrbs6lmYJ7BNPsn1B2De5bUgg3Gg5jWl-yXk2xcGU129jTuKFjp1L1UPHFdIlprS3G9nrhLYOkbuZOgLdbYZv5SD5-bZJjAFcYDaB7mEIRbKjynk0NWzqY8I4waJnztNcvRPP0T3qLQupRtViMFnfNWF2hKrdObbl6Utfry478iQu~KTFRALMVYhR~kj8o6Pd4rrOVJVhYQXw17psaJNQ__"
+    }
+  }
+}

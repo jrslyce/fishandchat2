@@ -1,0 +1,39 @@
+{
+  "task_id": "f4500b28-f57c-4e53-9a8b-b2e55fea9ce5",
+  "type": "text_to_model",
+  "status": "success",
+  "input": {
+    "prompt": "simple cute voxel fish, chunky cube segments, neutral gray-white body, big friendly eye, game asset, single object, centered, side-profile readable silhouette, plain design for recoloring",
+    "model_version": "v3.1-20260211",
+    "texture": true,
+    "pbr": true,
+    "texture_quality": "standard",
+    "texture_alignment": "geometry",
+    "smart_low_poly": true,
+    "export_uv": true,
+    "face_limit": 4000,
+    "geometry_quality": "standard"
+  },
+  "output": {
+    "pbr_model": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/f4500b28-f57c-4e53-9a8b-b2e55fea9ce5/tripo_pbr_model_f4500b28-f57c-4e53-9a8b-b2e55fea9ce5.glb?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvZjQ1MDBiMjgtZjU3Yy00ZTUzLTlhOGItYjJlNTVmZWE5Y2U1L3RyaXBvX3Bicl9tb2RlbF9mNDUwMGIyOC1mNTdjLTRlNTMtOWE4Yi1iMmU1NWZlYTljZTUuZ2xiIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzgzMjk2MDAwfX19XX0_&Signature=caywks6AdPNxij~kx~CLlXv-lKrM~xSWoPKtTZEqhWkwW9jwzM5O7u3vWdP~hmeU5hjdBD20YIAkCca-KpUZPVoVKTxCzkl1ImpnUzsGBOQIRkOlGdb8ZkZmIq0at9mq~3JD4AVti4kmEr66hCAdSDyuLNW7ROtK1q~WXfyvfAPqBKXFdXVRDlw397nsBBtXUCjC95SyQkHnmndb2ZwX27WP1opA7YkmVe~1mT8J67R1whQTLcEr9p6TkVtdq-XLmQ8~n8cltJUN9RnvxVsETqVBwEnukmvZrtYwiXTePqpY5UrLdDZJSaXiaPZQ-59Q7DjV50ryRCJ~67bQHtBSOw__",
+    "generated_image": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/f4500b28-f57c-4e53-9a8b-b2e55fea9ce5/text2image_f4500b28-f57c-4e53-9a8b-b2e55fea9ce5.jpeg?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvZjQ1MDBiMjgtZjU3Yy00ZTUzLTlhOGItYjJlNTVmZWE5Y2U1L3RleHQyaW1hZ2VfZjQ1MDBiMjgtZjU3Yy00ZTUzLTlhOGItYjJlNTVmZWE5Y2U1LmpwZWciLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3ODMyOTYwMDB9fX1dfQ__&Signature=c072SjvU20jVsvBlVyBguY37Qaxs-9MD9n0h~hOPxMLrzYQSnAtYUKlpyDwZUMtzYAC8n2~4znDR5TbQF6gMCdqIyKLf~7Mm~jWYr9-Y3YDbCbaJhobOFCBaefKvrKqVjtDEBC6SIpYUCE60ZKQQV9g1YVUcZzEdWg6O02W9T336OxwVe-Vn83xCtrn6wB7TfZY~M7fcWCoIOeqVvPmdcjrDnC9zZGAvA29wj45xjpnQAO1h-UJviaV9TZvzQ73ZYXM54rXOdCdcKVwAof3u0pIS4hXd7Mrqz9LQtOGGB1f9zRWVzGmO9Kf2gRl1IviTBUp8QeH7qUkkMqupZ5vRAQ__",
+    "rendered_image": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/f4500b28-f57c-4e53-9a8b-b2e55fea9ce5/legacy_mesh.webp?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvZjQ1MDBiMjgtZjU3Yy00ZTUzLTlhOGItYjJlNTVmZWE5Y2U1L2xlZ2FjeV9tZXNoLndlYnAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3ODMyOTYwMDB9fX1dfQ__&Signature=f~VcP7Odu83e54lNsIeysutrW6kUo5XGm7qK2ng5pMuQv33779a1JKxdTT7lMKS2FZdHcfomS-9v5JItd3VpqnwAH~icBMx9z1dtt-L8J7y2CvEHdxTn5SaN2HI0XKQ41FGU7ROfaLcOoujNR2LdVuZ-qbOGGHHABuAztVw2LfEfWaA5Rr~T7CckttRBLnkakI82vfEHI5PuuUsIbLXes5lTVpBAA3~25EnuJfX4A6bJ0xrv24bnBk2L9~8h~XRzfDh5yHcem9-3bTMdIU5jVoTidlq9hISGUD9DgBcO1V9KENTB~iyhsHqB1EOv7CeGofZAaYvT50h-6Qs0OSqTsA__"
+  },
+  "progress": 100,
+  "create_time": 1783226218,
+  "consumed_credit": 30,
+  "prompt": "simple cute voxel fish, chunky cube segments, neutral gray-white body, big friendly eye, game asset, single object, centered, side-profile readable silhouette, plain design for recoloring",
+  "thumbnail": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/f4500b28-f57c-4e53-9a8b-b2e55fea9ce5/legacy_mesh.webp?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvZjQ1MDBiMjgtZjU3Yy00ZTUzLTlhOGItYjJlNTVmZWE5Y2U1L2xlZ2FjeV9tZXNoLndlYnAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3ODMyOTYwMDB9fX1dfQ__&Signature=f~VcP7Odu83e54lNsIeysutrW6kUo5XGm7qK2ng5pMuQv33779a1JKxdTT7lMKS2FZdHcfomS-9v5JItd3VpqnwAH~icBMx9z1dtt-L8J7y2CvEHdxTn5SaN2HI0XKQ41FGU7ROfaLcOoujNR2LdVuZ-qbOGGHHABuAztVw2LfEfWaA5Rr~T7CckttRBLnkakI82vfEHI5PuuUsIbLXes5lTVpBAA3~25EnuJfX4A6bJ0xrv24bnBk2L9~8h~XRzfDh5yHcem9-3bTMdIU5jVoTidlq9hISGUD9DgBcO1V9KENTB~iyhsHqB1EOv7CeGofZAaYvT50h-6Qs0OSqTsA__",
+  "queuing_num": -1,
+  "running_left_time": -1,
+  "result": {
+    "pbr_model": {
+      "url": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/f4500b28-f57c-4e53-9a8b-b2e55fea9ce5/tripo_pbr_model_f4500b28-f57c-4e53-9a8b-b2e55fea9ce5.glb?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvZjQ1MDBiMjgtZjU3Yy00ZTUzLTlhOGItYjJlNTVmZWE5Y2U1L3RyaXBvX3Bicl9tb2RlbF9mNDUwMGIyOC1mNTdjLTRlNTMtOWE4Yi1iMmU1NWZlYTljZTUuZ2xiIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzgzMjk2MDAwfX19XX0_&Signature=caywks6AdPNxij~kx~CLlXv-lKrM~xSWoPKtTZEqhWkwW9jwzM5O7u3vWdP~hmeU5hjdBD20YIAkCca-KpUZPVoVKTxCzkl1ImpnUzsGBOQIRkOlGdb8ZkZmIq0at9mq~3JD4AVti4kmEr66hCAdSDyuLNW7ROtK1q~WXfyvfAPqBKXFdXVRDlw397nsBBtXUCjC95SyQkHnmndb2ZwX27WP1opA7YkmVe~1mT8J67R1whQTLcEr9p6TkVtdq-XLmQ8~n8cltJUN9RnvxVsETqVBwEnukmvZrtYwiXTePqpY5UrLdDZJSaXiaPZQ-59Q7DjV50ryRCJ~67bQHtBSOw__",
+      "type": "glb"
+    },
+    "rendered_image": {
+      "type": "webp",
+      "url": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/f4500b28-f57c-4e53-9a8b-b2e55fea9ce5/legacy_mesh.webp?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvZjQ1MDBiMjgtZjU3Yy00ZTUzLTlhOGItYjJlNTVmZWE5Y2U1L2xlZ2FjeV9tZXNoLndlYnAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3ODMyOTYwMDB9fX1dfQ__&Signature=f~VcP7Odu83e54lNsIeysutrW6kUo5XGm7qK2ng5pMuQv33779a1JKxdTT7lMKS2FZdHcfomS-9v5JItd3VpqnwAH~icBMx9z1dtt-L8J7y2CvEHdxTn5SaN2HI0XKQ41FGU7ROfaLcOoujNR2LdVuZ-qbOGGHHABuAztVw2LfEfWaA5Rr~T7CckttRBLnkakI82vfEHI5PuuUsIbLXes5lTVpBAA3~25EnuJfX4A6bJ0xrv24bnBk2L9~8h~XRzfDh5yHcem9-3bTMdIU5jVoTidlq9hISGUD9DgBcO1V9KENTB~iyhsHqB1EOv7CeGofZAaYvT50h-6Qs0OSqTsA__"
+    }
+  }
+}

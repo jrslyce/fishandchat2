@@ -1,0 +1,39 @@
+{
+  "task_id": "12886f27-5b39-4453-9f0e-294854466a1e",
+  "type": "text_to_model",
+  "status": "success",
+  "input": {
+    "prompt": "tiny cute voxel robot with a small fishing rod attachment, rounded cube body, single antenna, pastel teal and white color scheme, game asset, single object, centered, readable silhouette",
+    "model_version": "v3.1-20260211",
+    "texture": true,
+    "pbr": true,
+    "texture_quality": "standard",
+    "texture_alignment": "geometry",
+    "smart_low_poly": true,
+    "export_uv": true,
+    "face_limit": 5000,
+    "geometry_quality": "standard"
+  },
+  "output": {
+    "pbr_model": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/12886f27-5b39-4453-9f0e-294854466a1e/tripo_pbr_model_12886f27-5b39-4453-9f0e-294854466a1e.glb?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvMTI4ODZmMjctNWIzOS00NDUzLTlmMGUtMjk0ODU0NDY2YTFlL3RyaXBvX3Bicl9tb2RlbF8xMjg4NmYyNy01YjM5LTQ0NTMtOWYwZS0yOTQ4NTQ0NjZhMWUuZ2xiIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzgzMjk2MDAwfX19XX0_&Signature=Uyi1t1ozsVNHXP4O3zxWTVKBcZuQQR7Vsem6H9yHhlRz-iq24xmBuPrXKwPOo6gHMVhlRAsw7icuS-cPNregnH-ifEMnVNTCzwa2WK~OlnZdPncsRSIWhONvEf7yLEgLDbFf3xDTy~p1feq8GKduXgYJXyoz7XM5DxChwRJtMuzIdQ4RSgKYFz3IZTv7Auhw4z8Gd-YxgxIP6PP9s3FP8KJwjQCtEpKQx6n1noz0vc2jDLrQkIQ3yQmaPS7KiWL8XvFwpDD2HFI0Xd1mODkqGRdi37NbyaoE64~KhxGqSprHfhPYuRiZWU7YRzHBOpEQv9DyzXd-KHtntBI4URQwAg__",
+    "generated_image": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/12886f27-5b39-4453-9f0e-294854466a1e/text2image_12886f27-5b39-4453-9f0e-294854466a1e.jpeg?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvMTI4ODZmMjctNWIzOS00NDUzLTlmMGUtMjk0ODU0NDY2YTFlL3RleHQyaW1hZ2VfMTI4ODZmMjctNWIzOS00NDUzLTlmMGUtMjk0ODU0NDY2YTFlLmpwZWciLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3ODMyOTYwMDB9fX1dfQ__&Signature=gKrWUsJ73wy3oSG-4CLYuerW7Z67oIxUVgetFbCZ~sWaOF606kAmUT5puH5drUrAykdZik~HwTepP6Wq36jkjbsVcwJAVSEB-tBJm5rzVwKTk51DngSqkxU~dSyBENoAU9WoJYDg9ApEmGytVQ19jV-8gl-CzAstTgBE5VF5dwyviOZw902aoAZ820bmgxC70x-NJhoM3ylpflnl2lNnr8QNv8dlcz~BApk-jKRmlNw0oFLs4zc2CTZQAkP8I-jn7afu~Kjm4TNN-GYfWy3gVZE4JjjEj9x40ehuxIPqbKaxsJP2DxpW7Nx7tJfn8PJx0ccBOpHhOtpZMVy3zLA9rQ__",
+    "rendered_image": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/12886f27-5b39-4453-9f0e-294854466a1e/legacy_mesh.webp?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvMTI4ODZmMjctNWIzOS00NDUzLTlmMGUtMjk0ODU0NDY2YTFlL2xlZ2FjeV9tZXNoLndlYnAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3ODMyOTYwMDB9fX1dfQ__&Signature=Iqxt3r3WGe8jlWGJ2zM2vFiDJiggasb5axDiVeVho-sL4TOo0CylJFY8BvpL8jr1n2l~yoFxYT65zUUsN5qeBhRgos~9HNSCW-~GfJSAetoENt5GG7fWS0irAQR6mjmVO9V~8KxLeLa-K5pflYAKCv36aPNi0qQ2rb5T3a95T8HN3CvxgPYrGleGw6nLnGAoiCoVKNBc8uMvxFO584peSo3E~s232oG6FDupBaecGvMvuNNF8Xqh58Ox~7wGjw5BvBBjpDy08CN0SUgnIOuFfL5EHgHpsiTsbvXr-OxPjvUqFx8yQkeuWvVSI~Og6B~37PtN9mXLkXEy58jykJkV5w__"
+  },
+  "progress": 100,
+  "create_time": 1783226249,
+  "consumed_credit": 30,
+  "prompt": "tiny cute voxel robot with a small fishing rod attachment, rounded cube body, single antenna, pastel teal and white color scheme, game asset, single object, centered, readable silhouette",
+  "thumbnail": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/12886f27-5b39-4453-9f0e-294854466a1e/legacy_mesh.webp?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvMTI4ODZmMjctNWIzOS00NDUzLTlmMGUtMjk0ODU0NDY2YTFlL2xlZ2FjeV9tZXNoLndlYnAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3ODMyOTYwMDB9fX1dfQ__&Signature=Iqxt3r3WGe8jlWGJ2zM2vFiDJiggasb5axDiVeVho-sL4TOo0CylJFY8BvpL8jr1n2l~yoFxYT65zUUsN5qeBhRgos~9HNSCW-~GfJSAetoENt5GG7fWS0irAQR6mjmVO9V~8KxLeLa-K5pflYAKCv36aPNi0qQ2rb5T3a95T8HN3CvxgPYrGleGw6nLnGAoiCoVKNBc8uMvxFO584peSo3E~s232oG6FDupBaecGvMvuNNF8Xqh58Ox~7wGjw5BvBBjpDy08CN0SUgnIOuFfL5EHgHpsiTsbvXr-OxPjvUqFx8yQkeuWvVSI~Og6B~37PtN9mXLkXEy58jykJkV5w__",
+  "queuing_num": -1,
+  "running_left_time": -1,
+  "result": {
+    "pbr_model": {
+      "type": "glb",
+      "url": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/12886f27-5b39-4453-9f0e-294854466a1e/tripo_pbr_model_12886f27-5b39-4453-9f0e-294854466a1e.glb?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvMTI4ODZmMjctNWIzOS00NDUzLTlmMGUtMjk0ODU0NDY2YTFlL3RyaXBvX3Bicl9tb2RlbF8xMjg4NmYyNy01YjM5LTQ0NTMtOWYwZS0yOTQ4NTQ0NjZhMWUuZ2xiIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzgzMjk2MDAwfX19XX0_&Signature=Uyi1t1ozsVNHXP4O3zxWTVKBcZuQQR7Vsem6H9yHhlRz-iq24xmBuPrXKwPOo6gHMVhlRAsw7icuS-cPNregnH-ifEMnVNTCzwa2WK~OlnZdPncsRSIWhONvEf7yLEgLDbFf3xDTy~p1feq8GKduXgYJXyoz7XM5DxChwRJtMuzIdQ4RSgKYFz3IZTv7Auhw4z8Gd-YxgxIP6PP9s3FP8KJwjQCtEpKQx6n1noz0vc2jDLrQkIQ3yQmaPS7KiWL8XvFwpDD2HFI0Xd1mODkqGRdi37NbyaoE64~KhxGqSprHfhPYuRiZWU7YRzHBOpEQv9DyzXd-KHtntBI4URQwAg__"
+    },
+    "rendered_image": {
+      "type": "webp",
+      "url": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/12886f27-5b39-4453-9f0e-294854466a1e/legacy_mesh.webp?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvMTI4ODZmMjctNWIzOS00NDUzLTlmMGUtMjk0ODU0NDY2YTFlL2xlZ2FjeV9tZXNoLndlYnAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3ODMyOTYwMDB9fX1dfQ__&Signature=Iqxt3r3WGe8jlWGJ2zM2vFiDJiggasb5axDiVeVho-sL4TOo0CylJFY8BvpL8jr1n2l~yoFxYT65zUUsN5qeBhRgos~9HNSCW-~GfJSAetoENt5GG7fWS0irAQR6mjmVO9V~8KxLeLa-K5pflYAKCv36aPNi0qQ2rb5T3a95T8HN3CvxgPYrGleGw6nLnGAoiCoVKNBc8uMvxFO584peSo3E~s232oG6FDupBaecGvMvuNNF8Xqh58Ox~7wGjw5BvBBjpDy08CN0SUgnIOuFfL5EHgHpsiTsbvXr-OxPjvUqFx8yQkeuWvVSI~Og6B~37PtN9mXLkXEy58jykJkV5w__"
+    }
+  }
+}

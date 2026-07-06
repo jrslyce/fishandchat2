@@ -1,0 +1,39 @@
+{
+  "task_id": "8889e280-3579-474c-9b56-4279cacf51ca",
+  "type": "text_to_model",
+  "status": "success",
+  "input": {
+    "prompt": "voxel old leather boot, worn and weathered, chunky cube-based low-poly style, game asset, single object, centered, readable silhouette",
+    "model_version": "v3.1-20260211",
+    "texture": true,
+    "pbr": true,
+    "texture_quality": "standard",
+    "texture_alignment": "geometry",
+    "smart_low_poly": true,
+    "export_uv": true,
+    "face_limit": 3000,
+    "geometry_quality": "standard"
+  },
+  "output": {
+    "pbr_model": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/8889e280-3579-474c-9b56-4279cacf51ca/tripo_pbr_model_8889e280-3579-474c-9b56-4279cacf51ca.glb?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvODg4OWUyODAtMzU3OS00NzRjLTliNTYtNDI3OWNhY2Y1MWNhL3RyaXBvX3Bicl9tb2RlbF84ODg5ZTI4MC0zNTc5LTQ3NGMtOWI1Ni00Mjc5Y2FjZjUxY2EuZ2xiIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzgzMjk2MDAwfX19XX0_&Signature=vRDD-PqcFvHnGlDqAAoy~rMA5O2NrCQSMt0cmH7hp24FZRNVX7rihnU2vfRcYPzahpoITy3D8-dbjLRWRN1ySGwTDmTmdX07ZFhkFeDySHAzU~b2jInbxfPNi1J1Pa-jDZs~QLnrW-v6YC~Sa~obhDtVcY72m~DmYt8fZw6QvXv1MEWlial8zZJfODen9cROsKAR1B8cEIqwnlc-Qj~bZI5h4BWY040Yrbp6El75PIBlA4Fg03Frj5-0vYJdbRyzMJjHVzh-Dc53XoSWTd9HRAk7ZiKV9nQ~StAbc8hmkYLZEtyMvpxVgm4EMGQ7pu17zg6PKeP4IPZbd7YZPYOxgQ__",
+    "generated_image": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/8889e280-3579-474c-9b56-4279cacf51ca/text2image_8889e280-3579-474c-9b56-4279cacf51ca.jpeg?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvODg4OWUyODAtMzU3OS00NzRjLTliNTYtNDI3OWNhY2Y1MWNhL3RleHQyaW1hZ2VfODg4OWUyODAtMzU3OS00NzRjLTliNTYtNDI3OWNhY2Y1MWNhLmpwZWciLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3ODMyOTYwMDB9fX1dfQ__&Signature=ggyRACJIwP~ii08Cp-JA3CiQawVN9-d84JUwyalOVgu93QGAjMYmORHqg4MjK0jeNnfNu8K1bvQqvqUZlkTwF6Ao1OwTTUyvLbreEZojwvwCut0rwkquErJ~SUsCXOXNIuxkCfHBFtjTmzee6mVAltB58udq1VCNkPNyv9JsPwVCx54QwTYwdiwBTzqKiXXwFUs4wp7T5dJaGp1MQisBTP8Gou3IGB81-~YRCaYj6UXGdzITjXp0fi56MgBCFkFU3z7SBqV0B4kHnqzn4uHpxB5h5mmS-7JHcG62DpvFCMtx1~k6fzD0MGTSkt0obdgTxpA1lVp8YJjRRXBzz1ctWw__",
+    "rendered_image": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/8889e280-3579-474c-9b56-4279cacf51ca/legacy_mesh.webp?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvODg4OWUyODAtMzU3OS00NzRjLTliNTYtNDI3OWNhY2Y1MWNhL2xlZ2FjeV9tZXNoLndlYnAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3ODMyOTYwMDB9fX1dfQ__&Signature=h8zUNvW~smcI3b7mTsl5BTP6SkoVcQdtaIkeuQQGcKuTxTzedLGQPGP2qKODTlGu6NAcXeTzg~J8jkoR4byKsNMZegV2uazinMc52hUiT5r6jMMuIqJz1Wvl7MLY~YO~2EWfbjD8vwh0YwagKX1EH4GrL7lwPkzOzJ7w51OSZmfmW2aovZ~KXiUGPrgMKMPVtFSPDLYzW~jDMhqJx1aH6431B45oK5OZroCl1JBsgjyToAeGV4rBW89wnOM23EbC7WFG6c5gRKG18Wgy~IHVQPIAIA~Oqn95F~M3FDxIryQAfiBkcePhDKhXqTKjoDJcBEJqpDEdOjtb7RXW7D9gjg__"
+  },
+  "progress": 100,
+  "create_time": 1783226253,
+  "consumed_credit": 30,
+  "prompt": "voxel old leather boot, worn and weathered, chunky cube-based low-poly style, game asset, single object, centered, readable silhouette",
+  "thumbnail": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/8889e280-3579-474c-9b56-4279cacf51ca/legacy_mesh.webp?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvODg4OWUyODAtMzU3OS00NzRjLTliNTYtNDI3OWNhY2Y1MWNhL2xlZ2FjeV9tZXNoLndlYnAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3ODMyOTYwMDB9fX1dfQ__&Signature=h8zUNvW~smcI3b7mTsl5BTP6SkoVcQdtaIkeuQQGcKuTxTzedLGQPGP2qKODTlGu6NAcXeTzg~J8jkoR4byKsNMZegV2uazinMc52hUiT5r6jMMuIqJz1Wvl7MLY~YO~2EWfbjD8vwh0YwagKX1EH4GrL7lwPkzOzJ7w51OSZmfmW2aovZ~KXiUGPrgMKMPVtFSPDLYzW~jDMhqJx1aH6431B45oK5OZroCl1JBsgjyToAeGV4rBW89wnOM23EbC7WFG6c5gRKG18Wgy~IHVQPIAIA~Oqn95F~M3FDxIryQAfiBkcePhDKhXqTKjoDJcBEJqpDEdOjtb7RXW7D9gjg__",
+  "queuing_num": -1,
+  "running_left_time": -1,
+  "result": {
+    "pbr_model": {
+      "url": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/8889e280-3579-474c-9b56-4279cacf51ca/tripo_pbr_model_8889e280-3579-474c-9b56-4279cacf51ca.glb?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvODg4OWUyODAtMzU3OS00NzRjLTliNTYtNDI3OWNhY2Y1MWNhL3RyaXBvX3Bicl9tb2RlbF84ODg5ZTI4MC0zNTc5LTQ3NGMtOWI1Ni00Mjc5Y2FjZjUxY2EuZ2xiIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzgzMjk2MDAwfX19XX0_&Signature=vRDD-PqcFvHnGlDqAAoy~rMA5O2NrCQSMt0cmH7hp24FZRNVX7rihnU2vfRcYPzahpoITy3D8-dbjLRWRN1ySGwTDmTmdX07ZFhkFeDySHAzU~b2jInbxfPNi1J1Pa-jDZs~QLnrW-v6YC~Sa~obhDtVcY72m~DmYt8fZw6QvXv1MEWlial8zZJfODen9cROsKAR1B8cEIqwnlc-Qj~bZI5h4BWY040Yrbp6El75PIBlA4Fg03Frj5-0vYJdbRyzMJjHVzh-Dc53XoSWTd9HRAk7ZiKV9nQ~StAbc8hmkYLZEtyMvpxVgm4EMGQ7pu17zg6PKeP4IPZbd7YZPYOxgQ__",
+      "type": "glb"
+    },
+    "rendered_image": {
+      "type": "webp",
+      "url": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/8889e280-3579-474c-9b56-4279cacf51ca/legacy_mesh.webp?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvODg4OWUyODAtMzU3OS00NzRjLTliNTYtNDI3OWNhY2Y1MWNhL2xlZ2FjeV9tZXNoLndlYnAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3ODMyOTYwMDB9fX1dfQ__&Signature=h8zUNvW~smcI3b7mTsl5BTP6SkoVcQdtaIkeuQQGcKuTxTzedLGQPGP2qKODTlGu6NAcXeTzg~J8jkoR4byKsNMZegV2uazinMc52hUiT5r6jMMuIqJz1Wvl7MLY~YO~2EWfbjD8vwh0YwagKX1EH4GrL7lwPkzOzJ7w51OSZmfmW2aovZ~KXiUGPrgMKMPVtFSPDLYzW~jDMhqJx1aH6431B45oK5OZroCl1JBsgjyToAeGV4rBW89wnOM23EbC7WFG6c5gRKG18Wgy~IHVQPIAIA~Oqn95F~M3FDxIryQAfiBkcePhDKhXqTKjoDJcBEJqpDEdOjtb7RXW7D9gjg__"
+    }
+  }
+}

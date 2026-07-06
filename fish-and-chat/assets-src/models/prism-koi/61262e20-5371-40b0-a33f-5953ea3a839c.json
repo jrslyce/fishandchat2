@@ -1,0 +1,39 @@
+{
+  "task_id": "61262e20-5371-40b0-a33f-5953ea3a839c",
+  "type": "text_to_model",
+  "status": "success",
+  "input": {
+    "prompt": "voxel-style koi fish, crystalline rainbow scales, chunky cube segments, iridescent pearlescent colors, game asset, single object, centered, side-profile readable silhouette",
+    "model_version": "v3.1-20260211",
+    "texture": true,
+    "pbr": true,
+    "texture_quality": "detailed",
+    "texture_alignment": "geometry",
+    "smart_low_poly": true,
+    "export_uv": true,
+    "face_limit": 6000,
+    "geometry_quality": "standard"
+  },
+  "output": {
+    "pbr_model": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/61262e20-5371-40b0-a33f-5953ea3a839c/tripo_pbr_model_61262e20-5371-40b0-a33f-5953ea3a839c.glb?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvNjEyNjJlMjAtNTM3MS00MGIwLWEzM2YtNTk1M2VhM2E4MzljL3RyaXBvX3Bicl9tb2RlbF82MTI2MmUyMC01MzcxLTQwYjAtYTMzZi01OTUzZWEzYTgzOWMuZ2xiIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzgzMjk2MDAwfX19XX0_&Signature=EtIsYpJdrLfvgOnLcePCY~9pbABhceJM0Rl~HWnsY9vUu97q5sw5jE8g0O~iuldDQ4VPxWxX4JQr-YthSG-n63FwDGjz-CkRs72~8enKSBTZKUW1Uc1goHoic8DuxSBZZ7vPRv66vwXyfgZESXbwfV8wmOiXhgpVYoaVFmUsBchl8euNYukkFLREHWjQ10CFW9Uos~DF1T2o-RpUXFPGrRHQSpzPwJcfEvKKFHqQ94XtS8S~JsOr3HqpaFl9g3MkmMy1D7UZUD55D-3Tys8NsdcDyi1nq2HrydVJAdKJ8Bk--WSJi~x-lGOA9JW0QdvKxJSYr-IlsfqB~OPdPtK9WA__",
+    "generated_image": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/61262e20-5371-40b0-a33f-5953ea3a839c/text2image_61262e20-5371-40b0-a33f-5953ea3a839c.jpeg?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvNjEyNjJlMjAtNTM3MS00MGIwLWEzM2YtNTk1M2VhM2E4MzljL3RleHQyaW1hZ2VfNjEyNjJlMjAtNTM3MS00MGIwLWEzM2YtNTk1M2VhM2E4MzljLmpwZWciLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3ODMyOTYwMDB9fX1dfQ__&Signature=DAQzXzuYXbtYE~igMhjCU-QfgXLgDCpI~EMKxQMjKUHkHw3MJYlmhEC3a0C61ggKWz2Ab5jAYcAHyVBuZaT2ljck6eaUvVbVPhW5Et8EknOYfoXNhAXolHg-5Rb4DWOGYtFdaSjylR3-sRBeSIsoEnwpFmSBvmhBbbhToBuCuzyxODb0P-E9FgXAlLq-dAGqn8IX1TDw0P54MrYpmz2Yh8jpcOEgRHh0kc3FGcbkQtN8mJJu6fEqDgwXPOTGrHsjpkDzEgMUyiR6lCtyWKjqTVSeAq9U3O5jEmn6I019ngl38M7JWHSF9DoKdI~i7TQcUcNpRX69g8sT5mP6f4Uv3w__",
+    "rendered_image": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/61262e20-5371-40b0-a33f-5953ea3a839c/legacy_mesh.webp?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvNjEyNjJlMjAtNTM3MS00MGIwLWEzM2YtNTk1M2VhM2E4MzljL2xlZ2FjeV9tZXNoLndlYnAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3ODMyOTYwMDB9fX1dfQ__&Signature=AAwFDooKbg9~r3wyEAVdhyWx~oa1KlD0Om06i6QvoZnQK8p81waLtv4SuJDAs0yKkvz80yu1~DMaBfjWR~h-PFqVYS5d23-E1ESB636kcstmMAPK98kpdvyVu~8zxnahR6X4lAo1nqMq6YnNznjEyj6JVFLSVKOdyo750I6-eXE9d6zvk8MD~0~PQL9I~4RhN6MbAoIvJ4ctfpHwIxUFY8-ShiLG2yf7VU8aK7hpHEbDLl4MWIg-QL7vjpFio0oV0hhJqSKFmHwV~qkkScpqcW7pvBgX8E~j5Ep~Lw6GY1ws6jaXDkQQHCdrdtkZUAm9UdtZBXl8dZNZb4eA~ulC7A__"
+  },
+  "progress": 100,
+  "create_time": 1783226158,
+  "consumed_credit": 40,
+  "prompt": "voxel-style koi fish, crystalline rainbow scales, chunky cube segments, iridescent pearlescent colors, game asset, single object, centered, side-profile readable silhouette",
+  "thumbnail": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/61262e20-5371-40b0-a33f-5953ea3a839c/legacy_mesh.webp?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvNjEyNjJlMjAtNTM3MS00MGIwLWEzM2YtNTk1M2VhM2E4MzljL2xlZ2FjeV9tZXNoLndlYnAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3ODMyOTYwMDB9fX1dfQ__&Signature=AAwFDooKbg9~r3wyEAVdhyWx~oa1KlD0Om06i6QvoZnQK8p81waLtv4SuJDAs0yKkvz80yu1~DMaBfjWR~h-PFqVYS5d23-E1ESB636kcstmMAPK98kpdvyVu~8zxnahR6X4lAo1nqMq6YnNznjEyj6JVFLSVKOdyo750I6-eXE9d6zvk8MD~0~PQL9I~4RhN6MbAoIvJ4ctfpHwIxUFY8-ShiLG2yf7VU8aK7hpHEbDLl4MWIg-QL7vjpFio0oV0hhJqSKFmHwV~qkkScpqcW7pvBgX8E~j5Ep~Lw6GY1ws6jaXDkQQHCdrdtkZUAm9UdtZBXl8dZNZb4eA~ulC7A__",
+  "queuing_num": -1,
+  "running_left_time": -1,
+  "result": {
+    "pbr_model": {
+      "type": "glb",
+      "url": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/61262e20-5371-40b0-a33f-5953ea3a839c/tripo_pbr_model_61262e20-5371-40b0-a33f-5953ea3a839c.glb?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvNjEyNjJlMjAtNTM3MS00MGIwLWEzM2YtNTk1M2VhM2E4MzljL3RyaXBvX3Bicl9tb2RlbF82MTI2MmUyMC01MzcxLTQwYjAtYTMzZi01OTUzZWEzYTgzOWMuZ2xiIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzgzMjk2MDAwfX19XX0_&Signature=EtIsYpJdrLfvgOnLcePCY~9pbABhceJM0Rl~HWnsY9vUu97q5sw5jE8g0O~iuldDQ4VPxWxX4JQr-YthSG-n63FwDGjz-CkRs72~8enKSBTZKUW1Uc1goHoic8DuxSBZZ7vPRv66vwXyfgZESXbwfV8wmOiXhgpVYoaVFmUsBchl8euNYukkFLREHWjQ10CFW9Uos~DF1T2o-RpUXFPGrRHQSpzPwJcfEvKKFHqQ94XtS8S~JsOr3HqpaFl9g3MkmMy1D7UZUD55D-3Tys8NsdcDyi1nq2HrydVJAdKJ8Bk--WSJi~x-lGOA9JW0QdvKxJSYr-IlsfqB~OPdPtK9WA__"
+    },
+    "rendered_image": {
+      "type": "webp",
+      "url": "https://tripo-data.rg1.data.tripo3d.com/tcli_ddd89715df674dbc990b34c9a0a7c53e/20260705/61262e20-5371-40b0-a33f-5953ea3a839c/legacy_mesh.webp?Key-Pair-Id=K1676C64NMVM2J&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfZGRkODk3MTVkZjY3NGRiYzk5MGIzNGM5YTBhN2M1M2UvMjAyNjA3MDUvNjEyNjJlMjAtNTM3MS00MGIwLWEzM2YtNTk1M2VhM2E4MzljL2xlZ2FjeV9tZXNoLndlYnAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3ODMyOTYwMDB9fX1dfQ__&Signature=AAwFDooKbg9~r3wyEAVdhyWx~oa1KlD0Om06i6QvoZnQK8p81waLtv4SuJDAs0yKkvz80yu1~DMaBfjWR~h-PFqVYS5d23-E1ESB636kcstmMAPK98kpdvyVu~8zxnahR6X4lAo1nqMq6YnNznjEyj6JVFLSVKOdyo750I6-eXE9d6zvk8MD~0~PQL9I~4RhN6MbAoIvJ4ctfpHwIxUFY8-ShiLG2yf7VU8aK7hpHEbDLl4MWIg-QL7vjpFio0oV0hhJqSKFmHwV~qkkScpqcW7pvBgX8E~j5Ep~Lw6GY1ws6jaXDkQQHCdrdtkZUAm9UdtZBXl8dZNZb4eA~ulC7A__"
+    }
+  }
+}
