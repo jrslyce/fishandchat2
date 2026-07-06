@@ -57,28 +57,10 @@ body {
 
 @keyframes sway {
   0%, 100% {
-    transform: rotate(0deg);
+    transform: rotate(-1.5deg);
   }
   50% {
     transform: rotate(1.5deg);
-  }
-}
-
-@keyframes sway-rope-left {
-  0%, 100% {
-    transform: rotateZ(-0.5deg);
-  }
-  50% {
-    transform: rotateZ(0.5deg);
-  }
-}
-
-@keyframes sway-rope-right {
-  0%, 100% {
-    transform: rotateZ(0.5deg);
-  }
-  50% {
-    transform: rotateZ(-0.5deg);
   }
 }
 
@@ -101,26 +83,34 @@ body {
 
 /* Wraps the sign image; ropes are positioned relative to this box so they
    line up with the hole positions baked into the sign art (~13% in from
-   each edge) regardless of the sign's rendered size. */
+   each edge) regardless of the sign's rendered size. The sway animation
+   lives here (not on the img or the rope pseudo-elements separately) so
+   the sign and its ropes rotate together as one rigid body pivoting from
+   the ceiling — otherwise independent rotations desync and open a gap
+   between the rope and the sign at the extremes of the swing. */
 #sign-wrap {
   position: relative;
   max-width: min(420px, 82vw);
   width: 100%;
+  animation: sway 3s ease-in-out infinite;
+  transform-origin: 50% -100vh;
 }
 
-/* Rope extensions: anchored to the sign's own box (bottom: 100% = sign's
-   top edge) and reaching up past the top of the viewport so they always
-   connect into the hole positions baked into the sign art. */
+/* Rope extensions: anchored to the sign's own box and reaching up past the
+   top of the viewport so they always connect into the hole positions baked
+   into the sign art. Extended a few px below the sign's top edge (negative
+   bottom offset) so it overlaps behind the board instead of butting up
+   against it, removing any sub-pixel seam. */
 #sign-wrap::before,
 #sign-wrap::after {
   content: '';
   position: absolute;
-  bottom: 100%;
+  bottom: calc(100% - 6px);
   width: 11px;
-  height: 100vh;
+  height: calc(100vh + 6px);
   background:
     repeating-linear-gradient(
-      27deg,
+      153deg,
       #45332a 0px, #45332a 3px,
       #85614f 3px, #85614f 6px,
       #dbb086 6px, #dbb086 8px,
@@ -129,19 +119,16 @@ body {
   background-size: 11px 22px;
   border-radius: 5px;
   z-index: 15;
-  transform-origin: center bottom;
   box-shadow: inset -2px 0 2px rgba(0,0,0,0.35), inset 2px 0 2px rgba(255,255,255,0.15), 2px 4px 6px rgba(0, 0, 0, 0.25);
   pointer-events: none;
 }
 
 #sign-wrap::before {
   left: calc(13.05% - 5.5px);
-  animation: sway-rope-left 3s ease-in-out infinite;
 }
 
 #sign-wrap::after {
   right: calc(13.17% - 5.5px);
-  animation: sway-rope-right 3s ease-in-out infinite;
 }
 
 #title-logo {
@@ -150,8 +137,7 @@ body {
   height: auto;
   position: relative;
   z-index: 16;
-  animation: sway 3s ease-in-out infinite;
-  transform-origin: center top;
+  display: block;
 }
 
 #title-tagline {
