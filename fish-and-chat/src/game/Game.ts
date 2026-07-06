@@ -493,9 +493,26 @@ export class Game {
         this.playerWalkTimer = this.playerIsWalking ? 2.5 + Math.random() * 2 : 2 + Math.random() * 3;
 
         if (this.playerIsWalking) {
-          const angle = Math.random() * Math.PI * 2;
-          const radius = Math.random() * 0.6;
-          this.playerTargetLocal.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+          // Player's slot is at (2.2, -2.3) in world space (see DioramaBuilder's
+          // playerSlot), already only ~0.18 outside the pond radius (it's a
+          // fishing spot, right at the bank) — so rather than requiring a fixed
+          // absolute margin beyond POND_RADIUS (which the slot itself wouldn't
+          // clear), just never let wander bring the character closer to the
+          // pond center than its own anchor point.
+          const anchorWorldDist = Math.hypot(2.2, -2.3);
+          let valid = false;
+          for (let i = 0; i < 10 && !valid; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const radius = Math.random() * 0.6;
+            const localX = Math.cos(angle) * radius;
+            const localZ = Math.sin(angle) * radius;
+            const worldDist = Math.hypot(2.2 + localX, -2.3 + localZ);
+            if (worldDist >= anchorWorldDist - 0.05) {
+              this.playerTargetLocal.set(localX, 0, localZ);
+              valid = true;
+            }
+          }
+          if (!valid) this.playerTargetLocal.copy(this.playerCharacter.group.position);
         }
       }
 
@@ -601,8 +618,11 @@ export class Game {
           if (valid) {
             this.barnabyTargetPos = targetLocal;
           } else {
-            const angle = Math.random() * Math.PI * 2;
-            this.barnabyTargetPos = new THREE.Vector3(Math.cos(angle) * 0.5, 0, Math.sin(angle) * 0.5);
+            // No valid bank point found in 10 tries — stay put rather than fall
+            // back to an unchecked small offset, which could still land inside
+            // the pond (his slot is only ~3.26 from center, barely past the
+            // 3.0 pond radius).
+            this.barnabyTargetPos = this.barnabyGroup?.position.clone() ?? new THREE.Vector3();
           }
         } else {
           this.barnabyWalkAction?.crossFadeTo(this.barnabyIdleAction!, 0.3, false);
