@@ -102,32 +102,40 @@ body {
 /* Rope extensions using pseudo-elements on title-screen */
 #title-screen::before {
   content: '';
-  position: absolute;
-  top: max(24px, env(safe-area-inset-top));
-  left: calc(50% - 180px);
-  width: 8px;
-  height: calc(50vh - 120px);
-  background: linear-gradient(180deg, #8B7355 0%, #A0826D 50%, #8B7355 100%);
-  border-radius: 4px;
+  position: fixed;
+  top: 0;
+  left: calc(50% - 210px);
+  width: 12px;
+  height: 50vh;
+  background:
+    repeating-linear-gradient(90deg, #a89983 0px, #a89983 2px, #9b8b7e 2px, #9b8b7e 4px, #8b7b6e 4px, #8b7b6e 6px),
+    repeating-linear-gradient(-45deg, transparent 0px, transparent 6px, rgba(0,0,0,0.15) 6px, rgba(0,0,0,0.15) 12px);
+  background-size: 6px 100%, 16px 16px;
+  border-radius: 6px;
   z-index: 15;
   animation: sway-rope-left 3s ease-in-out infinite;
   transform-origin: center bottom;
-  box-shadow: 1px 2px 3px rgba(0, 0, 0, 0.3);
+  box-shadow: inset -2px 0 3px rgba(255,255,255,0.2), inset 2px 0 3px rgba(0,0,0,0.3), 3px 5px 8px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
 }
 
 #title-screen::after {
   content: '';
-  position: absolute;
-  top: max(24px, env(safe-area-inset-top));
-  right: calc(50% - 180px);
-  width: 8px;
-  height: calc(50vh - 120px);
-  background: linear-gradient(180deg, #8B7355 0%, #A0826D 50%, #8B7355 100%);
-  border-radius: 4px;
+  position: fixed;
+  top: 0;
+  right: calc(50% - 210px);
+  width: 12px;
+  height: 50vh;
+  background:
+    repeating-linear-gradient(90deg, #a89983 0px, #a89983 2px, #9b8b7e 2px, #9b8b7e 4px, #8b7b6e 4px, #8b7b6e 6px),
+    repeating-linear-gradient(45deg, transparent 0px, transparent 6px, rgba(0,0,0,0.15) 6px, rgba(0,0,0,0.15) 12px);
+  background-size: 6px 100%, 16px 16px;
+  border-radius: 6px;
   z-index: 15;
   animation: sway-rope-right 3s ease-in-out infinite;
   transform-origin: center bottom;
-  box-shadow: -1px 2px 3px rgba(0, 0, 0, 0.3);
+  box-shadow: inset 2px 0 3px rgba(255,255,255,0.2), inset -2px 0 3px rgba(0,0,0,0.3), -3px 5px 8px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
 }
 
 #title-logo {
