@@ -2,8 +2,10 @@ import type { EventBus } from '../core/EventBus';
 import type { GameEventMap } from '../game/events';
 
 /**
- * Twitch Extension identity handshake: grabs the signed JWT via `onAuthorized`, prompts the
- * viewer to share their Twitch ID, and asks the EBS to resolve a display name once shared.
+ * Twitch Extension identity handshake: grabs the signed JWT + helixToken via `onAuthorized`,
+ * prompts the viewer to share their Twitch ID, and once shared resolves their display name by
+ * calling Helix directly from the client (`Authorization: Extension <helixToken>`) — no backend
+ * needed, since `https://api.twitch.tv` is already in Twitch's default extension CSP allowlist.
  * Emits `twitchIdentityResolved` on the shared event bus.
  *
  * The Extension Helper script (`twitch-ext.min.js`) must be a static `<script>` tag in
@@ -15,21 +17,13 @@ import type { GameEventMap } from '../game/events';
  * never throws.
  */
 export class TwitchAuthSystem {
-  private token: string | null = null;
+  private helixToken: string | null = null;
+  private clientId: string | null = null;
   private requestedIdShare = false;
 
-  constructor(
-    private readonly events: EventBus<GameEventMap>,
-    private readonly ebsBaseUrl: string | undefined = import.meta.env.VITE_EBS_BASE_URL,
-  ) {}
-
-  get isConfigured(): boolean {
-    return Boolean(this.ebsBaseUrl);
-  }
+  constructor(private readonly events: EventBus<GameEventMap>) {}
 
   async init(): Promise<void> {
-    if (!this.isConfigured) return;
-
     const twitch = (window as unknown as { Twitch?: TwitchGlobal }).Twitch;
     if (!twitch?.ext) {
       console.error('[TwitchAuthSystem] Twitch Extension Helper not present; identity features disabled.');
@@ -37,40 +31,46 @@ export class TwitchAuthSystem {
     }
 
     twitch.ext.onAuthorized((auth) => {
-      this.token = auth.token;
+      this.helixToken = auth.helixToken ?? null;
+      this.clientId = auth.clientId;
       if (!this.requestedIdShare) {
         this.requestedIdShare = true;
         twitch.ext?.actions?.requestIdShare?.();
       }
-      void this.fetchProfile();
+      void this.fetchProfile(twitch);
     });
   }
 
-  private async fetchProfile(): Promise<void> {
-    if (!this.token || !this.ebsBaseUrl) return;
+  private async fetchProfile(twitch: TwitchGlobal): Promise<void> {
+    const viewerId = twitch.ext?.viewer?.id;
+    if (!viewerId || !this.helixToken || !this.clientId) return;
     try {
-      const res = await fetch(`${this.ebsBaseUrl}/profile`, {
-        headers: { Authorization: `Bearer ${this.token}` },
+      const res = await fetch(`https://api.twitch.tv/helix/users?id=${encodeURIComponent(viewerId)}`, {
+        headers: {
+          'Client-ID': this.clientId,
+          Authorization: `Extension ${this.helixToken}`,
+        },
       });
       if (!res.ok) return;
-      const data = (await res.json()) as { shared: boolean; displayName: string | null };
-      if (data.shared && data.displayName) {
-        this.events.emit('twitchIdentityResolved', { displayName: data.displayName });
+      const data = (await res.json()) as { data: Array<{ display_name: string }> };
+      const displayName = data.data[0]?.display_name;
+      if (displayName) {
+        this.events.emit('twitchIdentityResolved', { displayName });
       }
     } catch (err) {
       console.error('[TwitchAuthSystem] Profile lookup failed; continuing without a Twitch display name.', err);
     }
   }
-
 }
 
 interface TwitchAuthCallback {
-  (auth: { token: string; userId?: string; channelId: string; clientId: string }): void;
+  (auth: { token: string; userId?: string; channelId: string; clientId: string; helixToken?: string }): void;
 }
 
 interface TwitchGlobal {
   ext?: {
     onAuthorized: (callback: TwitchAuthCallback) => void;
     actions?: { requestIdShare?: () => void };
+    viewer?: { id?: string };
   };
 }

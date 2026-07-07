@@ -82,9 +82,15 @@ export class UI {
   private readonly modalHost: HTMLElement;
   private readonly titleScreen: HTMLElement;
   private readonly titleWelcome: HTMLElement;
+  private readonly titleStart: HTMLButtonElement;
+  private readonly titleLoading: HTMLElement;
+  private readonly titleLoadingFill: HTMLElement;
   private readonly actionButton: HTMLButtonElement;
+  private readonly railToggle: HTMLButtonElement;
+  private readonly railItems: HTMLElement;
 
   private openModal: ModalId = null;
+  private railExpanded = false;
   private toastTimeout: number | null = null;
   private catchCardTimeout: number | null = null;
   private resetArmed = false;
@@ -119,13 +125,16 @@ export class UI {
       </div>
 
       <div id="hud-rail">
-        <button class="rail-btn" id="btn-shop" type="button" aria-label="Shop">${icon(ICON.bait, 'Shop')}</button>
-        <button class="rail-btn" id="btn-market" type="button" aria-label="Market">${icon(ICON.coin, 'Market')}</button>
-        <button class="rail-btn" id="btn-craft" type="button" aria-label="Crafting Bench">${icon(ICON.hammer, 'Craft')}</button>
-        <button class="rail-btn" id="btn-candy" type="button" aria-label="Candy Bar Shop">${CANDY_EMOJI}</button>
-        <button class="rail-btn" id="btn-closet" type="button" aria-label="Closet">&#128100;</button>
-        <button class="rail-btn" id="btn-collection" type="button" aria-label="Collection">${icon(ICON.scale, 'Collection')}</button>
-        <button class="rail-btn" id="btn-settings" type="button" aria-label="Settings"><span class="gear-glyph">&#9881;</span></button>
+        <button class="rail-btn" id="rail-toggle" type="button" aria-label="Menu" aria-expanded="false">${icon(ICON.bait, 'Menu')}</button>
+        <div id="hud-rail-items" class="hidden">
+          <button class="rail-btn" id="btn-shop" type="button" aria-label="Shop">${icon(ICON.bait, 'Shop')}</button>
+          <button class="rail-btn" id="btn-market" type="button" aria-label="Market">${icon(ICON.coin, 'Market')}</button>
+          <button class="rail-btn" id="btn-craft" type="button" aria-label="Crafting Bench">${icon(ICON.hammer, 'Craft')}</button>
+          <button class="rail-btn" id="btn-candy" type="button" aria-label="Candy Bar Shop">${CANDY_EMOJI}</button>
+          <button class="rail-btn" id="btn-closet" type="button" aria-label="Closet">&#128100;</button>
+          <button class="rail-btn" id="btn-collection" type="button" aria-label="Collection">${icon(ICON.scale, 'Collection')}</button>
+          <button class="rail-btn" id="btn-settings" type="button" aria-label="Settings"><span class="gear-glyph">&#9881;</span></button>
+        </div>
       </div>
 
       <button id="basket-badge" type="button" aria-label="Basket">
@@ -151,20 +160,31 @@ export class UI {
     this.modalHost = document.querySelector<HTMLElement>('#modal-host')!;
     this.titleScreen = document.querySelector<HTMLElement>('#title-screen')!;
     this.titleWelcome = document.querySelector<HTMLElement>('#title-welcome')!;
+    this.titleStart = document.querySelector<HTMLButtonElement>('#title-start')!;
+    this.titleLoading = document.querySelector<HTMLElement>('#title-loading')!;
+    this.titleLoadingFill = document.querySelector<HTMLElement>('#title-loading-fill')!;
     this.actionButton = document.querySelector<HTMLButtonElement>('#action-button')!;
 
-    this.el('#btn-shop').addEventListener('click', () => this.toggleModal('shop'));
-    this.el('#btn-market').addEventListener('click', () => this.toggleModal('market'));
-    this.el('#btn-craft').addEventListener('click', () => this.toggleModal('craft'));
-    this.el('#btn-candy').addEventListener('click', () => this.toggleModal('candy'));
-    this.el('#btn-closet').addEventListener('click', () => this.toggleModal('closet'));
-    this.el('#btn-collection').addEventListener('click', () => this.toggleModal('collection'));
-    this.el('#btn-settings').addEventListener('click', () => this.toggleModal('settings'));
+    this.railToggle = this.el('#rail-toggle') as HTMLButtonElement;
+    this.railItems = this.el('#hud-rail-items');
+    this.railToggle.addEventListener('click', () => this.toggleRail());
+
+    const railSelect = (id: ModalId) => {
+      this.toggleModal(id);
+      this.collapseRail();
+    };
+    this.el('#btn-shop').addEventListener('click', () => railSelect('shop'));
+    this.el('#btn-market').addEventListener('click', () => railSelect('market'));
+    this.el('#btn-craft').addEventListener('click', () => railSelect('craft'));
+    this.el('#btn-candy').addEventListener('click', () => railSelect('candy'));
+    this.el('#btn-closet').addEventListener('click', () => railSelect('closet'));
+    this.el('#btn-collection').addEventListener('click', () => railSelect('collection'));
+    this.el('#btn-settings').addEventListener('click', () => railSelect('settings'));
     this.el('#hud-bait-pill').addEventListener('click', () => this.toggleModal('shop'));
     this.el('#hud-candy-pill').addEventListener('click', () => this.toggleModal('candy'));
     this.el('#basket-badge').addEventListener('click', () => this.toggleModal('market'));
 
-    document.querySelector('#title-start')?.addEventListener('click', () => this.dismissTitleScreen());
+    this.titleStart.addEventListener('click', () => this.dismissTitleScreen());
 
     this.bindEvents();
     this.renderHud();
@@ -186,10 +206,36 @@ export class UI {
     this.titleScreen?.classList.add('hidden');
   }
 
+  /** The rail's 7 buttons overflow a 496px-tall Twitch panel stacked open — nested behind the
+   * bait-can toggle so only one button occupies the rail until the player asks for the rest. */
+  private toggleRail(): void {
+    this.railExpanded = !this.railExpanded;
+    this.railItems.classList.toggle('hidden', !this.railExpanded);
+    this.railToggle.setAttribute('aria-expanded', String(this.railExpanded));
+  }
+
+  private collapseRail(): void {
+    this.railExpanded = false;
+    this.railItems.classList.add('hidden');
+    this.railToggle.setAttribute('aria-expanded', 'false');
+  }
+
   /** Shown on the title screen once the viewer has shared their Twitch ID and the EBS resolved a display name. */
   showWelcomeName(name: string): void {
     this.titleWelcome.textContent = `Welcome, ${name}!`;
     this.titleWelcome.classList.remove('hidden');
+  }
+
+  /** Drives the title screen's loading bar while hero assets stream in. `ratio` is 0..1. */
+  setLoadProgress(ratio: number): void {
+    this.titleLoadingFill.style.width = `${Math.round(Math.min(1, Math.max(0, ratio)) * 100)}%`;
+  }
+
+  /** Enables Cast Off! and hides the loading bar once assets are in (or the safety timeout fires). */
+  setReady(): void {
+    this.titleLoadingFill.style.width = '100%';
+    this.titleLoading.classList.add('hidden');
+    this.titleStart.disabled = false;
   }
 
   private bindEvents(): void {

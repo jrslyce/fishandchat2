@@ -13,7 +13,9 @@ export default defineConfig({
     strictPort: true,
   },
   build: {
-    sourcemap: true,
+    // Sourcemaps are dev-only tooling weight — the Twitch upload doesn't need them,
+    // and local debugging already has the dev server's own maps.
+    sourcemap: false,
     chunkSizeWarningLimit: 900,
   },
 });

@@ -52,7 +52,9 @@ export class RenderPipeline {
     this.keyLight = new THREE.DirectionalLight('#ffedbf', 2.0);
     this.keyLight.position.set(-6, 10, 6);
     this.keyLight.castShadow = true;
-    this.keyLight.shadow.mapSize.set(2048, 2048);
+    // 1024 is indistinguishable from 2048 at the panel/mobile sizes this actually
+    // renders at (a Twitch extension panel is ~318x496), and quarters the VSM blur cost.
+    this.keyLight.shadow.mapSize.set(1024, 1024);
     this.keyLight.shadow.camera.near = 1;
     this.keyLight.shadow.camera.far = 26;
     // Tightened to the diorama's actual ~6-unit radius (was +/-8, looser than

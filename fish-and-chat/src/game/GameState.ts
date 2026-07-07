@@ -22,7 +22,7 @@ export type FishingPhase =
   | 'celebrating'
   | 'missed';
 
-const CASTING_ANIM_SECONDS = 0.4;
+export const CASTING_ANIM_SECONDS = 0.4;
 const CELEBRATING_SECONDS = 2.5;
 const MISSED_TOAST_SECONDS = 1.4;
 

@@ -8,6 +8,7 @@ import { Loop } from '../core/Loop';
 import { createRenderer, resizeRenderer } from '../core/Renderer';
 import { SaveManager } from '../core/SaveManager';
 import { Bobber } from '../entities/Bobber';
+import { FishingLine } from '../entities/FishingLine';
 import { PlayerCharacter } from '../entities/character/PlayerCharacter';
 import { loadImportedAsset, normalizedClone, type ImportedAsset } from '../assets/ImportedAssetRegistry';
 import { MODEL_SOURCE_MANIFEST_PUBLIC, SFX_MANIFEST } from '../assets/manifest';
@@ -22,7 +23,7 @@ import { VfxSystem } from '../systems/VfxSystem';
 import { WaterSystem } from '../systems/WaterSystem';
 import { THEME_PALETTES } from '../assets/MaterialLibrary';
 import { Economy } from './Economy';
-import { FishingStateMachine, type FishingPhase } from './GameState';
+import { CASTING_ANIM_SECONDS, FishingStateMachine, type FishingPhase } from './GameState';
 import { createDefaultSaveState, type GameSaveStateV1 } from './SaveState';
 import { WATER_DISC_RADIUS, type DioramaResult } from '../world/DioramaBuilder';
 import type { GameEventMap } from './events';
@@ -32,6 +33,10 @@ const AUTOSAVE_INTERVAL_SECONDS = 5;
 const WATER_Y = -0.05;
 const AMBIENT_FISH_COUNT = 3;
 const FISH_TINTS = ['#8fb7c9', '#e0a860', '#7fa876'];
+// How far off the player's own facing a cast can be aimed — clamped so a cast can never
+// throw backward over the dock/land, only vary left-right while still landing in the pond.
+const CAST_CONE_RADIANS = THREE.MathUtils.degToRad(50);
+const CAST_DISTANCE = 1.8;
 
 interface AmbientFish {
   group: THREE.Object3D;
@@ -81,6 +86,7 @@ export class Game {
   private readonly fishingState: FishingStateMachine;
   private readonly ui: UI;
   private readonly bobber: Bobber;
+  private readonly fishingLine = new FishingLine();
   private readonly water: WaterSystem;
   private readonly themeManager: ThemeManager;
   private readonly renderPipeline: RenderPipeline;
@@ -129,6 +135,12 @@ export class Game {
   private ambienceStarted = false;
 
   private readonly onPageHide = () => this.economy.persist();
+  // A Twitch panel is frequently scrolled out of view while still "open" — pause the
+  // render/update loop rather than burning GPU/CPU on a tab the viewer can't see.
+  private readonly onVisibilityChange = () => {
+    if (document.hidden) this.loop.stop();
+    else this.loop.start();
+  };
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.renderer = createRenderer(canvas);
@@ -159,6 +171,7 @@ export class Game {
     });
     this.fishingState = new FishingStateMachine(this.economy, this.events);
     this.ui = new UI(this.economy, this.fishingState, this.marketSystem, this.craftingSystem, this.fishbotSystem, this.muxySystem, this.audio, this.events);
+    this.wireLoadingScreen();
 
     const initialTheme = this.economy.currentTheme();
     const initialPalette = THEME_PALETTES[initialTheme];
@@ -200,8 +213,8 @@ export class Game {
     this.renderPipeline = new RenderPipeline(this.renderer, this.scene, this.camera);
 
     this.bobber = new Bobber(WATER_Y);
-    this.bobber.group.position.set(0, 0, 1.5);
     this.scene.add(this.bobber.group);
+    this.scene.add(this.fishingLine.mesh);
 
     document.getElementById('debug-perfect-cast')?.addEventListener('click', (e) => {
       this.fishingState.debugPerfectCastMode = !this.fishingState.debugPerfectCastMode;
@@ -236,12 +249,34 @@ export class Game {
     this.loadHeroAssets();
     this.fishbotSystem.simulateOfflineProgress(this.economy.currentTheme());
     window.addEventListener('pagehide', this.onPageHide);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
     resizeRenderer(this.renderer, this.camera);
     this.publishDiagnostics();
   }
 
   start(): void {
     this.loop.start();
+  }
+
+  /**
+   * Drives the title screen's loading bar off THREE.DefaultLoadingManager, which every loader in
+   * the game uses implicitly (GLTFLoader/FBXLoader/TextureLoader singletons don't take an explicit
+   * manager) — so this one hook covers the diorama sky texture, hero GLBs, and Barnaby's FBX
+   * animations without each caller needing to report progress separately. A safety timeout
+   * enables Cast Off! regardless, so a stalled asset never strands the player on the title screen.
+   */
+  private wireLoadingScreen(): void {
+    let ready = false;
+    const markReady = () => {
+      if (ready) return;
+      ready = true;
+      this.ui.setReady();
+    };
+    THREE.DefaultLoadingManager.onProgress = (_url, loaded, total) => {
+      this.ui.setLoadProgress(total > 0 ? loaded / total : 1);
+    };
+    THREE.DefaultLoadingManager.onLoad = markReady;
+    window.setTimeout(markReady, 10000);
   }
 
   /** Subscribes SFX playback to gameplay events (the Phase 3 audio trigger map, realized). */
@@ -277,10 +312,12 @@ export class Game {
   dispose(): void {
     this.loop.stop();
     window.removeEventListener('pagehide', this.onPageHide);
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
     this.input.dispose();
     this.audio.dispose();
     this.ui.dispose();
     this.bobber.dispose();
+    this.fishingLine.dispose();
     this.water.dispose();
     this.themeManager.dispose();
     this.vfx.dispose();
@@ -313,6 +350,7 @@ export class Game {
         this.playerFishingActive = true;
         this.playerCharacter.setPose('fishing');
         this.playerCharacter.setFishingSubPose(phase);
+        if (phase === 'casting') this.throwBobber();
         break;
       case 'celebrating':
         this.playerFishingActive = false;
@@ -325,13 +363,47 @@ export class Game {
     }
   }
 
+  /**
+   * Throws the bobber toward wherever the player is currently facing, clamped to a cone
+   * around the dock's water-facing direction so a cast can never aim backward onto land —
+   * the wander loop leaves the character facing an arbitrary direction once fishing starts
+   * (Game.ts's updatePlayerCharacter freezes it), so an unclamped throw could otherwise aim
+   * at the dock or grass instead of the pond.
+   */
+  private throwBobber(): void {
+    const slotForward = new THREE.Vector3();
+    this.diorama.playerSlot.getWorldDirection(slotForward);
+    const playerForward = new THREE.Vector3();
+    this.playerCharacter.group.getWorldDirection(playerForward);
+
+    const slotAngle = Math.atan2(slotForward.x, slotForward.z);
+    const playerAngle = Math.atan2(playerForward.x, playerForward.z);
+    let relativeAngle = playerAngle - slotAngle;
+    relativeAngle = ((relativeAngle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    const clampedAngle = THREE.MathUtils.clamp(relativeAngle, -CAST_CONE_RADIANS, CAST_CONE_RADIANS);
+
+    const castDir = slotForward.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), clampedAngle);
+    castDir.y = 0;
+    castDir.normalize();
+
+    const playerWorldPos = new THREE.Vector3();
+    this.playerCharacter.group.getWorldPosition(playerWorldPos);
+
+    const startPos = this.playerCharacter.getRodTipWorldPosition(new THREE.Vector3());
+    const landingPos = playerWorldPos.clone().addScaledVector(castDir, CAST_DISTANCE);
+    landingPos.y = 0;
+
+    this.bobber.throwTo(startPos, landingPos, CASTING_ANIM_SECONDS);
+  }
+
   private async loadHeroAssets(): Promise<void> {
-    const [barnaby, fishbot, genericFish, prismKoi, oldBoot] = await Promise.allSettled([
+    const [barnaby, fishbot, genericFish, prismKoi, oldBoot, bobberAsset] = await Promise.allSettled([
       loadImportedAsset(MODEL_SOURCE_MANIFEST_PUBLIC.barnaby),
       loadImportedAsset(MODEL_SOURCE_MANIFEST_PUBLIC.fishbot),
       loadImportedAsset(MODEL_SOURCE_MANIFEST_PUBLIC.genericFish),
       loadImportedAsset(MODEL_SOURCE_MANIFEST_PUBLIC.prismKoi),
       loadImportedAsset(MODEL_SOURCE_MANIFEST_PUBLIC.oldBoot),
+      loadImportedAsset(MODEL_SOURCE_MANIFEST_PUBLIC.bobber),
     ]);
 
     if (barnaby.status === 'fulfilled') {
@@ -422,6 +494,9 @@ export class Game {
       boot.position.set(2.1, 0.02, 2.5);
       boot.rotation.y = 0.6;
       this.scene.add(boot);
+    }
+    if (bobberAsset.status === 'fulfilled') {
+      this.bobber.setModel(normalizedClone(bobberAsset.value, 0.22));
     }
   }
 
@@ -567,8 +642,11 @@ export class Game {
     this.frame += 1;
     this.elapsed = elapsed;
 
-    resizeRenderer(this.renderer, this.camera);
-    this.renderPipeline.resize(this.canvas.width, this.canvas.height);
+    // composer.setSize() reallocates every post-processing render target (bloom's mip
+    // chain, vignette pass) — only pay that cost when the canvas actually changed size.
+    if (resizeRenderer(this.renderer, this.camera)) {
+      this.renderPipeline.resize(this.canvas.width, this.canvas.height);
+    }
 
     if (this.input.justPressed()) this.events.emit('actionPressed', {});
     this.fishingState.update(delta, this.input);
@@ -589,6 +667,13 @@ export class Game {
     const phase = this.fishingState.getPhase();
     this.bobber.setVisible(phase === 'casting' || phase === 'waiting' || phase === 'bite' || phase === 'celebrating');
     this.bobber.update(delta, phase);
+
+    const lineTaut = phase === 'casting' || phase === 'waiting' || phase === 'bite';
+    this.fishingLine.setVisible(lineTaut);
+    if (lineTaut) {
+      const rodTip = this.playerCharacter.getRodTipWorldPosition(new THREE.Vector3());
+      this.fishingLine.update(rodTip, this.bobber.group.position);
+    }
     if (phase === 'waiting') {
       // Timer-based cadence: one ripple every 2s. (A floor(elapsed)%N check
       // is true for a whole 0.5s window each cycle — ~30 emits per window.)
@@ -862,7 +947,7 @@ export class Game {
         clientHeight: this.canvas.clientHeight,
         width: this.canvas.width,
         height: this.canvas.height,
-        dpr: Math.min(window.devicePixelRatio || 1, 2),
+        dpr: Math.min(window.devicePixelRatio || 1, 1.5),
       },
     };
   }

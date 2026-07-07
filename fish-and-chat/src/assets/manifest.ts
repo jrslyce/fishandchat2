@@ -77,6 +77,7 @@ export const MODEL_SOURCE_MANIFEST_PUBLIC = {
   genericFish: './models/generic-fish.glb',
   fishbot: './models/fishbot.glb',
   oldBoot: './models/old-boot.glb',
+  bobber: './models/bobber.glb',
 } as const;
 
 /**

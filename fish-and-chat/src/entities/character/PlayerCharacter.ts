@@ -31,6 +31,11 @@ export class PlayerCharacter {
   // Left arm waves — the right arm is reserved for fishing poses.
   private readonly waveAnim = new WaveAnimation('left');
 
+  // No rod is modeled — FishingAnimation only swings the arm bone to imply holding one.
+  // Anchoring this to the arm (rather than computing a world offset by hand) means it
+  // automatically rides the same aiming/casting/waiting swing for free.
+  private readonly rodTipAnchor = new THREE.Object3D();
+
   private pose: CharacterPose = 'idle';
   private waveTimer = 0;
 
@@ -55,6 +60,11 @@ export class PlayerCharacter {
     this.nameTag.position.y = NAME_TAG_Y;
     this.group.add(this.nameTag);
     this.setName('Angler');
+
+    // A bit past the hand (rightArm's own local space, Minecraft units) — approximates
+    // where a held rod's tip would sit.
+    this.rodTipAnchor.position.set(0, -13, 0);
+    this.player.skin.rightArm.add(this.rodTipAnchor);
   }
 
   private buildNameTag(): THREE.Sprite {
@@ -116,6 +126,11 @@ export class PlayerCharacter {
 
   setFishingSubPose(sub: FishingPose): void {
     this.fishAnim.pose = sub;
+  }
+
+  /** World-space position of the rod-tip anchor (see constructor) — the fishing line's start point. */
+  getRodTipWorldPosition(target: THREE.Vector3): THREE.Vector3 {
+    return this.rodTipAnchor.getWorldPosition(target);
   }
 
   private activeAnimation(): PlayerAnimation {

@@ -20,7 +20,7 @@ import {
   type UpgradeId,
 } from './data';
 import type { SaveManager } from '../core/SaveManager';
-import type { BasketItem, FishbotState, GameSaveStateV1 } from './SaveState';
+import { migrateSaveState, type BasketItem, type FishbotState, type GameSaveStateV1 } from './SaveState';
 
 export interface LevelUpResult {
   leveledUp: boolean;
@@ -51,7 +51,7 @@ export class Economy {
   private state: GameSaveStateV1;
 
   constructor(private readonly saveManager: SaveManager<GameSaveStateV1>) {
-    this.state = saveManager.load();
+    this.state = migrateSaveState(saveManager.load());
   }
 
   get snapshot(): Readonly<GameSaveStateV1> {

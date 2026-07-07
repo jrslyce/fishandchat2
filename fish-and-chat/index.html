@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#bfe3d8" />
     <title>Fish and Chat</title>
+    <!-- Linked here (not imported from main.ts) so Vite's dev server serves it as a real
+         blocking stylesheet, same as the production build already does — importing it from
+         a JS module instead makes dev inject the CSS only after main.ts's module script runs,
+         so the raw HTML (the title logo at its native size, an unstyled Cast button) paints
+         and flashes for a moment first. -->
+    <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
     <main id="app">
@@ -16,11 +22,15 @@
       <button id="action-button" type="button" aria-label="Cast / React">Cast</button>
       <section id="title-screen" role="dialog" aria-label="Fish and Chat title screen">
         <div id="sign-wrap">
-          <img id="title-logo" src="./images/logo-title.png" alt="Fish and Chat" />
+          <img id="title-logo" src="./images/logo-title.png" alt="Fish and Chat" width="704" height="325" />
         </div>
         <p id="title-tagline">A cozy fishing afternoon awaits.</p>
         <p id="title-welcome" class="hidden"></p>
-        <button id="title-start" type="button">Cast Off!</button>
+        <div id="title-loading">
+          <div id="title-loading-bar"><div id="title-loading-fill"></div></div>
+          <p id="title-loading-label">Loading&hellip;</p>
+        </div>
+        <button id="title-start" type="button" disabled>Cast Off!</button>
       </section>
     </main>
     <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>

@@ -3,7 +3,9 @@ import * as THREE from 'three';
 export function createRenderer(canvas: HTMLCanvasElement): THREE.WebGLRenderer {
   const renderer = new THREE.WebGLRenderer({
     canvas,
-    antialias: true,
+    // Canvas MSAA is wasted here — the final image comes out of RenderPipeline's
+    // EffectComposer (bloom + vignette passes), which already softens edges.
+    antialias: false,
     alpha: false,
     powerPreference: 'high-performance',
   });
@@ -23,7 +25,7 @@ export function createRenderer(canvas: HTMLCanvasElement): THREE.WebGLRenderer {
 export function resizeRenderer(
   renderer: THREE.WebGLRenderer,
   camera: THREE.PerspectiveCamera,
-  maxDpr = 2,
+  maxDpr = 1.5,
 ): boolean {
   const canvas = renderer.domElement;
   const width = Math.max(1, Math.floor(canvas.clientWidth));

@@ -2,7 +2,8 @@ import '@fontsource/baloo-2/latin-500.css';
 import '@fontsource/baloo-2/latin-600.css';
 import '@fontsource/baloo-2/latin-700.css';
 import '@fontsource/baloo-2/latin-800.css';
-import './styles.css';
+// styles.css is linked directly in index.html's <head> (not imported here) so it's a
+// real blocking stylesheet in dev too — see the comment on that <link> tag for why.
 import { Game } from './game/Game';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game-canvas');

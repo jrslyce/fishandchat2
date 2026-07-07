@@ -42,6 +42,15 @@ export async function compositeSkinTexture(
     ctx.fillRect(layout.base.x, layout.base.y, layout.base.w, layout.base.h);
   }
 
+  // Simple pixel face on the head's front-face island (base layer, not overlay — a hat's
+  // overlay-layer box mesh renders in front of it automatically, so equipping a hat still
+  // covers the face with no extra bookkeeping). Hard-coded dark brown so it reads against
+  // every base skin tone.
+  ctx.fillStyle = '#3a2418';
+  ctx.fillRect(10, 10, 1, 2);
+  ctx.fillRect(13, 10, 1, 2);
+  ctx.fillRect(10, 13, 4, 1);
+
   const drawJobs: Array<Promise<void>> = [];
   for (const slot of Object.keys(equipped) as ClothingSlot[]) {
     const itemId = equipped[slot];

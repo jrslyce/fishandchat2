@@ -67,3 +67,23 @@ export function createDefaultSaveState(): GameSaveStateV1 {
     displayNameOverride: null,
   };
 }
+
+/**
+ * Backfills saves made between the character system landing and the starter-outfit
+ * commit — those saves are already SAVE_VERSION 3 (so SaveManager doesn't discard them)
+ * but have `equippedClothing` left all-null from before basic-shirt/pants/shoes existed
+ * as defaults, so the angler renders bare forever. Grants the same free basics a brand
+ * new save starts with. Only touches saves with nothing equipped in those three slots —
+ * a save with any intentional loadout (even just a jacket) is left alone.
+ */
+export function migrateSaveState(state: GameSaveStateV1): GameSaveStateV1 {
+  const { jacket, pants, shoes } = state.equippedClothing;
+  if (jacket || pants || shoes) return state;
+
+  const starterIds = ['basic-shirt', 'basic-pants', 'basic-shoes'];
+  return {
+    ...state,
+    ownedClothingIds: Array.from(new Set([...state.ownedClothingIds, ...starterIds])),
+    equippedClothing: { ...state.equippedClothing, jacket: 'basic-shirt', pants: 'basic-pants', shoes: 'basic-shoes' },
+  };
+}
