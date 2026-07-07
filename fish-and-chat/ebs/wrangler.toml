@@ -1,0 +1,8 @@
+name = "fish-and-chat-ebs"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# Secrets (never set here — use `wrangler secret put <NAME>` / .dev.vars locally):
+#   TWITCH_EXTENSION_SECRET  — base64 JWT-signing secret from the Twitch dev console
+#   TWITCH_CLIENT_SECRET     — OAuth client secret for the extension's client ID (Helix app tokens)
+#   TWITCH_CLIENT_ID         — the extension's client ID (not secret, but set alongside the above)
