@@ -12,7 +12,7 @@ export interface ThemeConfig {
 export const THEME_CONFIGS: Record<ThemeId, ThemeConfig> = {
   'forest-pond': {
     id: 'forest-pond',
-    skyImage: '/images/sky-forest-pond.png',
+    skyImage: './images/sky-forest-pond.png',
     ambienceKey: 'forest-pond',
     fogNear: 10,
     fogFar: 26,
@@ -20,7 +20,7 @@ export const THEME_CONFIGS: Record<ThemeId, ThemeConfig> = {
   },
   'ocean-trench': {
     id: 'ocean-trench',
-    skyImage: '/images/sky-ocean-trench.png',
+    skyImage: './images/sky-ocean-trench.png',
     ambienceKey: 'ocean-trench',
     fogNear: 8,
     fogFar: 22,
@@ -28,7 +28,7 @@ export const THEME_CONFIGS: Record<ThemeId, ThemeConfig> = {
   },
   'cosmic-lake': {
     id: 'cosmic-lake',
-    skyImage: '/images/sky-cosmic-lake.png',
+    skyImage: './images/sky-cosmic-lake.png',
     ambienceKey: 'cosmic-lake',
     fogNear: 9,
     fogFar: 24,

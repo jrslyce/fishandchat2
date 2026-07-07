@@ -1,6 +1,17 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
+/**
+ * GLTFLoader picks ImageBitmapLoader over plain ImageLoader whenever `createImageBitmap`
+ * exists, to move texture decoding off the main thread. ImageBitmapLoader loads embedded
+ * GLB textures via `fetch(blobUrl)`, which falls under the page's CSP `connect-src` — and
+ * Twitch's extension CSP has no way to allowlist the `blob:` scheme there (its allowlist
+ * fields only accept real domains), so every embedded texture fails to load in a hosted
+ * Twitch extension. Forcing the plain ImageLoader path (an `<img>` tag, governed by
+ * `img-src`, which already permits `'self'`) sidesteps the restriction entirely.
+ */
+delete (window as unknown as { createImageBitmap?: unknown }).createImageBitmap;
+
 export interface ImportedAsset {
   root: THREE.Group;
   bounds: THREE.Box3;

@@ -5,22 +5,22 @@
  */
 
 export const SFX_MANIFEST = {
-  castWhoosh: '/audio/sfx/cast-whoosh.mp3',
-  bobberSplash: '/audio/sfx/bobber-splash.mp3',
-  biteAlert: '/audio/sfx/bite-alert.mp3',
-  reelIn: '/audio/sfx/reel-in.mp3',
-  catchJingle: '/audio/sfx/catch-jingle.mp3',
-  rareCatchFanfare: '/audio/sfx/rare-catch-fanfare.mp3',
-  coinClink: '/audio/sfx/coin-clink.mp3',
-  uiClick: '/audio/sfx/ui-click.mp3',
-  craftClunk: '/audio/sfx/craft-clunk.mp3',
-  haggleBones: '/audio/sfx/haggle-bones.mp3',
+  castWhoosh: './audio/sfx/cast-whoosh.mp3',
+  bobberSplash: './audio/sfx/bobber-splash.mp3',
+  biteAlert: './audio/sfx/bite-alert.mp3',
+  reelIn: './audio/sfx/reel-in.mp3',
+  catchJingle: './audio/sfx/catch-jingle.mp3',
+  rareCatchFanfare: './audio/sfx/rare-catch-fanfare.mp3',
+  coinClink: './audio/sfx/coin-clink.mp3',
+  uiClick: './audio/sfx/ui-click.mp3',
+  craftClunk: './audio/sfx/craft-clunk.mp3',
+  haggleBones: './audio/sfx/haggle-bones.mp3',
 } as const;
 
 export const AMBIENCE_MANIFEST = {
-  'forest-pond': '/audio/ambience/ambience-forest.mp3',
-  'ocean-trench': '/audio/ambience/ambience-ocean.mp3',
-  'cosmic-lake': '/audio/ambience/ambience-cosmic.mp3',
+  'forest-pond': './audio/ambience/ambience-forest.mp3',
+  'ocean-trench': './audio/ambience/ambience-ocean.mp3',
+  'cosmic-lake': './audio/ambience/ambience-cosmic.mp3',
 } as const;
 
 /**
@@ -72,11 +72,11 @@ export const MODEL_SOURCE_MANIFEST = {
  * These are what the running game actually loads via GLTFLoader/fetch.
  */
 export const MODEL_SOURCE_MANIFEST_PUBLIC = {
-  barnaby: '/models/barnaby.glb',
-  prismKoi: '/models/prism-koi.glb',
-  genericFish: '/models/generic-fish.glb',
-  fishbot: '/models/fishbot.glb',
-  oldBoot: '/models/old-boot.glb',
+  barnaby: './models/barnaby.glb',
+  prismKoi: './models/prism-koi.glb',
+  genericFish: './models/generic-fish.glb',
+  fishbot: './models/fishbot.glb',
+  oldBoot: './models/old-boot.glb',
 } as const;
 
 /**
@@ -85,10 +85,10 @@ export const MODEL_SOURCE_MANIFEST_PUBLIC = {
  * direction reference only, never meant to render at runtime.
  */
 export const IMAGE_MANIFEST_PUBLIC = {
-  barnabyConcept: '/images/barnaby-portrait.png',
-  logoTitle: '/images/logo-title.png',
-  iconSheet: '/images/icons.png',
-  skyForestPond: '/images/sky-forest-pond.png',
-  skyOceanTrench: '/images/sky-ocean-trench.png',
-  skyCosmicLake: '/images/sky-cosmic-lake.png',
+  barnabyConcept: './images/barnaby-portrait.png',
+  logoTitle: './images/logo-title.png',
+  iconSheet: './images/icons.png',
+  skyForestPond: './images/sky-forest-pond.png',
+  skyOceanTrench: './images/sky-ocean-trench.png',
+  skyCosmicLake: './images/sky-cosmic-lake.png',
 } as const;

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && cp dist/index.html dist/panel.html && cp dist/index.html dist/mobile.html && cp dist/index.html dist/video_component.html",
     "preview": "vite preview --host 127.0.0.1",
     "test": "playwright test",
     "verify:visual": "playwright test tests/visual.spec.ts",

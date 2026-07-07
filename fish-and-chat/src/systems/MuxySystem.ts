@@ -2,12 +2,17 @@ import { CANDY_BAR_PACKS, type CandyBarPackDefinition } from '../game/data';
 import type { CraftingSystem } from './CraftingSystem';
 
 /**
- * Bits → Candy Bars purchase integration via the dev.muxy.io extension kit.
+ * Bits → Candy Bars purchase integration via the Muxy extension kit.
+ *
+ * The Muxy SDK is vendored locally at `public/muxy.js` and loaded via a static `<script>` tag
+ * in index.html (not fetched from a CDN at runtime) — Twitch's extension CSP blocks third-party
+ * CDN script origins, so self-hosting from `'self'` is required, mirroring the working pattern
+ * from another Twitch extension in this account.
  *
  * NOTE: the exact Muxy SDK global name and callback shape below are our best guess pending
  * your extension ID/secret — verify against Muxy's console/docs once the extension exists
- * and adjust `loadSdk`/`registerProducts`/the purchase callback accordingly. Everything else
- * in the economy (candy bar balance, spending) does not depend on these details.
+ * and adjust the purchase callback accordingly. Everything else in the economy (candy bar
+ * balance, spending) does not depend on these details.
  *
  * Trust model: the SDK's purchase-complete callback is trusted directly, matching this
  * game's client-only economy elsewhere (coins, materials). There is no backend receipt
@@ -32,12 +37,11 @@ export class MuxySystem {
 
   async init(): Promise<void> {
     if (!this.isConfigured) return; // no extension ID yet — purchaseCandyPack() falls back to a debug grant
-    try {
-      await this.loadSdk();
-      this.sdkReady = true;
-    } catch (err) {
-      console.error('[MuxySystem] Failed to load Muxy SDK; candy bar purchases will use the debug fallback.', err);
+    if (!(window as unknown as { Muxy?: MuxyGlobal }).Muxy) {
+      console.error('[MuxySystem] Muxy SDK not present; candy bar purchases will use the debug fallback.');
+      return;
     }
+    this.sdkReady = true;
   }
 
   /** Kicks off a real bits transaction, or (unconfigured/local dev) grants candy bars directly for testing. */
@@ -53,21 +57,6 @@ export class MuxySystem {
     const muxy = (window as unknown as { Muxy?: MuxyGlobal }).Muxy;
     muxy?.purchaseBits?.(pack.bitsCost, (result) => {
       if (result?.success) this.craftingSystem.grantCandyBars(pack.candyBars);
-    });
-  }
-
-  private loadSdk(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if ((window as unknown as { Muxy?: MuxyGlobal }).Muxy) {
-        resolve();
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = 'https://cdn.muxy.io/extension/sdk.js'; // TODO: confirm actual CDN path with Muxy docs
-      script.async = true;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error('Muxy SDK script failed to load'));
-      document.head.appendChild(script);
     });
   }
 }
