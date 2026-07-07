@@ -61,8 +61,8 @@ export function createDefaultSaveState(): GameSaveStateV1 {
     luckyDuckyCount: 0,
     luckyDuckyExpiresAtMs: 0,
     ownedPremiumItemIds: [],
-    ownedClothingIds: [],
-    equippedClothing: { hat: null, jacket: null, pants: null, shoes: null },
+    ownedClothingIds: ['basic-shirt', 'basic-pants', 'basic-shoes'],
+    equippedClothing: { hat: null, jacket: 'basic-shirt', pants: 'basic-pants', shoes: 'basic-shoes' },
     baseToneId: 'sunfish-tan',
     displayNameOverride: null,
   };

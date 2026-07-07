@@ -108,6 +108,15 @@ export class Game {
   private playerFishingActive = false;
   private readonly defaultCameraFocus = new THREE.Vector3(0, 0.3, 0.5);
 
+  // Closet live preview: a second small render (same renderer/scene, no
+  // second WebGL context) into an offscreen target, read back into a plain
+  // 2D <canvas> in the modal each frame the closet is open.
+  private closetOpen = false;
+  private readonly closetPreviewSize = { width: 220, height: 280 };
+  private readonly closetCamera = new THREE.PerspectiveCamera(32, this.closetPreviewSize.width / this.closetPreviewSize.height, 0.05, 20);
+  private readonly closetRenderTarget = new THREE.WebGLRenderTarget(this.closetPreviewSize.width, this.closetPreviewSize.height);
+  private readonly closetPixelBuffer = new Uint8Array(this.closetPreviewSize.width * this.closetPreviewSize.height * 4);
+
   private readonly loop = new Loop(
     (delta, elapsed) => this.update(delta, elapsed),
     () => this.render(),
@@ -125,6 +134,11 @@ export class Game {
     this.renderer = createRenderer(canvas);
     this.cameraRig = new CameraRig(this.camera, new THREE.Vector3(0, 6.5, 9));
     this.cameraRig.focusOn(this.defaultCameraFocus);
+    // Render targets default to a linear working color space (the sRGB
+    // output transform normally only happens on the final canvas blit) — the
+    // closet preview reads pixels straight back out, so it needs the target
+    // itself to hold sRGB-encoded values or it comes out looking too dark.
+    this.closetRenderTarget.texture.colorSpace = THREE.SRGBColorSpace;
 
     const actionSurface = this.getElement('#action-button');
     this.input = new InputController(actionSurface);
@@ -163,8 +177,21 @@ export class Game {
     this.events.on('displayNameChanged', ({ name }) => this.playerCharacter.setName(name));
     // Closet UI: dolly the (single, shared) main camera onto the player's own
     // slot while customizing, rather than standing up a second WebGL context.
-    this.events.on('closetOpened', () => this.cameraRig.focusOn(this.diorama.playerSlot.position));
-    this.events.on('closetClosed', () => this.cameraRig.focusOn(this.defaultCameraFocus));
+    this.events.on('closetOpened', () => {
+      this.closetOpen = true;
+      // Freeze a clean, camera-facing pose for the preview: reset the
+      // wander offset/rotation the idle loop may have left it in, so the
+      // total facing/position is just the slot's own fixed anchor.
+      this.playerCharacter.group.position.set(0, 0, 0);
+      this.playerCharacter.group.rotation.y = 0;
+      this.playerIsWalking = false;
+      this.playerCharacter.setPose('idle');
+      this.cameraRig.focusOn(this.diorama.playerSlot.position);
+    });
+    this.events.on('closetClosed', () => {
+      this.closetOpen = false;
+      this.cameraRig.focusOn(this.defaultCameraFocus);
+    });
     this.events.on('phaseChanged', ({ phase }) => this.onFishingPhaseChanged(phase));
     this.events.on('catchResolved', ({ result }) => {
       if (!result.isTrash) this.playerCharacter.setPose('wave');
@@ -311,8 +338,8 @@ export class Game {
       const fbxLoader = new FBXLoader();
       try {
         const [idleFbx, walkFbx] = await Promise.all([
-          fbxLoader.loadAsync('/models/barnaby-anim/idle.fbx'),
-          fbxLoader.loadAsync('/models/barnaby-anim/walk.fbx')
+          fbxLoader.loadAsync('./models/barnaby-anim/idle.fbx'),
+          fbxLoader.loadAsync('./models/barnaby-anim/walk.fbx')
         ]);
 
         idleFbx.traverse((child) => {
@@ -486,6 +513,14 @@ export class Game {
    * checks needed).
    */
   private updatePlayerCharacter(delta: number): void {
+    if (this.closetOpen) {
+      // Frozen for the live preview — still advance the idle animation clock
+      // (so it doesn't look like a paused screenshot) but skip wander/pose
+      // changes entirely.
+      this.playerCharacter.update(delta);
+      return;
+    }
+
     if (!this.playerFishingActive) {
       this.playerWalkTimer -= delta;
       if (this.playerWalkTimer <= 0) {
@@ -493,26 +528,16 @@ export class Game {
         this.playerWalkTimer = this.playerIsWalking ? 2.5 + Math.random() * 2 : 2 + Math.random() * 3;
 
         if (this.playerIsWalking) {
-          // Player's slot is at (2.2, -2.3) in world space (see DioramaBuilder's
-          // playerSlot), already only ~0.18 outside the pond radius (it's a
-          // fishing spot, right at the bank) — so rather than requiring a fixed
-          // absolute margin beyond POND_RADIUS (which the slot itself wouldn't
-          // clear), just never let wander bring the character closer to the
-          // pond center than its own anchor point.
-          const anchorWorldDist = Math.hypot(2.2, -2.3);
-          let valid = false;
-          for (let i = 0; i < 10 && !valid; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const radius = Math.random() * 0.6;
-            const localX = Math.cos(angle) * radius;
-            const localZ = Math.sin(angle) * radius;
-            const worldDist = Math.hypot(2.2 + localX, -2.3 + localZ);
-            if (worldDist >= anchorWorldDist - 0.05) {
-              this.playerTargetLocal.set(localX, 0, localZ);
-              valid = true;
-            }
-          }
-          if (!valid) this.playerTargetLocal.copy(this.playerCharacter.group.position);
+          // Player's slot sits on the dock itself (world 1.4, 1.65 — see
+          // DioramaBuilder's playerSlot), close to its water-end edge (the
+          // dock's local z bottoms out at -1.35 relative to its own anchor,
+          // and our slot is already at local z=-1.2 there). Wander is
+          // constrained to a small rectangle biased landward (away from the
+          // water-end edge) rather than a circle, so the character can't
+          // step off the narrow (0.9-wide) planks on any side.
+          const localX = (Math.random() - 0.5) * 0.4; // +/-0.2, well inside the 0.45 half-width
+          const localZ = Math.random() * 0.5 - 0.05; // -0.05..0.45, biased landward off the water-end edge
+          this.playerTargetLocal.set(localX, 0, localZ);
         }
       }
 
@@ -771,6 +796,48 @@ export class Game {
 
   private render(): void {
     this.renderPipeline.render();
+    if (this.closetOpen) this.renderClosetPreview();
+  }
+
+  /**
+   * Live character preview for the Closet modal: a second render of the same
+   * scene from a close-up camera, into an offscreen WebGLRenderTarget, read
+   * back into a plain 2D <canvas> in the modal — no second WebGL context, no
+   * DOM/canvas coordinate-mapping tricks (the target is a fixed small size
+   * independent of where the modal panel actually sits on screen).
+   */
+  private renderClosetPreview(): void {
+    const canvas = document.getElementById('closet-preview') as HTMLCanvasElement | null;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+
+    const slotPos = this.diorama.playerSlot.position;
+    // Character faces -Z (DioramaBuilder's playerSlot rotation) — camera sits
+    // further along -Z, in front of them, looking back at chest/head height.
+    this.closetCamera.position.set(slotPos.x, slotPos.y + 0.65, slotPos.z - 1.9);
+    this.closetCamera.lookAt(slotPos.x, slotPos.y + 0.75, slotPos.z);
+
+    const { width, height } = this.closetPreviewSize;
+    const prevClearColor = new THREE.Color();
+    this.renderer.getClearColor(prevClearColor);
+    const prevClearAlpha = this.renderer.getClearAlpha();
+
+    this.renderer.setRenderTarget(this.closetRenderTarget);
+    this.renderer.setClearColor(0x8fc9b8, 1);
+    this.renderer.clear();
+    this.renderer.render(this.scene, this.closetCamera);
+    this.renderer.readRenderTargetPixels(this.closetRenderTarget, 0, 0, width, height, this.closetPixelBuffer);
+    this.renderer.setRenderTarget(null);
+    this.renderer.setClearColor(prevClearColor, prevClearAlpha);
+
+    // WebGL readback is bottom-up; Canvas2D ImageData is top-down.
+    const imageData = ctx.createImageData(width, height);
+    const rowBytes = width * 4;
+    for (let y = 0; y < height; y++) {
+      const srcStart = (height - 1 - y) * rowBytes;
+      imageData.data.set(this.closetPixelBuffer.subarray(srcStart, srcStart + rowBytes), y * rowBytes);
+    }
+    ctx.putImageData(imageData, 0, 0);
   }
 
   private publishDiagnostics(): void {

@@ -55,7 +55,8 @@ const STRUCTURE_EXCLUSIONS: ExclusionZone[] = [
   { x: -3.4, z: 3.2, radius: 0.5 }, // lantern
   { x: 3.4, z: -2.6, radius: 0.5 }, // lantern
   { x: 2.1, z: 2.5, radius: 0.5 }, // shore boot
-  { x: 2.2, z: -2.3, radius: 1.0 }, // player character — own patch of bank, opposite side from Barnaby's stall
+  // player character now stands on the dock itself — already covered by the
+  // "dock walkway" exclusion zone above, no separate entry needed.
 ];
 
 function isExcluded(x: number, z: number, margin = 0): boolean {
@@ -150,12 +151,15 @@ export function buildDiorama(theme: ThemeId, materials: MaterialLibrary): Dioram
   fishbotSlot.position.set(1.4, 0.56, 2.05); // nudged landward to make room for lantern
   root.add(fishbotSlot);
 
-  // Own patch of bank, opposite side of the pond from Barnaby's stall — a
-  // quiet solo fishing spot rather than crowding the already-busy foreground.
+  // On the dock itself (x=1.4, its plank line), near the water end — the
+  // dock's local z spans world z=3.75 (landward) to z=1.5 (matches the
+  // bobber's cast position exactly), so z=1.65 puts the player right at the
+  // water's edge, clear of the fishbot slot at z=2.05. y=0.51 is the plank
+  // top surface (dock.position.y=0.45 + half the 0.12-tall plank).
   const playerSlot = new THREE.Group();
   playerSlot.name = 'playerSlot';
-  playerSlot.position.set(2.2, 0.5, -2.3);
-  playerSlot.rotation.y = Math.PI * 0.35; // facing roughly toward the pond
+  playerSlot.position.set(1.4, 0.51, 1.65);
+  playerSlot.rotation.y = Math.PI; // facing -Z, out toward the pond
   root.add(playerSlot);
 
   const lanternPositions: [number, number, number][] = [

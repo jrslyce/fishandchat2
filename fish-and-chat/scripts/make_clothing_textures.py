@@ -85,6 +85,12 @@ def main() -> None:
     make_hat("straw-hat-head", (222, 186, 111), forehead_coverage=0.55)
     make_hat("party-hat-head", (233, 92, 190), forehead_coverage=0.3)
 
+    # Starter outfit — free, owned+equipped from the default save state.
+    make_full_wrap("basic-shirt-body", BODY_W, BODY_H, (120, 140, 150))
+    make_full_wrap("basic-shirt-arm", LIMB_W, LIMB_H, (120, 140, 150))
+    make_leg_band("basic-pants-leg", (86, 96, 110), row_start=0, row_end=11)
+    make_leg_band("basic-shoes-leg", (60, 48, 40), row_start=11, row_end=16)
+
     make_full_wrap("flannel-jacket-body", BODY_W, BODY_H, (139, 58, 58))
     make_full_wrap("flannel-jacket-arm", LIMB_W, LIMB_H, (139, 58, 58))
     make_full_wrap("rain-slicker-body", BODY_W, BODY_H, (235, 196, 33))

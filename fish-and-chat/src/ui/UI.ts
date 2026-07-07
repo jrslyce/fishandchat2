@@ -30,12 +30,12 @@ import type { CatchResult, GameEventMap } from '../game/events';
 type ModalId = 'shop' | 'market' | 'craft' | 'collection' | 'settings' | 'candy' | 'closet' | null;
 
 const ICON = {
-  coin: '/images/icons/coin.png',
-  bait: '/images/icons/bait.png',
-  basket: '/images/icons/basket.png',
-  hammer: '/images/icons/hammer.png',
-  scale: '/images/icons/scale.png',
-  bone: '/images/icons/bone.png',
+  coin: './images/icons/coin.png',
+  bait: './images/icons/bait.png',
+  basket: './images/icons/basket.png',
+  hammer: './images/icons/hammer.png',
+  scale: './images/icons/scale.png',
+  bone: './images/icons/bone.png',
 } as const;
 
 const CANDY_EMOJI = '🍫';
@@ -568,7 +568,7 @@ export class UI {
       "Monger Barnaby's Market",
       `
         <div class="market-header">
-          <img class="barnaby-portrait" src="/images/barnaby-portrait.png" alt="Monger Barnaby" />
+          <img class="barnaby-portrait" src="./images/barnaby-portrait.png" alt="Monger Barnaby" />
           <div class="bones-row" title="Patience bones">${bonesMarkup}</div>
           <button id="btn-debug-coins" class="btn-small" style="margin-left: auto;">+500 Coins (Debug)</button>
         </div>
@@ -807,6 +807,9 @@ export class UI {
     this.modalHost.innerHTML = this.modalShell(
       'Closet',
       `
+        <div class="closet-preview-frame">
+          <canvas id="closet-preview" width="220" height="280"></canvas>
+        </div>
         <h4 class="modal-subhead">Appearance</h4>
         <div class="tone-swatch-row">${toneRow}</div>
         ${slotSections}

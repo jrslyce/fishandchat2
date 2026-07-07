@@ -351,11 +351,45 @@ export interface ClothingDefinition {
 
 export const CLOTHING_CATALOG: ClothingDefinition[] = [
   {
+    id: 'basic-shirt',
+    slot: 'jacket',
+    name: 'Basic Shirt',
+    flavor: 'Plain, comfortable, and already broken in.',
+    textures: {
+      body: './images/clothing/basic-shirt-body.png',
+      rightArm: './images/clothing/basic-shirt-arm.png',
+      leftArm: './images/clothing/basic-shirt-arm.png',
+    },
+    unlock: { type: 'craft', coins: 0 },
+  },
+  {
+    id: 'basic-pants',
+    slot: 'pants',
+    name: 'Basic Pants',
+    flavor: 'Sturdy enough for a long day at the pond.',
+    textures: {
+      rightLeg: './images/clothing/basic-pants-leg.png',
+      leftLeg: './images/clothing/basic-pants-leg.png',
+    },
+    unlock: { type: 'craft', coins: 0 },
+  },
+  {
+    id: 'basic-shoes',
+    slot: 'shoes',
+    name: 'Basic Shoes',
+    flavor: 'Nothing fancy, but they get the job done.',
+    textures: {
+      rightLeg: './images/clothing/basic-shoes-leg.png',
+      leftLeg: './images/clothing/basic-shoes-leg.png',
+    },
+    unlock: { type: 'craft', coins: 0 },
+  },
+  {
     id: 'red-beanie',
     slot: 'hat',
     name: 'Red Beanie',
     flavor: 'Keeps the ears warm on foggy mornings.',
-    textures: { head: '/images/clothing/red-beanie-head.png' },
+    textures: { head: './images/clothing/red-beanie-head.png' },
     unlock: { type: 'craft', coins: 40, materials: { fabric: 1 } },
   },
   {
@@ -363,7 +397,7 @@ export const CLOTHING_CATALOG: ClothingDefinition[] = [
     slot: 'hat',
     name: 'Straw Hat',
     flavor: 'Wide-brimmed and woven from old cattails.',
-    textures: { head: '/images/clothing/straw-hat-head.png' },
+    textures: { head: './images/clothing/straw-hat-head.png' },
     unlock: { type: 'craft', coins: 60, materials: { fiber: 2 } },
   },
   {
@@ -374,7 +408,7 @@ export const CLOTHING_CATALOG: ClothingDefinition[] = [
     slot: 'hat',
     name: 'Party Hat',
     flavor: 'A cosmetic hat for your angler.',
-    textures: { head: '/images/clothing/party-hat-head.png' },
+    textures: { head: './images/clothing/party-hat-head.png' },
     unlock: { type: 'premium', premiumId: 'party-hat' },
   },
   {
@@ -383,9 +417,9 @@ export const CLOTHING_CATALOG: ClothingDefinition[] = [
     name: 'Flannel Jacket',
     flavor: 'Classic plaid, smells faintly of campfire.',
     textures: {
-      body: '/images/clothing/flannel-jacket-body.png',
-      rightArm: '/images/clothing/flannel-jacket-arm.png',
-      leftArm: '/images/clothing/flannel-jacket-arm.png',
+      body: './images/clothing/flannel-jacket-body.png',
+      rightArm: './images/clothing/flannel-jacket-arm.png',
+      leftArm: './images/clothing/flannel-jacket-arm.png',
     },
     unlock: { type: 'craft', coins: 90, materials: { fabric: 2 } },
   },
@@ -395,9 +429,9 @@ export const CLOTHING_CATALOG: ClothingDefinition[] = [
     name: 'Rain Slicker',
     flavor: 'Bright yellow, in case the fish need a warning.',
     textures: {
-      body: '/images/clothing/rain-slicker-body.png',
-      rightArm: '/images/clothing/rain-slicker-arm.png',
-      leftArm: '/images/clothing/rain-slicker-arm.png',
+      body: './images/clothing/rain-slicker-body.png',
+      rightArm: './images/clothing/rain-slicker-arm.png',
+      leftArm: './images/clothing/rain-slicker-arm.png',
     },
     unlock: { type: 'craft', coins: 120, materials: { rubber: 2 } },
   },
@@ -407,8 +441,8 @@ export const CLOTHING_CATALOG: ClothingDefinition[] = [
     name: 'Overalls',
     flavor: 'One big pocket for snacks and bobbers alike.',
     textures: {
-      rightLeg: '/images/clothing/overalls-leg.png',
-      leftLeg: '/images/clothing/overalls-leg.png',
+      rightLeg: './images/clothing/overalls-leg.png',
+      leftLeg: './images/clothing/overalls-leg.png',
     },
     unlock: { type: 'craft', coins: 100, materials: { fabric: 2, metal: 1 } },
   },
@@ -418,8 +452,8 @@ export const CLOTHING_CATALOG: ClothingDefinition[] = [
     name: 'Cargo Pants',
     flavor: 'Every pocket holds a slightly different lure.',
     textures: {
-      rightLeg: '/images/clothing/cargo-pants-leg.png',
-      leftLeg: '/images/clothing/cargo-pants-leg.png',
+      rightLeg: './images/clothing/cargo-pants-leg.png',
+      leftLeg: './images/clothing/cargo-pants-leg.png',
     },
     unlock: { type: 'craft', coins: 80, materials: { fabric: 2 } },
   },
@@ -429,8 +463,8 @@ export const CLOTHING_CATALOG: ClothingDefinition[] = [
     name: 'Rubber Boots',
     flavor: 'Waterproof, mostly.',
     textures: {
-      rightLeg: '/images/clothing/rubber-boots-leg.png',
-      leftLeg: '/images/clothing/rubber-boots-leg.png',
+      rightLeg: './images/clothing/rubber-boots-leg.png',
+      leftLeg: './images/clothing/rubber-boots-leg.png',
     },
     unlock: { type: 'craft', coins: 70, materials: { rubber: 2 } },
   },
@@ -440,8 +474,8 @@ export const CLOTHING_CATALOG: ClothingDefinition[] = [
     name: 'Sneakers',
     flavor: 'Not really made for standing in mud, but here we are.',
     textures: {
-      rightLeg: '/images/clothing/sneakers-leg.png',
-      leftLeg: '/images/clothing/sneakers-leg.png',
+      rightLeg: './images/clothing/sneakers-leg.png',
+      leftLeg: './images/clothing/sneakers-leg.png',
     },
     unlock: { type: 'craft', coins: 65, materials: { fabric: 1, rubber: 1 } },
   },

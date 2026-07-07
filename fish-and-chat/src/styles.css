@@ -776,6 +776,20 @@ body {
   font-size: 0.85rem;
 }
 
+.closet-preview-frame {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 14px;
+}
+
+#closet-preview {
+  width: 220px;
+  height: 280px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #bfe3d8, #8fc9b8);
+  box-shadow: inset 0 0 0 3px var(--paper-dark), var(--shadow-panel);
+}
+
 .tone-swatch-row {
   display: flex;
   gap: 10px;
