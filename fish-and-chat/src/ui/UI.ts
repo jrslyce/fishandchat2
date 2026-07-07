@@ -1,4 +1,5 @@
 import {
+  ARCHETYPE_CATALOG,
   BAIT_CATALOG,
   BASE_TONE_CATALOG,
   BOX_OF_NOT_FISH_CONTENTS,
@@ -13,6 +14,7 @@ import {
   TRASH_CATALOG,
   UPGRADE_CATALOG,
   xpToNextLevel,
+  type ArchetypeId,
   type ClothingSlot,
   type UpgradeId,
 } from '../game/data';
@@ -27,7 +29,7 @@ import type { MarketSystem } from '../systems/MarketSystem';
 import type { EventBus } from '../core/EventBus';
 import type { CatchResult, GameEventMap } from '../game/events';
 
-type ModalId = 'shop' | 'market' | 'craft' | 'collection' | 'settings' | 'candy' | 'closet' | null;
+type ModalId = 'shop' | 'market' | 'craft' | 'collection' | 'settings' | 'candy' | 'closet' | 'skills' | null;
 
 const ICON = {
   coin: './images/icons/coin.png',
@@ -95,6 +97,8 @@ export class UI {
   private catchCardTimeout: number | null = null;
   private resetArmed = false;
   private lastDuckySecond = 0;
+  private biteLabel = 'BITE! Tap now!';
+  private missedLabel = 'It got away&hellip;';
 
   constructor(
     private readonly economy: Economy,
@@ -133,6 +137,7 @@ export class UI {
           <button class="rail-btn" id="btn-candy" type="button" aria-label="Candy Bar Shop">${CANDY_EMOJI}</button>
           <button class="rail-btn" id="btn-closet" type="button" aria-label="Closet">&#128100;</button>
           <button class="rail-btn" id="btn-collection" type="button" aria-label="Collection">${icon(ICON.scale, 'Collection')}</button>
+          <button class="rail-btn" id="btn-skills" type="button" aria-label="Skills"><span class="gear-glyph">&#11088;</span></button>
           <button class="rail-btn" id="btn-settings" type="button" aria-label="Settings"><span class="gear-glyph">&#9881;</span></button>
         </div>
       </div>
@@ -179,6 +184,7 @@ export class UI {
     this.el('#btn-candy').addEventListener('click', () => railSelect('candy'));
     this.el('#btn-closet').addEventListener('click', () => railSelect('closet'));
     this.el('#btn-collection').addEventListener('click', () => railSelect('collection'));
+    this.el('#btn-skills').addEventListener('click', () => railSelect('skills'));
     this.el('#btn-settings').addEventListener('click', () => railSelect('settings'));
     this.el('#hud-bait-pill').addEventListener('click', () => this.toggleModal('shop'));
     this.el('#hud-candy-pill').addEventListener('click', () => this.toggleModal('candy'));
@@ -240,10 +246,18 @@ export class UI {
 
   private bindEvents(): void {
     this.events.on('toast', ({ message }) => this.showToast(message));
-    // 'missed' needs no listener here: GameState already emits a toast for it.
+    this.events.on('biteStarted', ({ fightValue, skillValue }) => {
+      const margin = skillValue - fightValue;
+      this.biteLabel =
+        margin > 20 ? 'Easy catch — reel whenever!' : margin > -10 ? "It's fighting back!" : "It's fighting HARD!";
+    });
+    this.events.on('missed', ({ reason }) => {
+      this.missedLabel = reason === 'escaped' ? 'It broke free!' : 'It got away&hellip;';
+    });
     this.events.on('catchResolved', ({ result }) => this.showCatchCard(result));
     this.events.on('coinsChanged', () => this.refreshOpenModal());
     this.events.on('upgradePurchased', () => this.refreshOpenModal());
+    this.events.on('skillPointSpent', () => this.refreshOpenModal());
     this.events.on('baitPurchased', () => this.refreshOpenModal());
     this.events.on('baitEquipped', () => this.refreshOpenModal());
     this.events.on('fishbotPurchased', () => this.refreshOpenModal());
@@ -451,10 +465,10 @@ export class UI {
         this.phaseIndicator.innerHTML = `<div class="phase-label">Waiting for a bite&hellip;</div><div class="progress-track"><div class="progress-fill" style="width:${snap.waitProgress * 100}%"></div></div>`;
         break;
       case 'bite':
-        this.phaseIndicator.innerHTML = `<div class="phase-label bite">BITE! Tap now!</div><div class="progress-track"><div class="progress-fill bite" style="width:${100 - snap.biteProgress * 100}%"></div></div>`;
+        this.phaseIndicator.innerHTML = `<div class="phase-label bite">${this.biteLabel}</div><div class="progress-track"><div class="progress-fill bite" style="width:${100 - snap.biteProgress * 100}%"></div></div>`;
         break;
       case 'missed':
-        this.phaseIndicator.innerHTML = `<div class="phase-label missed">It got away&hellip;</div>`;
+        this.phaseIndicator.innerHTML = `<div class="phase-label missed">${this.missedLabel}</div>`;
         break;
       default:
         this.phaseIndicator.innerHTML = '';
@@ -530,6 +544,36 @@ export class UI {
     else if (this.openModal === 'closet') this.renderCloset();
     else if (this.openModal === 'collection') this.renderCollection();
     else if (this.openModal === 'settings') this.renderSettings();
+    else if (this.openModal === 'skills') this.renderSkills();
+  }
+
+  private renderSkills(): void {
+    const available = this.economy.skillPointsAvailable();
+    const rows = ARCHETYPE_CATALOG.map((archetype) => {
+      const points = this.economy.archetypePoints(archetype.id);
+      return `
+        <li class="row">
+          <div class="row-body">
+            <strong>${archetype.name}</strong> <span class="tier-badge">${points}</span>
+            <span class="row-meta">${archetype.description}</span>
+          </div>
+          <div class="row-actions">
+            <button class="btn-small ${available > 0 ? '' : 'btn-disabled'}" data-action="spend-skill-point" data-id="${archetype.id}" ${available > 0 ? '' : 'disabled'}>+1</button>
+          </div>
+        </li>`;
+    }).join('');
+
+    this.modalHost.innerHTML = this.modalShell(
+      'Skills',
+      `
+        <div class="craft-header">
+          <strong>Skill Points Available: ${available}</strong>
+          <span class="modal-note">Earned one per fishing level-up. Spend them to fight tougher fish.</span>
+        </div>
+        <ul class="modal-list">${rows}</ul>
+      `,
+    );
+    this.bindModalActions();
   }
 
   private renderShop(): void {
@@ -988,6 +1032,7 @@ export class UI {
         else if (action === 'claim-hopper') this.fishbotSystem.claimHopper();
         else if (action === 'sell' && method) this.marketSystem.sell(index, method);
         else if (action === 'buy-upgrade') this.craftingSystem.purchaseUpgrade(id as UpgradeId);
+        else if (action === 'spend-skill-point') this.craftingSystem.spendSkillPoint(id as ArchetypeId);
         else if (action === 'recycle-all') this.craftingSystem.recycleAllTrash();
         else if (action === 'craft-ducky') this.craftingSystem.craftLuckyDucky();
         else if (action === 'use-ducky') this.craftingSystem.useLuckyDucky();

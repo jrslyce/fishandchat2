@@ -6,7 +6,9 @@ import {
   randomSweetSpot,
 } from '../systems/CastingSystem';
 import { isWithinReactionWindow, rollWaitSeconds } from '../systems/BiteSystem';
+import { computeReactionWindowMs, computeSuccessChance, rollFightValue } from '../systems/FightSystem';
 import { resolveCatch } from '../systems/CatchResolver';
+import { computeRarityWeights, rollRarity, type Rarity } from './data';
 import type { Economy } from './Economy';
 import type { EventBus } from '../core/EventBus';
 import type { GameEventMap, CatchResult } from './events';
@@ -52,6 +54,10 @@ export class FishingStateMachine {
   private lockedRolls: { L: number; T: number; S: number } | null = null;
   private waitDurationSeconds = 0;
   private lastCatch: CatchResult | null = null;
+  private hookedRarity: Rarity | null = null;
+  private fightValue = 0;
+  private skillValueForBite = 0;
+  private currentReactionWindowMs = 0;
   
   public debugPerfectCastMode = false;
   public autoFishingEnabled = false;
@@ -73,7 +79,7 @@ export class FishingStateMachine {
       sweetSpotWidth: this.gauge.sweetSpotWidth,
       waitProgress: this.phase === 'waiting' ? Math.min(1, this.phaseElapsed / this.waitDurationSeconds) : 0,
       biteProgress:
-        this.phase === 'bite' ? Math.min(1, (this.phaseElapsed * 1000) / this.economy.reactionWindowMs()) : 0,
+        this.phase === 'bite' ? Math.min(1, (this.phaseElapsed * 1000) / this.currentReactionWindowMs) : 0,
       lastCatch: this.lastCatch,
     };
   }
@@ -98,10 +104,12 @@ export class FishingStateMachine {
         if (this.phaseElapsed >= this.waitDurationSeconds) this.enterBite();
         break;
       case 'bite':
-        if (input.justPressed() || this.autoFishingEnabled) {
-          this.resolveBiteSuccess();
-        } else if (!isWithinReactionWindow(this.phaseElapsed, this.economy.reactionWindowMs())) {
-          this.enterMissed('no-react');
+        if (input.justPressed()) {
+          this.attemptReel(false);
+        } else if (this.autoFishingEnabled) {
+          this.attemptReel(true);
+        } else if (!isWithinReactionWindow(this.phaseElapsed, this.currentReactionWindowMs)) {
+          this.attemptReel(true);
         }
         break;
       case 'resolving':
@@ -163,21 +171,53 @@ export class FishingStateMachine {
   }
 
   private enterBite(): void {
+    const precisionBonus = precisionSkillBonus(this.lockedPrecision);
+    const S = this.lockedRolls ? this.lockedRolls.S : 0;
+    const skill = this.economy.effectiveSkill(precisionBonus + S * 5);
+    const weights = computeRarityWeights(skill, this.economy.hasSonarScanner());
+    const rarity = rollRarity(weights);
+    const fight = rollFightValue(rarity, this.economy.charmerVarianceReduction());
+
+    this.hookedRarity = rarity;
+    this.fightValue = fight;
+    this.skillValueForBite = skill;
+    this.currentReactionWindowMs = computeReactionWindowMs(skill, fight, this.economy.reelWindowFlatBonusMs());
+
     this.setPhase('bite');
-    this.events.emit('biteStarted', {});
+    this.events.emit('biteStarted', { rarity, fightValue: fight, skillValue: skill });
   }
 
-  private resolveBiteSuccess(): void {
-    this.events.emit('biteReacted', { success: true });
+  /**
+   * Shared by a manual tap and by the window simply timing out — both roll the same
+   * skill-vs-fight odds, so a bite left unattended can still land (or still escape) rather
+   * than defaulting to an automatic miss. `auto` is true for the timeout path and for the
+   * AFK toggle (which resolves immediately rather than waiting out the window); a manual tap
+   * gets a small early-reaction bonus that tapers off through the window.
+   */
+  private attemptReel(auto: boolean): void {
+    let successChance = computeSuccessChance(this.skillValueForBite, this.fightValue, this.economy.trapperSuccessBonus());
+    if (!auto) {
+      const elapsedRatio = (this.phaseElapsed * 1000) / this.currentReactionWindowMs;
+      if (elapsedRatio < 0.4) successChance = Math.min(0.97, successChance + 0.08);
+    }
+    const success = Math.random() < successChance;
+    this.events.emit('biteReacted', { success });
+
+    if (!success) {
+      this.enterMissed('escaped');
+      return;
+    }
+
     this.setPhase('resolving');
 
     const precisionBonus = precisionSkillBonus(this.lockedPrecision);
     const theme = this.economy.currentTheme();
-    
+
     const L = this.lockedRolls ? this.lockedRolls.L : 0;
     const S = this.lockedRolls ? this.lockedRolls.S : 0;
-    
-    const result = resolveCatch(this.economy, precisionBonus, theme, L, S);
+    const rarity = this.hookedRarity ?? 'common';
+
+    const result = resolveCatch(this.economy, precisionBonus, theme, L, S, rarity);
     const levelResult = this.economy.addXp(result.xpAwarded);
     this.lastCatch = result;
 
@@ -192,10 +232,9 @@ export class FishingStateMachine {
     this.setPhase('celebrating');
   }
 
-  private enterMissed(reason: 'early' | 'late' | 'no-react'): void {
-    this.events.emit('biteReacted', { success: false });
+  private enterMissed(reason: 'early' | 'late' | 'no-react' | 'escaped'): void {
     this.events.emit('missed', { reason });
-    this.events.emit('toast', { message: 'It got away...' });
+    this.events.emit('toast', { message: reason === 'escaped' ? 'It broke free!' : 'It got away...' });
     this.setPhase('missed');
   }
 

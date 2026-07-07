@@ -1,5 +1,5 @@
 import type { Economy } from '../game/Economy';
-import type { ClothingSlot, UpgradeId } from '../game/data';
+import type { ArchetypeId, ClothingSlot, UpgradeId } from '../game/data';
 import type { EventBus } from '../core/EventBus';
 import type { GameEventMap } from '../game/events';
 
@@ -15,6 +15,13 @@ export class CraftingSystem {
     this.events.emit('upgradePurchased', { id, ok: result.ok });
     if (result.ok) this.events.emit('coinsChanged', {});
     return result.ok;
+  }
+
+  spendSkillPoint(id: ArchetypeId): boolean {
+    const ok = this.economy.spendSkillPoint(id);
+    this.events.emit('skillPointSpent', { id, ok });
+    if (ok) this.economy.persist();
+    return ok;
   }
 
   recycleBasketItem(index: number): boolean {

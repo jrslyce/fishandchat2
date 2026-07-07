@@ -1,4 +1,5 @@
 import {
+  ARCHETYPE_CATALOG,
   BAIT_CATALOG,
   BASE_TONE_CATALOG,
   BASKET_BASE_CAPACITY,
@@ -12,6 +13,7 @@ import {
   UPGRADE_CATALOG,
   themeForLevel,
   xpToNextLevel,
+  type ArchetypeId,
   type BaitDefinition,
   type ClothingSlot,
   type FishbotDefinition,
@@ -97,10 +99,6 @@ export class Economy {
 
   // --- Derived gameplay modifiers --------------------------------------
 
-  reactionWindowMs(): number {
-    return 900 + this.upgradeTier('carbon-rod') * 150;
-  }
-
   waitMultiplier(): number {
     return this.hasUpgrade('led-bobber') ? 0.8 : 1;
   }
@@ -159,7 +157,44 @@ export class Economy {
   }
 
   effectiveSkill(castPrecisionBonus: number): number {
-    return this.state.level * 2 + this.equippedBait().skillBonus + castPrecisionBonus;
+    const gearBonus =
+      this.upgradeTier('carbon-rod') * 8 +
+      this.upgradeTier('braided-line') * 8 +
+      this.upgradeTier('trophy-lure') * 8 +
+      this.equippedBait().skillBonus;
+    const tacticianMult = 1 + this.archetypePoints('tactician') * 0.1;
+    return this.state.level + this.archetypePoints('brawler') * 2 + gearBonus * tacticianMult + castPrecisionBonus;
+  }
+
+  /** Flat reel-window bonus (rod tier + Patience archetype) — fed into the fight formula's flatBonusMs, separate from the skill-vs-fight margin. */
+  reelWindowFlatBonusMs(): number {
+    return this.upgradeTier('carbon-rod') * 150 + this.archetypePoints('patience') * 250;
+  }
+
+  // --- Skill points & archetypes ------------------------------------------
+
+  skillPointsAvailable(): number {
+    return this.state.skillPoints;
+  }
+
+  archetypePoints(id: ArchetypeId): number {
+    return this.state.archetypePoints[id] ?? 0;
+  }
+
+  spendSkillPoint(id: ArchetypeId): boolean {
+    if (!ARCHETYPE_CATALOG.some((a) => a.id === id)) return false;
+    if (this.state.skillPoints <= 0) return false;
+    this.state.skillPoints -= 1;
+    this.state.archetypePoints[id] = (this.state.archetypePoints[id] ?? 0) + 1;
+    return true;
+  }
+
+  trapperSuccessBonus(): number {
+    return this.archetypePoints('trapper') * 0.02;
+  }
+
+  charmerVarianceReduction(): number {
+    return this.archetypePoints('charmer') * 0.02;
   }
 
   // --- Basket -------------------------------------------------------------
@@ -190,6 +225,7 @@ export class Economy {
     while (this.state.xp >= xpToNextLevel(this.state.level)) {
       this.state.xp -= xpToNextLevel(this.state.level);
       this.state.level += 1;
+      this.state.skillPoints += 1;
       leveledUp = true;
     }
     const newTheme = themeForLevel(this.state.level);

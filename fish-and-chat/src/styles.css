@@ -328,14 +328,19 @@ body {
   flex-direction: column;
   gap: 8px;
   pointer-events: auto;
+  max-height: calc(100vh - 160px);
 }
 
 /* Nested behind the toggle (the bait-can rail-btn) so the collapsed rail is a single
-   button — a 496px-tall Twitch panel can't fit all 7 stacked open at once. */
+   button — a 496px-tall Twitch panel can't fit every item stacked open at once. Scrolls
+   (rather than shrinking buttons further) once there are more items than fit vertically. */
 #hud-rail-items {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
 }
 
 #hud-rail-items.hidden {

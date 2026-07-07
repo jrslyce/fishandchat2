@@ -1,4 +1,4 @@
-import { RARITY_XP_MULTIPLIER, computeRarityWeights, rollRarity, type ThemeId } from '../game/data';
+import { RARITY_XP_MULTIPLIER, type Rarity, type ThemeId } from '../game/data';
 import { pickSpeciesForRarity, pickTrashItem, rollWeightKg } from '../game/loot';
 import type { CatchResult } from '../game/events';
 import type { Economy } from '../game/Economy';
@@ -6,15 +6,22 @@ import type { Economy } from '../game/Economy';
 const TRASH_FLAT_XP = 2;
 
 /**
- * Rolls a rarity, picks a species (respecting theme affinity), computes
- * weight/value/XP, and adds the catch to the basket. Does not apply XP —
- * the caller applies `xpAwarded` via `economy.addXp()` so it can react to
- * the returned level-up/theme-change info in the same tick.
+ * Picks a species for the already-decided `rarity` (respecting theme affinity), computes
+ * weight/value/XP, and adds the catch to the basket. Rarity is rolled earlier, at bite-start
+ * (`GameState.enterBite()`), so the reel window/fight value can reflect it before the player
+ * reacts — this function no longer rolls its own. Does not apply XP — the caller applies
+ * `xpAwarded` via `economy.addXp()` so it can react to the returned level-up/theme-change info
+ * in the same tick.
  */
-export function resolveCatch(economy: Economy, castPrecisionBonus: number, theme: ThemeId, L: number, S: number): CatchResult {
+export function resolveCatch(
+  economy: Economy,
+  castPrecisionBonus: number,
+  theme: ThemeId,
+  L: number,
+  S: number,
+  rarity: Rarity,
+): CatchResult {
   const effectiveSkill = economy.effectiveSkill(castPrecisionBonus + S * 5);
-  const weights = computeRarityWeights(effectiveSkill, economy.hasSonarScanner());
-  const rarity = rollRarity(weights);
 
   if (rarity === 'trash') {
     const trash = pickTrashItem();

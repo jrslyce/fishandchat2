@@ -1,4 +1,4 @@
-import type { ClothingSlot, Rarity, ThemeId, UpgradeId } from './data';
+import type { ArchetypeId, ClothingSlot, Rarity, ThemeId, UpgradeId } from './data';
 import type { FishingPhase } from './GameState';
 import type { LevelUpResult } from './Economy';
 import type { RecycleResult } from './Economy';
@@ -21,13 +21,13 @@ export interface GameEventMap {
 
   phaseChanged: { phase: FishingPhase };
   castLocked: { precision: number; rolls: { L: number; T: number; S: number } };
-  biteStarted: Record<string, never>;
+  biteStarted: { rarity: Rarity; fightValue: number; skillValue: number };
   biteReacted: { success: boolean };
   catchResolved: { result: CatchResult };
   patienceBonusAwarded: Record<string, never>;
   trashRecycled: { result: RecycleResult; catchId: string };
   recycleFinished: { successCount: number; failCount: number; salvaged: Record<string, number> };
-  missed: { reason: 'early' | 'late' | 'no-react' };
+  missed: { reason: 'early' | 'late' | 'no-react' | 'escaped' };
   basketFull: Record<string, never>;
 
   xpGained: { amount: number } & LevelUpResult;
@@ -42,6 +42,7 @@ export interface GameEventMap {
   marketBonesDepleted: Record<string, never>;
 
   upgradePurchased: { id: UpgradeId; ok: boolean };
+  skillPointSpent: { id: ArchetypeId; ok: boolean };
   baitPurchased: { id: string; ok: boolean };
   baitEquipped: { id: string };
 

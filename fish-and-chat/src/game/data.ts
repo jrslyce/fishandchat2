@@ -94,6 +94,8 @@ export const BAIT_CATALOG: BaitDefinition[] = [
 
 export type UpgradeId =
   | 'carbon-rod'
+  | 'braided-line'
+  | 'trophy-lure'
   | 'led-bobber'
   | 'turbo-bot-chip'
   | 'heavy-duty-basket'
@@ -114,12 +116,34 @@ export const UPGRADE_CATALOG: UpgradeDefinition[] = [
   {
     id: 'carbon-rod',
     name: 'Carbon Rod',
-    description: '+150ms bite reaction window per tier.',
+    description: '+150ms reel window per tier, and boosts your skill against tough fish.',
     maxTier: 3,
     costPerTier: [
       { coins: 80, materials: { wood: 2 } },
       { coins: 220, materials: { wood: 4, metal: 2 } },
       { coins: 500, materials: { wood: 6, metal: 4 } },
+    ],
+  },
+  {
+    id: 'braided-line',
+    name: 'Braided Line',
+    description: 'Boosts your skill against tough fish, per tier.',
+    maxTier: 3,
+    costPerTier: [
+      { coins: 90, materials: { fiber: 2 } },
+      { coins: 240, materials: { fiber: 4, rubber: 2 } },
+      { coins: 540, materials: { fiber: 6, rubber: 4 } },
+    ],
+  },
+  {
+    id: 'trophy-lure',
+    name: 'Trophy Lure',
+    description: 'Boosts your skill against tough fish, per tier.',
+    maxTier: 3,
+    costPerTier: [
+      { coins: 100, materials: { glass: 2 } },
+      { coins: 260, materials: { glass: 4, metal: 2 } },
+      { coins: 560, materials: { glass: 6, metal: 4 } },
     ],
   },
   {
@@ -171,6 +195,23 @@ export const UPGRADE_CATALOG: UpgradeDefinition[] = [
     maxTier: 1,
     costPerTier: [{ coins: 700, materials: { metal: 6, glass: 4 } }],
   },
+];
+
+export type ArchetypeId = 'brawler' | 'patience' | 'trapper' | 'charmer' | 'tactician';
+
+export interface ArchetypeDefinition {
+  id: ArchetypeId;
+  name: string;
+  description: string;
+}
+
+/** One skill point is earned per fishing level-up; freely spent across these, one at a time. */
+export const ARCHETYPE_CATALOG: ArchetypeDefinition[] = [
+  { id: 'brawler', name: 'Brawler', description: '+2 skill per point. Raw power against every fight.' },
+  { id: 'patience', name: 'Patience', description: '+250ms reel window per point. More slack before a bite needs your attention.' },
+  { id: 'trapper', name: 'Trapper', description: '+2% success chance per point, on top of your skill-vs-fight odds.' },
+  { id: 'charmer', name: 'Charmer', description: 'Fish you hook fight closer to their average, less likely to roll a nasty surprise.' },
+  { id: 'tactician', name: 'Tactician', description: '+10% bonus per point on your combined rod/line/lure/bait skill.' },
 ];
 
 export const BASKET_BASE_CAPACITY = 8;

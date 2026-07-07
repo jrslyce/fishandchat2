@@ -1,4 +1,4 @@
-import { FISHBOT_CATALOG, type ClothingSlot, type MaterialId, type UpgradeId } from './data';
+import { FISHBOT_CATALOG, type ArchetypeId, type ClothingSlot, type MaterialId, type UpgradeId } from './data';
 
 export interface BasketItem {
   /** FISH_CATALOG id, TRASH_CATALOG id, or a fishbot-caught species id. */
@@ -35,6 +35,8 @@ export interface GameSaveStateV1 {
   equippedClothing: Record<ClothingSlot, string | null>;
   baseToneId: string;
   displayNameOverride: string | null;
+  skillPoints: number;
+  archetypePoints: Record<ArchetypeId, number>;
 }
 
 export function createDefaultSaveState(): GameSaveStateV1 {
@@ -65,6 +67,8 @@ export function createDefaultSaveState(): GameSaveStateV1 {
     equippedClothing: { hat: null, jacket: 'basic-shirt', pants: 'basic-pants', shoes: 'basic-shoes' },
     baseToneId: 'sunfish-tan',
     displayNameOverride: null,
+    skillPoints: 0,
+    archetypePoints: { brawler: 0, patience: 0, trapper: 0, charmer: 0, tactician: 0 },
   };
 }
 
@@ -77,13 +81,26 @@ export function createDefaultSaveState(): GameSaveStateV1 {
  * a save with any intentional loadout (even just a jacket) is left alone.
  */
 export function migrateSaveState(state: GameSaveStateV1): GameSaveStateV1 {
-  const { jacket, pants, shoes } = state.equippedClothing;
-  if (jacket || pants || shoes) return state;
+  let next = state;
 
-  const starterIds = ['basic-shirt', 'basic-pants', 'basic-shoes'];
-  return {
-    ...state,
-    ownedClothingIds: Array.from(new Set([...state.ownedClothingIds, ...starterIds])),
-    equippedClothing: { ...state.equippedClothing, jacket: 'basic-shirt', pants: 'basic-pants', shoes: 'basic-shoes' },
-  };
+  const { jacket, pants, shoes } = next.equippedClothing;
+  if (!jacket && !pants && !shoes) {
+    const starterIds = ['basic-shirt', 'basic-pants', 'basic-shoes'];
+    next = {
+      ...next,
+      ownedClothingIds: Array.from(new Set([...next.ownedClothingIds, ...starterIds])),
+      equippedClothing: { ...next.equippedClothing, jacket: 'basic-shirt', pants: 'basic-pants', shoes: 'basic-shoes' },
+    };
+  }
+
+  // Saves from before the fight/skill-point system predate these fields entirely.
+  if (next.skillPoints === undefined || next.archetypePoints === undefined) {
+    next = {
+      ...next,
+      skillPoints: next.skillPoints ?? 0,
+      archetypePoints: next.archetypePoints ?? { brawler: 0, patience: 0, trapper: 0, charmer: 0, tactician: 0 },
+    };
+  }
+
+  return next;
 }
