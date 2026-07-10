@@ -398,11 +398,10 @@ export class Economy {
 
   addRandomGarbage(count: number): void {
     for (let i = 0; i < count; i++) {
-      if (this.basketFull()) break;
       const trash = TRASH_CATALOG[Math.floor(Math.random() * TRASH_CATALOG.length)];
       const [min, max] = trash.weightRangeKg;
       const weight = min + (max - min) * Math.random();
-      this.addToBasket({
+      this.addToTrashBucket({
         catchId: trash.id,
         isTrash: true,
         weightKg: weight,
