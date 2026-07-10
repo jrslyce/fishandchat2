@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import type { ClothingSlot } from '../../game/data';
+import { CLOTHING_CATALOG, type ClothingSlot } from '../../game/data';
 import { compositeSkinTexture } from './compositeSkin';
+import { buildCowboyHatGeometry } from './hatGeometry';
 import { PlayerObject } from './PlayerObject';
 import { FishingAnimation, IdleAnimation, PlayerAnimation, WalkingAnimation, WaveAnimation, type FishingPose } from './animations';
 
@@ -38,6 +39,7 @@ export class PlayerCharacter {
 
   private pose: CharacterPose = 'idle';
   private waveTimer = 0;
+  private hatGeometry: THREE.Group | null = null;
 
   constructor() {
     this.player = new PlayerObject();
@@ -114,6 +116,32 @@ export class PlayerCharacter {
     const texture = await compositeSkinTexture(baseToneId, equipped);
     this.player.skin.map?.dispose();
     this.player.skin.map = texture;
+    this.refreshHatGeometry(equipped.hat);
+  }
+
+  /**
+   * Hats with a `hatGeometry` catalog entry (e.g. the cowboy hat's brim) render
+   * as a real mesh attached to the head bone instead of a flat texture overlay
+   * — see hatGeometry.ts for why. Swaps it out whenever the equipped hat changes.
+   */
+  private refreshHatGeometry(hatId: string | null): void {
+    if (this.hatGeometry) {
+      this.player.skin.head.remove(this.hatGeometry);
+      this.hatGeometry.traverse((child) => {
+        const mesh = child as THREE.Mesh;
+        if (mesh.isMesh) {
+          mesh.geometry.dispose();
+          (mesh.material as THREE.Material).dispose();
+        }
+      });
+      this.hatGeometry = null;
+    }
+
+    const item = hatId ? CLOTHING_CATALOG.find((c) => c.id === hatId) : null;
+    if (!item?.hatGeometry) return;
+
+    this.hatGeometry = buildCowboyHatGeometry(item.hatGeometry);
+    this.player.skin.head.add(this.hatGeometry);
   }
 
   setPose(pose: CharacterPose): void {
@@ -159,5 +187,6 @@ export class PlayerCharacter {
   dispose(): void {
     this.player.skin.map?.dispose();
     this.nameTagTexture.dispose();
+    this.refreshHatGeometry(null);
   }
 }

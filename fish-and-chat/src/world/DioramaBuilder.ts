@@ -26,7 +26,7 @@ export interface DioramaResult {
   root: THREE.Group;
   /** Empty anchor group where Barnaby's GLB is attached, positioned at the market stall. */
   barnabySlot: THREE.Group;
-  /** Empty anchor group where the fishbot's GLB is attached, positioned on the dock. */
+  /** Empty anchor group where the equipped fishbot's GLB is attached, positioned on the dock. */
   fishbotSlot: THREE.Group;
   /** Empty anchor group where the player's voxel character is attached, on its own patch of bank. */
   playerSlot: THREE.Group;
@@ -145,7 +145,10 @@ export function buildDiorama(theme: ThemeId, materials: MaterialLibrary): Dioram
   root.add(bench);
   track(bench, 'craftingBench');
 
-  // Aligned with the dock's plank line (x=1.4) near its far end, so the bot reads as standing on the dock.
+  // Aligned with the dock's plank line (x=1.4) near its far end, so the bot reads as standing
+  // on the dock. Only one fishbot is ever equipped/active at a time (see Economy.equipFishbot),
+  // so Mk I's and Mk II's models share this single slot — Game.ts toggles which one is
+  // parented/visible rather than needing two separate dock positions.
   const fishbotSlot = new THREE.Group();
   fishbotSlot.name = 'fishbotSlot';
   fishbotSlot.position.set(1.4, 0.56, 2.05); // nudged landward to make room for lantern

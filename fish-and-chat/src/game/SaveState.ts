@@ -27,6 +27,8 @@ export interface GameSaveStateV1 {
   baitInventory: Record<string, number>;
   discoveredCatchIds: string[];
   fishbots: Record<string, FishbotState>;
+  /** Only one fishbot works the dock at a time — swapping is how you trade Mk II's better odds for Mk I's trash-inclusive bias (e.g. to farm crafting materials). */
+  equippedFishbotId: string | null;
   fishbotHopper: BasketItem[];
   lastActiveAtMs: number;
   audio: { master: number; sfx: number; ambience: number; muted: boolean };
@@ -63,6 +65,7 @@ export function createDefaultSaveState(): GameSaveStateV1 {
     baitInventory: {},
     discoveredCatchIds: [],
     fishbots,
+    equippedFishbotId: null,
     fishbotHopper: [],
     lastActiveAtMs: Date.now(),
     audio: { master: 1, sfx: 0.8, ambience: 0.6, muted: false },
@@ -133,6 +136,15 @@ export function migrateSaveState(state: GameSaveStateV1): GameSaveStateV1 {
       hasSeenCastTutorial: next.hasSeenCastTutorial ?? true,
       hasSeenReelTutorial: next.hasSeenReelTutorial ?? true,
     };
+  }
+
+  // Saves from before fishbots became single-active predate this field — older saves could
+  // have both Mk I and Mk II owned and ticking at once. Preserve auto-fishing for these
+  // players by equipping their best owned bot (Mk II over Mk I) rather than dropping them
+  // to nothing-equipped.
+  if (next.equippedFishbotId === undefined) {
+    const ownedIds = FISHBOT_CATALOG.filter((bot) => next.fishbots[bot.id]?.owned).map((bot) => bot.id);
+    next = { ...next, equippedFishbotId: ownedIds.includes('fishbot-mk2') ? 'fishbot-mk2' : (ownedIds[0] ?? null) };
   }
 
   return next;

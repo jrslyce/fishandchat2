@@ -64,6 +64,7 @@ export const MODEL_SOURCE_MANIFEST = {
   prismKoi: 'assets-src/models/prism-koi/61262e20-5371-40b0-a33f-5953ea3a839c-pbr_model.glb',
   genericFish: 'assets-src/models/generic-fish/f4500b28-f57c-4e53-9a8b-b2e55fea9ce5-pbr_model.glb',
   fishbot: 'assets-src/models/fishbot/12886f27-5b39-4453-9f0e-294854466a1e-pbr_model.glb',
+  fishbotMk2: 'assets-src/models/fishbot-mk2/1099a84a-b1b0-4031-9f1b-c244faca4a4d-pbr_model.glb',
   oldBoot: 'assets-src/models/old-boot/8889e280-3579-474c-9b56-4279cacf51ca-pbr_model.glb',
 } as const;
 
@@ -76,6 +77,7 @@ export const MODEL_SOURCE_MANIFEST_PUBLIC = {
   prismKoi: './models/prism-koi.glb',
   genericFish: './models/generic-fish.glb',
   fishbot: './models/fishbot.glb',
+  fishbotMk2: './models/fishbot-mk2.glb',
   oldBoot: './models/old-boot.glb',
   bobber: './models/bobber.glb',
 } as const;

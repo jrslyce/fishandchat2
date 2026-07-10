@@ -399,6 +399,14 @@ export interface ClothingDefinition {
   /** Per-body-part overlay texture URLs; only the parts relevant to `slot` need entries. */
   textures: Partial<Record<ClothingPart, string>>;
   /**
+   * Hat-only: renders as real 3D geometry attached to the head bone instead of
+   * (or in addition to) a flat texture overlay. The texture-overlay hat layer
+   * is just a uniformly-scaled-up copy of the head cube (see PlayerObject.ts's
+   * `head2Box`), so it can never silhouette wider than the head — a brim that
+   * actually overhangs needs its own mesh. See entities/character/hatGeometry.ts.
+   */
+  hatGeometry?: { crown: string; band: string; brim: string };
+  /**
    * How this item is unlocked. `craft` spends coins+materials directly (this
    * catalog owns that purchase). `premium` defers entirely to the existing
    * candy-bar premium system — `premiumId` must match a `PREMIUM_CATALOG`
@@ -465,7 +473,8 @@ export const CLOTHING_CATALOG: ClothingDefinition[] = [
     slot: 'hat',
     name: 'Cowboy Hat',
     flavor: 'Wide-brimmed felt with a proper band — built for long days at the water.',
-    textures: { head: './images/clothing/cowboy-hat-head.png' },
+    textures: {},
+    hatGeometry: { crown: '#a37547', band: '#4a3020', brim: '#7a5636' },
     unlock: { type: 'craft', coins: 70, materials: { fabric: 2 } },
   },
   {

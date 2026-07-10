@@ -320,6 +320,7 @@ export class UI {
     this.events.on('baitPurchased', () => this.refreshOpenModal());
     this.events.on('baitEquipped', () => this.refreshOpenModal());
     this.events.on('fishbotPurchased', () => this.refreshOpenModal());
+    this.events.on('fishbotEquipped', () => this.refreshOpenModal());
     this.events.on('fishbotClaimed', () => this.refreshOpenModal());
     this.events.on('candyBarsChanged', () => this.refreshOpenModal());
     this.events.on('premiumItemPurchased', () => this.refreshOpenModal());
@@ -750,12 +751,18 @@ export class UI {
     const botRows = FISHBOT_CATALOG.map((bot) => {
       const botState = state.fishbots[bot.id];
       const owned = botState?.owned;
-      const secondsToNext = owned ? Math.max(0, Math.ceil((botState.nextReadyAtMs - Date.now()) / 1000)) : 0;
-      const statusLine = owned
+      const equipped = state.equippedFishbotId === bot.id;
+      const secondsToNext = equipped ? Math.max(0, Math.ceil((botState!.nextReadyAtMs - Date.now()) / 1000)) : 0;
+      const statusLine = equipped
         ? secondsToNext > 0
           ? `<span class="row-meta">🟢 Active — next catch in ${secondsToNext}s</span>`
           : `<span class="row-meta">🟢 Active — catch ready, check the hopper below</span>`
-        : '';
+        : owned
+          ? `<span class="row-meta">In holdings — not fishing</span>`
+          : '';
+      const actionButton = !owned
+        ? `<button class="btn-small" data-action="buy-fishbot" data-id="${bot.id}">Buy</button>`
+        : `<button class="btn-small ${equipped ? 'btn-disabled' : ''}" data-action="equip-fishbot" data-id="${bot.id}" ${equipped ? 'disabled' : ''}>${equipped ? 'Equipped' : 'Equip'}</button>`;
       return `
         <li class="row">
           ${rowIcon(bot.id, bot.name)}
@@ -764,9 +771,7 @@ export class UI {
             <span class="row-meta">${bot.cost}🪙 &middot; ${bot.baseIntervalSeconds}s cycle</span>
             ${statusLine}
           </div>
-          <div class="row-actions">
-            <button class="btn-small" data-action="buy-fishbot" data-id="${bot.id}" ${owned ? 'disabled' : ''}>${owned ? 'Owned' : 'Buy'}</button>
-          </div>
+          <div class="row-actions">${actionButton}</div>
         </li>`;
     }).join('');
 
@@ -1227,6 +1232,7 @@ export class UI {
           if (!this.craftingSystem.purchaseBait(id)) this.showToast('Not enough 🪙');
         }
         else if (action === 'buy-fishbot') this.craftingSystem.purchaseFishbot(id);
+        else if (action === 'equip-fishbot') this.craftingSystem.equipFishbot(id);
         else if (action === 'claim-hopper') this.fishbotSystem.claimHopper();
         else if (action === 'sell' && method) this.marketSystem.sell(index, method);
         else if (action === 'sell-all' && (method === 'sell' || method === 'haggle')) this.marketSystem.sellAll(method);
