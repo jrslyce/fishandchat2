@@ -374,27 +374,39 @@ export class Game {
    * at the dock or grass instead of the pond.
    */
   private throwBobber(): void {
-    const slotForward = new THREE.Vector3();
-    this.diorama.playerSlot.getWorldDirection(slotForward);
-    const playerForward = new THREE.Vector3();
-    this.playerCharacter.group.getWorldDirection(playerForward);
-
-    const slotAngle = Math.atan2(slotForward.x, slotForward.z);
-    const playerAngle = Math.atan2(playerForward.x, playerForward.z);
-    let relativeAngle = playerAngle - slotAngle;
-    relativeAngle = ((relativeAngle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-    const clampedAngle = THREE.MathUtils.clamp(relativeAngle, -CAST_CONE_RADIANS, CAST_CONE_RADIANS);
-
-    const castDir = slotForward.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), clampedAngle);
-    castDir.y = 0;
-    castDir.normalize();
-
     const playerWorldPos = new THREE.Vector3();
     this.playerCharacter.group.getWorldPosition(playerWorldPos);
-
     const startPos = this.playerCharacter.getRodTipWorldPosition(new THREE.Vector3());
-    const landingPos = playerWorldPos.clone().addScaledVector(castDir, CAST_DISTANCE);
-    landingPos.y = 0;
+
+    let landingPos: THREE.Vector3 | null = null;
+    
+    if (this.input.lastClickEvent) {
+      const e = this.input.lastClickEvent;
+      const rect = this.renderer.domElement.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+      const intersects = raycaster.intersectObjects([this.water.mesh, this.diorama.root], true);
+      if (intersects.length > 0 && intersects[0].object === this.water.mesh) {
+        landingPos = intersects[0].point;
+      }
+    }
+    
+    if (!landingPos) {
+      const slotForward = new THREE.Vector3();
+      this.diorama.playerSlot.getWorldDirection(slotForward);
+      
+      const randomAngle = (Math.random() * 2 - 1) * CAST_CONE_RADIANS;
+      const castDir = slotForward.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), randomAngle);
+      castDir.y = 0;
+      castDir.normalize();
+      
+      const randomDist = CAST_DISTANCE * (0.6 + Math.random() * 0.6);
+      landingPos = playerWorldPos.clone().addScaledVector(castDir, randomDist);
+    }
+    
+    landingPos.y = WATER_Y;
 
     this.bobber.throwTo(startPos, landingPos, CASTING_ANIM_SECONDS);
   }
@@ -577,6 +589,20 @@ export class Game {
     this.water.emitRipple(startX, startZ);
   }
 
+  private updateFishbotGlow(): void {
+    if (!this.fishbotGroup) return;
+    const isAuto = this.fishingState.autoFishingEnabled;
+    const targetEmissive = isAuto ? 0x66ff66 : 0x000000;
+    this.fishbotGroup.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        if (!child.userData.originalMaterial) child.userData.originalMaterial = child.material;
+        child.material = child.userData.originalMaterial.clone();
+        child.material.emissive.setHex(targetEmissive);
+        child.material.emissiveIntensity = isAuto ? 0.8 : 0;
+      }
+    });
+  }
+
   private updateFishbotVisibility(): void {
     if (!this.fishbotGroup) return;
     this.fishbotGroup.visible = this.economy.ownedFishbots().length > 0;
@@ -648,7 +674,33 @@ export class Game {
     // composer.setSize() reallocates every post-processing render target (bloom's mip
     // chain, vignette pass) — only pay that cost when the canvas actually changed size.
     if (resizeRenderer(this.renderer, this.camera)) {
-      this.renderPipeline.resize(this.canvas.width, this.canvas.height);
+      this.renderPipeline.resize(this.canvas.clientWidth, this.canvas.clientHeight);
+    }
+
+    if (this.input.justPressed() && this.input.lastClickEvent && this.fishbotGroup && this.fishbotGroup.visible) {
+      if (this.fishingState.autoFishingEnabled) {
+        this.fishingState.autoFishingEnabled = false;
+        this.input.consumePress();
+        this.updateFishbotGlow();
+        this.events.emit('fishbotToggled', { enabled: false, name: '' });
+      } else {
+        const e = this.input.lastClickEvent;
+        const rect = this.renderer.domElement.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+        const intersects = raycaster.intersectObject(this.fishbotGroup, true);
+        if (intersects.length > 0) {
+          this.fishingState.autoFishingEnabled = true;
+          this.input.consumePress();
+          this.updateFishbotGlow();
+          
+          const activeBots = this.economy.ownedFishbots();
+          const botName = activeBots.length > 0 ? activeBots[0].name : 'Fishbot';
+          this.events.emit('fishbotToggled', { enabled: true, name: botName });
+        }
+      }
     }
 
     if (this.input.justPressed()) this.events.emit('actionPressed', {});

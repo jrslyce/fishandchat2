@@ -87,7 +87,6 @@ export class RenderPipeline {
   private setupComposer(): void {
     const size = new THREE.Vector2();
     this.renderer.getSize(size);
-
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
 
@@ -99,6 +98,7 @@ export class RenderPipeline {
   }
 
   resize(width: number, height: number): void {
+    this.composer?.setPixelRatio(this.renderer.getPixelRatio());
     this.composer?.setSize(width, height);
   }
 

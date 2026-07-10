@@ -58,6 +58,7 @@ export class PlayerCharacter {
 
     this.nameTag = this.buildNameTag();
     this.nameTag.position.y = NAME_TAG_Y;
+    this.nameTag.visible = false;
     this.group.add(this.nameTag);
     this.setName('Angler');
 

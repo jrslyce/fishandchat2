@@ -417,9 +417,10 @@ body {
 
 /* Phase indicator (cast gauge / wait / bite) */
 
-#phase-indicator {
+#phase-indicator,
+#fishbot-status {
   position: absolute;
-  bottom: max(80px, calc(env(safe-area-inset-bottom) + 74px));
+  top: max(160px, calc(env(safe-area-inset-top) + 154px));
   left: 50%;
   transform: translateX(-50%);
   width: min(320px, 80vw);
@@ -427,16 +428,28 @@ body {
   color: var(--ink);
 }
 
+#fishbot-status {
+  top: max(220px, calc(env(safe-area-inset-top) + 214px));
+  display: inline-block;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: rgba(44, 58, 48, 0.88);
+  color: #f6f1df;
+  font-weight: 700;
+  font-size: 0.85rem;
+  box-shadow: var(--shadow-panel);
+}
+
 .phase-label {
-  font-weight: 800;
-  margin-bottom: 4px;
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.7);
-}
-.phase-label.bite {
-  color: var(--danger);
-}
-.phase-label.missed {
-  color: #6a6a6a;
+  display: inline-block;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: rgba(44, 58, 48, 0.88);
+  color: #f6f1df;
+  font-weight: 700;
+  font-size: 0.85rem;
+  box-shadow: var(--shadow-panel);
+  margin-bottom: 8px;
 }
 
 .gauge-track {

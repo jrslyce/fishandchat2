@@ -286,13 +286,6 @@ export class FishingStateMachine {
 
   private enterMissed(reason: 'early' | 'late' | 'no-react' | 'escaped' | 'no-catch' | 'bait-stolen' | 'reeled-early'): void {
     this.events.emit('missed', { reason });
-    const message =
-      reason === 'escaped' ? 'It broke free!' :
-      reason === 'bait-stolen' ? 'It stole your bait and bolted!' :
-      reason === 'no-catch' ? 'It slipped off the hook!' :
-      reason === 'reeled-early' ? 'Reeled in early.' :
-      'It got away...';
-    this.events.emit('toast', { message });
     this.setPhase('missed');
   }
 

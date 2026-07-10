@@ -18,6 +18,7 @@ export interface CatchResult {
 export interface GameEventMap {
   actionPressed: Record<string, never>;
   actionReleased: { heldSeconds: number };
+  fishbotToggled: { enabled: boolean; name: string };
 
   phaseChanged: { phase: FishingPhase };
   castLocked: { precision: number; rolls: { L: number; T: number; S: number } };

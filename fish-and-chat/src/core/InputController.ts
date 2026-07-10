@@ -10,10 +10,12 @@ export class InputController {
   private releasedThisFrame = false;
   private pressStartedAt = 0;
   private lastHoldDuration = 0;
+  public lastClickEvent: PointerEvent | null = null;
 
   private readonly onKeyDown = (event: KeyboardEvent) => {
     if (!this.isActionKey(event.code)) return;
     event.preventDefault();
+    this.lastClickEvent = null;
     this.press();
   };
 
@@ -26,6 +28,7 @@ export class InputController {
   private readonly onPointerDown = (event: PointerEvent) => {
     if (event.button !== 0 && event.pointerType === 'mouse') return;
     event.preventDefault();
+    this.lastClickEvent = event;
     this.press();
   };
 
@@ -55,6 +58,11 @@ export class InputController {
 
   justPressed(): boolean {
     return this.pressedThisFrame;
+  }
+  
+  consumePress(): void {
+    this.pressedThisFrame = false;
+    this.held = false;
   }
 
   justReleased(): boolean {

@@ -93,6 +93,7 @@ export class UI {
   private readonly hudBaitName: HTMLElement;
   private readonly hudBasketCount: HTMLElement;
   private readonly phaseIndicator: HTMLElement;
+  private readonly fishbotStatus: HTMLElement;
   private readonly toastLine: HTMLElement;
   private readonly catchCard: HTMLElement;
   private readonly modalHost: HTMLElement;
@@ -165,8 +166,10 @@ export class UI {
         ${icon(ICON.basket, 'Basket')}
         <span id="hud-basket-count">0/8</span>
       </button>
-
-      <div id="phase-indicator"></div>
+      <div id="game-ui">
+        <div id="phase-indicator"></div>
+        <div id="fishbot-status" class="hidden"></div>
+      </div>
       <div id="tutorial-bubble" class="hidden">
         <img class="barnaby-portrait-small" src="./images/barnaby-portrait.png" alt="Barnaby" />
         <button type="button" id="tutorial-bubble-text" class="tutorial-bubble-text"></button>
@@ -184,6 +187,7 @@ export class UI {
     this.hudBaitName = this.el('#hud-bait-name');
     this.hudBasketCount = this.el('#hud-basket-count');
     this.phaseIndicator = this.el('#phase-indicator');
+    this.fishbotStatus = this.el('#fishbot-status');
     this.biteFlash = document.querySelector<HTMLElement>('#bite-flash')!;
     this.toastLine = document.querySelector<HTMLElement>('#toast-line')!;
     this.catchCard = document.querySelector<HTMLElement>('#catch-card')!;
@@ -343,6 +347,14 @@ export class UI {
         this.showPerfectCastFireworks();
       }
       this.showDiceRolls(rolls.L, rolls.T, rolls.S);
+    });
+    this.events.on('fishbotToggled', ({ enabled, name }) => {
+      if (enabled) {
+        this.fishbotStatus.textContent = `Fishingbot ${name} is on. Click anywhere to turn off.`;
+        this.fishbotStatus.classList.remove('hidden');
+      } else {
+        this.fishbotStatus.classList.add('hidden');
+      }
     });
 
     let staggerCount = 0;
