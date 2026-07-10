@@ -3,3 +3,4 @@ fish-and-chat/dist/
 fish-and-chat/test-results/
 .DS_Store
 *.local
+.claude/
