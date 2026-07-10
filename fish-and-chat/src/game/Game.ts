@@ -152,7 +152,10 @@ export class Game {
     // itself to hold sRGB-encoded values or it comes out looking too dark.
     this.closetRenderTarget.texture.colorSpace = THREE.SRGBColorSpace;
 
-    const actionSurface = this.getElement('#action-button');
+    // The whole canvas is the action surface (tap anywhere to cast/reel) — `#ui-root` sits on
+    // top with `pointer-events: none` except on its own buttons, so real HUD/modal clicks never
+    // reach here and won't double-fire a cast.
+    const actionSurface = this.getElement('#game-canvas');
     this.input = new InputController(actionSurface);
 
     this.economy = new Economy(this.saveManager);

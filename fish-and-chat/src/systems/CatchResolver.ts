@@ -6,6 +6,29 @@ import type { Economy } from '../game/Economy';
 const TRASH_FLAT_XP = 2;
 
 /**
+ * The "catch" is a bag of coins, not a fish — it credits coins immediately and skips the
+ * basket entirely, rather than sitting there as an unsellable item. (It used to go through
+ * `addToBasket` like a real fish, but `'treasure'` isn't in `FISH_CATALOG`, so `MarketSystem.sell()`
+ * silently no-ops on it and the Market list showed the raw id for 0 coins — no way to ever
+ * actually get the coins out.)
+ */
+function resolveTreasureHook(economy: Economy): CatchResult {
+  const coins = Math.floor(Math.random() * 50) + 50;
+  economy.addCoins(coins);
+  return {
+    catchId: 'treasure',
+    name: 'Sunken Coin Purse',
+    rarity: 'epic',
+    isTrash: false,
+    weightKg: 2.0,
+    value: coins,
+    flavor: 'A dripping leather bag heavy with coins.',
+    xpAwarded: 50,
+    addedToBasket: true,
+  };
+}
+
+/**
  * Picks a species for the already-decided `rarity` (respecting theme affinity), computes
  * weight/value/XP, and adds the catch to the basket. Rarity is rolled earlier, at bite-start
  * (`GameState.enterBite()`), so the reel window/fight value can reflect it before the player
@@ -21,6 +44,10 @@ export function resolveCatch(
   S: number,
   rarity: Rarity,
 ): CatchResult {
+  if (economy.consumeDebugForcedCatch() === 'treasure') {
+    return resolveTreasureHook(economy);
+  }
+
   const effectiveSkill = economy.effectiveSkill(castPrecisionBonus + S * 5);
 
   if (rarity === 'trash') {
@@ -33,7 +60,7 @@ export function resolveCatch(
       name = `Salvaged ${name}`;
       value *= 5; // Trash to Treasure
     }
-    const addedToBasket = economy.addToBasket({ catchId: trashId, isTrash: true, weightKg, caughtAt: Date.now() });
+    const addedToBasket = economy.addToTrashBucket({ catchId: trashId, isTrash: true, weightKg, caughtAt: Date.now() });
 
     return {
       catchId: trash.id,
@@ -49,19 +76,7 @@ export function resolveCatch(
   }
 
   if ((L === 3 || L === 7) && Math.random() < 0.25) {
-    // Treasure Hook
-    const coins = Math.floor(Math.random() * 50) + 50;
-    return {
-      catchId: 'treasure',
-      name: 'Sunken Coin Purse',
-      rarity: 'epic',
-      isTrash: false,
-      weightKg: 2.0,
-      value: coins,
-      flavor: 'A dripping leather bag heavy with coins.',
-      xpAwarded: 50,
-      addedToBasket: false, // auto-sell? or goes in basket? let's put it in basket so they can sell it.
-    };
+    return resolveTreasureHook(economy);
   }
 
   const species = pickSpeciesForRarity(rarity, theme, effectiveSkill);

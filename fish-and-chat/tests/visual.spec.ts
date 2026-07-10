@@ -45,9 +45,9 @@ async function sampleCanvas(page: import('@playwright/test').Page): Promise<Canv
 }
 
 async function tap(page: import('@playwright/test').Page, pointerId: number) {
-  const button = page.locator('#action-button');
-  await button.dispatchEvent('pointerdown', { pointerId, button: 0 });
-  await button.dispatchEvent('pointerup', { pointerId, button: 0 });
+  const canvas = page.locator('#game-canvas');
+  await canvas.dispatchEvent('pointerdown', { pointerId, button: 0 });
+  await canvas.dispatchEvent('pointerup', { pointerId, button: 0 });
 }
 
 test('renders a nonblank pond diorama and plays the cast -> wait loop', async ({ page }, testInfo) => {
@@ -65,7 +65,7 @@ test('renders a nonblank pond diorama and plays the cast -> wait loop', async ({
   const sample = await sampleCanvas(page);
   expect(sample, JSON.stringify(sample)).toMatchObject({ ok: true });
 
-  // Dismiss the title screen (it visually covers the action button until this fires).
+  // Dismiss the title screen (it visually covers the canvas until this fires).
   await page.locator('#title-start').click();
   await expect(page.locator('#title-screen')).toBeHidden();
 
@@ -81,7 +81,6 @@ test('renders a nonblank pond diorama and plays the cast -> wait loop', async ({
   });
 
   await expect(page.locator('#hud-coins')).toBeVisible();
-  await expect(page.locator('#phase-indicator .progress-track')).toBeVisible();
 
   const screenshot = await page.screenshot({ fullPage: true });
   await testInfo.attach(`${testInfo.project.name}-game`, {

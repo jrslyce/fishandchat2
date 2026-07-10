@@ -32,28 +32,26 @@ export class CraftingSystem {
     return true;
   }
 
-  /** Recycles every trash item currently in the basket; returns how many were processed. */
+  /** Recycles every trash item currently in the trash bucket; returns how many were processed. */
   recycleAllTrash(): number {
-    const basket = this.economy.snapshot.basket;
+    const bucket = this.economy.trashBucket();
     let successCount = 0;
     let failCount = 0;
     const salvaged: Record<string, number> = {};
 
-    for (let i = basket.length - 1; i >= 0; i -= 1) {
-      if (basket[i].isTrash) {
-        const catchId = basket[i].catchId;
-        const res = this.economy.recycleTrash(catchId);
-        if (res) {
-          if (res.success && res.materialId) {
-            successCount += 1;
-            salvaged[res.materialId] = (salvaged[res.materialId] ?? 0) + res.amount;
-          } else {
-            failCount += 1;
-          }
-          this.events.emit('trashRecycled', { result: res, catchId });
+    for (let i = bucket.length - 1; i >= 0; i -= 1) {
+      const catchId = bucket[i].catchId;
+      const res = this.economy.recycleTrash(catchId);
+      if (res) {
+        if (res.success && res.materialId) {
+          successCount += 1;
+          salvaged[res.materialId] = (salvaged[res.materialId] ?? 0) + res.amount;
+        } else {
+          failCount += 1;
         }
-        this.economy.removeFromBasket(i);
+        this.events.emit('trashRecycled', { result: res, catchId });
       }
+      this.economy.removeFromTrashBucket(i);
     }
 
     if (successCount > 0 || failCount > 0) {

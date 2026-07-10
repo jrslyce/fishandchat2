@@ -19,6 +19,8 @@ export interface GameSaveStateV1 {
   level: number;
   xp: number;
   basket: BasketItem[];
+  /** Trash is uncapped and kept separate from the basket so junk never competes with fish for room. */
+  trashBucket: BasketItem[];
   materials: Record<MaterialId, number>;
   upgrades: Partial<Record<UpgradeId, number>>;
   equippedBaitId: string;
@@ -37,6 +39,9 @@ export interface GameSaveStateV1 {
   displayNameOverride: string | null;
   skillPoints: number;
   archetypePoints: Record<ArchetypeId, number>;
+  /** One-time Barnaby tutorial bubbles — dismissed permanently once the player has cast/reeled once. */
+  hasSeenCastTutorial: boolean;
+  hasSeenReelTutorial: boolean;
 }
 
 export function createDefaultSaveState(): GameSaveStateV1 {
@@ -51,6 +56,7 @@ export function createDefaultSaveState(): GameSaveStateV1 {
     level: 1,
     xp: 0,
     basket: [],
+    trashBucket: [],
     materials: { rubber: 0, metal: 0, wood: 0, fabric: 0, fiber: 0, glass: 0 },
     upgrades: {},
     equippedBaitId: 'pleb-bait',
@@ -69,6 +75,8 @@ export function createDefaultSaveState(): GameSaveStateV1 {
     displayNameOverride: null,
     skillPoints: 0,
     archetypePoints: { brawler: 0, patience: 0, trapper: 0, charmer: 0, tactician: 0 },
+    hasSeenCastTutorial: false,
+    hasSeenReelTutorial: false,
   };
 }
 
@@ -99,6 +107,31 @@ export function migrateSaveState(state: GameSaveStateV1): GameSaveStateV1 {
       ...next,
       skillPoints: next.skillPoints ?? 0,
       archetypePoints: next.archetypePoints ?? { brawler: 0, patience: 0, trapper: 0, charmer: 0, tactician: 0 },
+    };
+  }
+
+  // Saves from before the trash/basket split predate this field entirely.
+  if (next.trashBucket === undefined) {
+    next = { ...next, trashBucket: [] };
+  }
+
+  // Saves from before the split also have trash items still sitting in the basket
+  // (mixed in with fish) — move them over so they stop showing up as sellable.
+  if (next.basket.some((item) => item.isTrash)) {
+    next = {
+      ...next,
+      basket: next.basket.filter((item) => !item.isTrash),
+      trashBucket: [...next.trashBucket, ...next.basket.filter((item) => item.isTrash)],
+    };
+  }
+
+  // Saves from before the tap-to-cast tutorial predate these fields — an existing player
+  // already knows how to play, so default them to "seen" rather than surfacing the popups.
+  if (next.hasSeenCastTutorial === undefined || next.hasSeenReelTutorial === undefined) {
+    next = {
+      ...next,
+      hasSeenCastTutorial: next.hasSeenCastTutorial ?? true,
+      hasSeenReelTutorial: next.hasSeenReelTutorial ?? true,
     };
   }
 

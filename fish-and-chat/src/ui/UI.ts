@@ -24,12 +24,12 @@ import type { AudioEngine } from '../core/AudioEngine';
 import type { CraftingSystem } from '../systems/CraftingSystem';
 import type { FishbotSystem } from '../systems/FishbotSystem';
 import type { MuxySystem } from '../systems/MuxySystem';
-import type { FishingStateMachine } from '../game/GameState';
+import type { FishingStateMachine, FishingPhase } from '../game/GameState';
 import type { MarketSystem } from '../systems/MarketSystem';
 import type { EventBus } from '../core/EventBus';
 import type { CatchResult, GameEventMap } from '../game/events';
 
-type ModalId = 'shop' | 'market' | 'craft' | 'collection' | 'settings' | 'candy' | 'closet' | 'skills' | null;
+type ModalId = 'shop' | 'market' | 'craft' | 'collection' | 'settings' | 'candy' | 'closet' | 'skills' | 'debug' | null;
 
 const ICON = {
   coin: './images/icons/coin.png',
@@ -38,9 +38,23 @@ const ICON = {
   hammer: './images/icons/hammer.png',
   scale: './images/icons/scale.png',
   bone: './images/icons/bone.png',
+  hamburger: './images/icons/hamburger.png',
 } as const;
 
 const CANDY_EMOJI = '🍫';
+
+/** Barnaby's small talk when you click his portrait in the Shop — always followed by "*gulp*". */
+const BARNABY_LINES = [
+  "Looks like fine fishing weather out there.",
+  "Storm's rolling in by evening, mark my words.",
+  "Caught a boot bigger than my own head once.",
+  "The big ones always bite right before closing time.",
+  "Back in my day, the pond went twice as deep.",
+  "There's a hum in the water — good sign, that.",
+  "Reel in slow, reel in steady, that's how you keep 'em.",
+  "♪ Oh the line goes down, the line goes deep, a fisherman's got no time to sleep ♪",
+];
+const BARNABY_5TH_CLICK_LINE = "Baker's dozen it is";
 
 function catchName(catchId: string): string {
   return (
@@ -82,14 +96,16 @@ export class UI {
   private readonly toastLine: HTMLElement;
   private readonly catchCard: HTMLElement;
   private readonly modalHost: HTMLElement;
+  private readonly biteFlash: HTMLElement;
   private readonly titleScreen: HTMLElement;
   private readonly titleWelcome: HTMLElement;
   private readonly titleStart: HTMLButtonElement;
   private readonly titleLoading: HTMLElement;
   private readonly titleLoadingFill: HTMLElement;
-  private readonly actionButton: HTMLButtonElement;
   private readonly railToggle: HTMLButtonElement;
   private readonly railItems: HTMLElement;
+  private readonly tutorialBubble: HTMLElement;
+  private readonly tutorialBubbleText: HTMLButtonElement;
 
   private openModal: ModalId = null;
   private railExpanded = false;
@@ -97,6 +113,8 @@ export class UI {
   private catchCardTimeout: number | null = null;
   private resetArmed = false;
   private lastDuckySecond = 0;
+  private barnabyMessage: string | null = null;
+  private barnabyClickCount = 0;
   private biteLabel = 'BITE! Tap now!';
   private missedLabel = 'It got away&hellip;';
 
@@ -115,6 +133,7 @@ export class UI {
     document.querySelector('#app')?.appendChild(this.root);
 
     this.root.innerHTML = `
+      <button id="btn-debug" type="button" aria-label="Debug">🖥️</button>
       <div id="hud-top">
         <div id="hud-level-block">
           <span id="hud-level">Lv 1</span>
@@ -124,12 +143,12 @@ export class UI {
           <div class="hud-pill hidden" id="hud-lucky-ducky-pill">🦆 <span id="hud-lucky-ducky-timer">0:00</span></div>
           <div class="hud-pill" id="hud-coins-pill">${icon(ICON.coin, 'Coins')}<span id="hud-coins">0</span></div>
           <button class="hud-pill hud-pill-button" id="hud-candy-pill" type="button">${CANDY_EMOJI}<span id="hud-candy-bars">0</span></button>
-          <button class="hud-pill hud-pill-button" id="hud-bait-pill" type="button">${icon(ICON.bait, 'Bait')}<span id="hud-bait-name">Pleb Bait</span></button>
+          <button class="hud-pill hud-pill-button" id="hud-bait-pill" type="button"><span id="hud-bait-name">&infin; PB</span></button>
         </div>
       </div>
 
       <div id="hud-rail">
-        <button class="rail-btn" id="rail-toggle" type="button" aria-label="Menu" aria-expanded="false">${icon(ICON.bait, 'Menu')}</button>
+        <button class="rail-btn" id="rail-toggle" type="button" aria-label="Menu" aria-expanded="false"><span class="gear-glyph">&#9776;</span></button>
         <div id="hud-rail-items" class="hidden">
           <button class="rail-btn" id="btn-shop" type="button" aria-label="Shop">${icon(ICON.bait, 'Shop')}</button>
           <button class="rail-btn" id="btn-market" type="button" aria-label="Market">${icon(ICON.coin, 'Market')}</button>
@@ -148,9 +167,14 @@ export class UI {
       </button>
 
       <div id="phase-indicator"></div>
+      <div id="tutorial-bubble" class="hidden">
+        <img class="barnaby-portrait-small" src="./images/barnaby-portrait.png" alt="Barnaby" />
+        <button type="button" id="tutorial-bubble-text" class="tutorial-bubble-text"></button>
+      </div>
       <div id="toast-line" class="hidden"></div>
       <div id="catch-card" class="hidden"></div>
       <div id="modal-host" class="hidden"></div>
+      <div id="bite-flash"></div>
     `;
 
     this.hudLevel = this.el('#hud-level');
@@ -160,6 +184,7 @@ export class UI {
     this.hudBaitName = this.el('#hud-bait-name');
     this.hudBasketCount = this.el('#hud-basket-count');
     this.phaseIndicator = this.el('#phase-indicator');
+    this.biteFlash = document.querySelector<HTMLElement>('#bite-flash')!;
     this.toastLine = document.querySelector<HTMLElement>('#toast-line')!;
     this.catchCard = document.querySelector<HTMLElement>('#catch-card')!;
     this.modalHost = document.querySelector<HTMLElement>('#modal-host')!;
@@ -168,7 +193,8 @@ export class UI {
     this.titleStart = document.querySelector<HTMLButtonElement>('#title-start')!;
     this.titleLoading = document.querySelector<HTMLElement>('#title-loading')!;
     this.titleLoadingFill = document.querySelector<HTMLElement>('#title-loading-fill')!;
-    this.actionButton = document.querySelector<HTMLButtonElement>('#action-button')!;
+    this.tutorialBubble = this.el('#tutorial-bubble');
+    this.tutorialBubbleText = this.el('#tutorial-bubble-text') as HTMLButtonElement;
 
     this.railToggle = this.el('#rail-toggle') as HTMLButtonElement;
     this.railItems = this.el('#hud-rail-items');
@@ -186,9 +212,18 @@ export class UI {
     this.el('#btn-collection').addEventListener('click', () => railSelect('collection'));
     this.el('#btn-skills').addEventListener('click', () => railSelect('skills'));
     this.el('#btn-settings').addEventListener('click', () => railSelect('settings'));
+    this.el('#btn-debug').addEventListener('click', () => this.toggleModal('debug'));
     this.el('#hud-bait-pill').addEventListener('click', () => this.toggleModal('shop'));
     this.el('#hud-candy-pill').addEventListener('click', () => this.toggleModal('candy'));
     this.el('#basket-badge').addEventListener('click', () => this.toggleModal('market'));
+
+    // Clicking the bubble itself dismisses it early — a real button, so this never bubbles
+    // down to the canvas and accidentally fires a cast/reel tap underneath.
+    this.tutorialBubbleText.addEventListener('click', () => {
+      if (!this.economy.hasSeenCastTutorial()) this.economy.markCastTutorialSeen();
+      else if (!this.economy.hasSeenReelTutorial()) this.economy.markReelTutorialSeen();
+      this.renderTutorialBubble(this.gameState.getPhase());
+    });
 
     this.titleStart.addEventListener('click', () => this.dismissTitleScreen());
 
@@ -246,13 +281,33 @@ export class UI {
 
   private bindEvents(): void {
     this.events.on('toast', ({ message }) => this.showToast(message));
+    // Tutorial bubbles auto-close the instant the described action actually happens, rather
+    // than waiting for the player to notice and dismiss them by hand.
+    this.events.on('castLocked', () => {
+      if (!this.economy.hasSeenCastTutorial()) this.economy.markCastTutorialSeen();
+    });
+    this.events.on('biteReacted', () => {
+      if (!this.economy.hasSeenReelTutorial()) this.economy.markReelTutorialSeen();
+    });
+    this.events.on('missed', ({ reason }) => {
+      // Reeling in early during 'waiting' is itself a tap-to-reel action.
+      if ((reason === 'reeled-early' || reason === 'bait-stolen') && !this.economy.hasSeenReelTutorial()) {
+        this.economy.markReelTutorialSeen();
+      }
+    });
     this.events.on('biteStarted', ({ fightValue, skillValue }) => {
       const margin = skillValue - fightValue;
       this.biteLabel =
         margin > 20 ? 'Easy catch — reel whenever!' : margin > -10 ? "It's fighting back!" : "It's fighting HARD!";
+      this.showBiteFlash();
     });
     this.events.on('missed', ({ reason }) => {
-      this.missedLabel = reason === 'escaped' ? 'It broke free!' : 'It got away&hellip;';
+      this.missedLabel =
+        reason === 'escaped' ? 'It broke free!' :
+        reason === 'bait-stolen' ? 'It stole your bait and bolted!' :
+        reason === 'no-catch' ? 'It slipped off the hook!' :
+        reason === 'reeled-early' ? 'Reeled in early.' :
+        'It got away&hellip;';
     });
     this.events.on('catchResolved', ({ result }) => this.showCatchCard(result));
     this.events.on('coinsChanged', () => this.refreshOpenModal());
@@ -318,12 +373,9 @@ export class UI {
     const dice = document.createElement('div');
     dice.className = 'dice-rolls-anim';
     dice.innerHTML = `L<span>${L}</span> T<span>${T}</span> S<span>${S}</span>`;
-    
-    const actionBtn = this.actionButton;
-    const rect = actionBtn.getBoundingClientRect();
-    dice.style.left = `${rect.left + rect.width / 2}px`;
-    dice.style.top = `${rect.top - 50}px`;
-    
+    dice.style.left = '50%';
+    dice.style.top = `${window.innerHeight - 130}px`;
+
     document.body.appendChild(dice);
     setTimeout(() => dice.remove(), 2000);
   }
@@ -416,7 +468,9 @@ export class UI {
     this.hudXpFill.style.width = `${Math.min(100, (state.xp / needed) * 100)}%`;
     this.hudCoins.textContent = String(state.coins);
     this.hudCandyBars.textContent = String(state.candyBars);
-    this.hudBaitName.textContent = this.economy.equippedBait().name;
+    const equippedBait = this.economy.equippedBait();
+    const baitOwned = state.baitInventory[equippedBait.id] ?? 0;
+    this.hudBaitName.textContent = `${equippedBait.free ? '∞' : baitOwned} ${equippedBait.acronym}`;
     this.hudBasketCount.textContent = `${state.basket.length}/${this.economy.basketCapacity()}`;
 
     const duckyActive = this.economy.isLuckyDuckyActive();
@@ -450,28 +504,48 @@ export class UI {
 
   private renderPhaseIndicator(): void {
     const snap = this.gameState.snapshot();
-    
-    if (snap.phase === 'idle' || snap.phase === 'aiming' || snap.phase === 'casting') {
-      this.actionButton.textContent = 'Cast';
-    } else {
-      this.actionButton.textContent = 'Reel';
-    }
 
     switch (snap.phase) {
       case 'aiming':
         this.phaseIndicator.innerHTML = this.gaugeMarkup(snap.gaugeValue, snap.sweetSpot, snap.sweetSpotWidth);
         break;
-      case 'waiting':
-        this.phaseIndicator.innerHTML = `<div class="phase-label">Waiting for a bite&hellip;</div><div class="progress-track"><div class="progress-fill" style="width:${snap.waitProgress * 100}%"></div></div>`;
-        break;
       case 'bite':
-        this.phaseIndicator.innerHTML = `<div class="phase-label bite">${this.biteLabel}</div><div class="progress-track"><div class="progress-fill bite" style="width:${100 - snap.biteProgress * 100}%"></div></div>`;
+        this.phaseIndicator.innerHTML = `<div class="phase-label bite">${this.biteLabel}</div>`;
         break;
       case 'missed':
         this.phaseIndicator.innerHTML = `<div class="phase-label missed">${this.missedLabel}</div>`;
         break;
       default:
         this.phaseIndicator.innerHTML = '';
+    }
+
+    this.renderTutorialBubble(snap.phase);
+  }
+
+  /**
+   * Barnaby's two one-time onboarding bubbles, driven purely by economy flags + current phase
+   * (no separate stage tracking to fall out of sync) — recomputed every frame:
+   * "click to cast" while idle/aiming, then "tap to reel" once cast until the first bite is
+   * reacted to. Both also auto-close via `bindEvents()`'s `castLocked`/`biteReacted` listeners.
+   */
+  private renderTutorialBubble(phase: FishingPhase): void {
+    let text: string | null = null;
+
+    if (!this.economy.hasSeenCastTutorial() && (phase === 'idle' || phase === 'aiming')) {
+      text = 'Click on the screen to cast your reel.';
+    } else if (
+      this.economy.hasSeenCastTutorial() &&
+      !this.economy.hasSeenReelTutorial() &&
+      (phase === 'casting' || phase === 'waiting' || phase === 'bite')
+    ) {
+      text = 'Once you have a bite, tap the screen to reel in.';
+    }
+
+    if (text) {
+      this.tutorialBubbleText.textContent = text;
+      this.tutorialBubble.classList.remove('hidden');
+    } else {
+      this.tutorialBubble.classList.add('hidden');
     }
   }
 
@@ -495,6 +569,29 @@ export class UI {
     this.toastLine.classList.remove('hidden');
     if (this.toastTimeout) window.clearTimeout(this.toastTimeout);
     this.toastTimeout = window.setTimeout(() => this.toastLine.classList.add('hidden'), 2200);
+  }
+
+  /** Brief pulsing border cue when a bite starts. */
+  private showBiteFlash(): void {
+    this.biteFlash.classList.remove('flashing');
+    // Force a reflow so re-triggering while already flashing restarts the animation.
+    void this.biteFlash.offsetWidth;
+    this.biteFlash.classList.add('flashing');
+  }
+
+  /**
+   * "BITE" pop text that originates small at the bobber's screen position (`x`, `y` in CSS
+   * pixels) and zooms bigger while fading — see Game.ts's `biteStarted` handler for the
+   * world-to-screen projection that supplies the coordinates.
+   */
+  showBiteText(x: number, y: number): void {
+    const el = document.createElement('div');
+    el.className = 'bite-pop';
+    el.textContent = 'BITE!';
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    el.addEventListener('animationend', () => el.remove());
+    this.root.appendChild(el);
   }
 
   private showCatchCard(result: CatchResult): void {
@@ -536,6 +633,10 @@ export class UI {
       this.modalHost.innerHTML = '';
       return;
     }
+    // Every render*() below does a full innerHTML rebuild, which resets scroll to the top —
+    // jarring when an action (e.g. a failed purchase) re-renders the same modal the player was
+    // scrolled through. Preserve it across the rebuild.
+    const scrollTop = this.modalHost.querySelector('.modal-body')?.scrollTop ?? 0;
     this.modalHost.classList.remove('hidden');
     if (this.openModal === 'shop') this.renderShop();
     else if (this.openModal === 'market') this.renderMarket();
@@ -545,6 +646,9 @@ export class UI {
     else if (this.openModal === 'collection') this.renderCollection();
     else if (this.openModal === 'settings') this.renderSettings();
     else if (this.openModal === 'skills') this.renderSkills();
+    else if (this.openModal === 'debug') this.renderDebug();
+    const newModalBody = this.modalHost.querySelector('.modal-body');
+    if (newModalBody) newModalBody.scrollTop = scrollTop;
   }
 
   private renderSkills(): void {
@@ -576,11 +680,47 @@ export class UI {
     this.bindModalActions();
   }
 
+  private renderDebug(): void {
+    const perfectCastOn = this.gameState.debugPerfectCastMode;
+    const autoFishOn = this.gameState.autoFishingEnabled;
+
+    this.modalHost.innerHTML = this.modalShell(
+      'Debug',
+      `
+        <ul class="modal-list">
+          <li class="row">
+            <div class="row-body"><strong>Perfect Cast</strong><span class="row-meta">Every cast locks at 100% precision.</span></div>
+            <div class="row-actions"><button class="btn-small" data-action="debug-toggle-perfect-cast">${perfectCastOn ? 'On' : 'Off'}</button></div>
+          </li>
+          <li class="row">
+            <div class="row-body"><strong>Auto-Fish (AFK)</strong><span class="row-meta">Casts and reels automatically.</span></div>
+            <div class="row-actions"><button class="btn-small" data-action="debug-toggle-auto-fish">${autoFishOn ? 'On' : 'Off'}</button></div>
+          </li>
+          <li class="row">
+            <div class="row-body"><strong>+500 Coins</strong></div>
+            <div class="row-actions"><button class="btn-small" data-action="debug-add-coins">Grant</button></div>
+          </li>
+          <li class="row">
+            <div class="row-body"><strong>+5 Trash</strong></div>
+            <div class="row-actions"><button class="btn-small" data-action="debug-add-garbage">Grant</button></div>
+          </li>
+          <li class="row">
+            <div class="row-body"><strong>Force Next Catch: Coin Purse</strong><span class="row-meta">Next successful reel is a Sunken Coin Purse.</span></div>
+            <div class="row-actions"><button class="btn-small" data-action="debug-force-treasure">Set</button></div>
+          </li>
+        </ul>
+      `,
+    );
+    this.bindModalActions();
+  }
+
   private renderShop(): void {
     const state = this.economy.snapshot;
     const baitRows = BAIT_CATALOG.map((bait) => {
       const owned = state.baitInventory[bait.id] ?? 0;
       const equipped = state.equippedBaitId === bait.id;
+      const canEquip = bait.free || owned > 0;
+      const equipDisabled = equipped || !canEquip;
       return `
         <li class="row">
           ${rowIcon(bait.id, bait.name, icon(ICON.bait, bait.name))}
@@ -589,20 +729,28 @@ export class UI {
             <span class="row-meta">${bait.free ? 'always available' : `${bait.costPerTen}🪙 / 10`} &middot; have ${bait.free ? '&infin;' : owned}</span>
           </div>
           <div class="row-actions">
-            <button class="btn-small" data-action="equip-bait" data-id="${bait.id}" ${equipped ? 'disabled' : ''}>${equipped ? 'Equipped' : 'Equip'}</button>
+            <button class="btn-small ${equipDisabled ? 'btn-disabled' : ''}" data-action="equip-bait" data-id="${bait.id}" ${equipDisabled ? 'disabled' : ''}>${equipped ? 'Equipped' : 'Equip'}</button>
             ${bait.free ? '' : `<button class="btn-small" data-action="buy-bait" data-id="${bait.id}">Buy 10</button>`}
           </div>
         </li>`;
     }).join('');
 
     const botRows = FISHBOT_CATALOG.map((bot) => {
-      const owned = state.fishbots[bot.id]?.owned;
+      const botState = state.fishbots[bot.id];
+      const owned = botState?.owned;
+      const secondsToNext = owned ? Math.max(0, Math.ceil((botState.nextReadyAtMs - Date.now()) / 1000)) : 0;
+      const statusLine = owned
+        ? secondsToNext > 0
+          ? `<span class="row-meta">🟢 Active — next catch in ${secondsToNext}s</span>`
+          : `<span class="row-meta">🟢 Active — catch ready, check the hopper below</span>`
+        : '';
       return `
         <li class="row">
           ${rowIcon(bot.id, bot.name)}
           <div class="row-body">
             <strong>${bot.name}</strong>
             <span class="row-meta">${bot.cost}🪙 &middot; ${bot.baseIntervalSeconds}s cycle</span>
+            ${statusLine}
           </div>
           <div class="row-actions">
             <button class="btn-small" data-action="buy-fishbot" data-id="${bot.id}" ${owned ? 'disabled' : ''}>${owned ? 'Owned' : 'Buy'}</button>
@@ -611,16 +759,31 @@ export class UI {
     }).join('');
 
     const hopperCount = state.fishbotHopper.length;
+    const trashCount = this.economy.trashBucket().length;
+
+    const barnabyHeader = `
+      <div class="barnaby-header-slot">
+        <button class="barnaby-portrait-btn" data-action="click-barnaby" type="button" aria-label="Barnaby">
+          <img class="barnaby-portrait-small" src="./images/barnaby-portrait.png" alt="Barnaby" />
+        </button>
+        ${this.barnabyMessage ? `<button class="barnaby-bubble" type="button" data-action="close-barnaby-message">${this.barnabyMessage} <em>*gulp*</em></button>` : ''}
+      </div>
+    `;
 
     this.modalHost.innerHTML = this.modalShell(
       'Shop',
       `
+        <div class="craft-actions-row">
+          <span class="craft-trash-count">Trash bucket: ${trashCount} (unlimited)</span>
+          <button class="btn-small" data-action="recycle-all" ${trashCount === 0 ? 'disabled' : ''}>Recycle All</button>
+        </div>
         <h4 class="modal-subhead">Bait</h4>
         <ul class="modal-list">${baitRows}</ul>
         <h4 class="modal-subhead">Fishbots</h4>
         <ul class="modal-list">${botRows}</ul>
         <p class="modal-note">Hopper: ${hopperCount}/10 <button class="btn-small" data-action="claim-hopper" ${hopperCount === 0 ? 'disabled' : ''}>Claim</button></p>
       `,
+      barnabyHeader,
     );
     this.bindModalActions();
   }
@@ -634,9 +797,7 @@ export class UI {
     ).join('');
 
     const rows = state.basket.map((item, index) => {
-      if (item.isTrash) {
-        return `<li class="row">${rowIcon(item.catchId, catchName(item.catchId))}<div class="row-body"><strong>${catchName(item.catchId)}</strong><span class="row-meta">trash — recycle at the Crafting Bench instead</span></div></li>`;
-      }
+      if (item.isTrash) return '';
       const species = FISH_CATALOG.find((f) => f.id === item.catchId);
       const value = species ? Math.round(species.baseValue * this.economy.saleMultiplier()) : 0;
       return `
@@ -654,13 +815,20 @@ export class UI {
         </li>`;
     }).join('');
 
+    const sellableCount = state.basket.filter((item) => !item.isTrash).length;
+    const bulkBtnClass = `btn-small${sellableCount === 0 ? ' btn-disabled' : ''}`;
+    const bulkBtnDisabled = sellableCount === 0 ? 'disabled' : '';
+
     this.modalHost.innerHTML = this.modalShell(
       "Monger Barnaby's Market",
       `
         <div class="market-header">
           <img class="barnaby-portrait" src="./images/barnaby-portrait.png" alt="Monger Barnaby" />
           <div class="bones-row" title="Patience bones">${bonesMarkup}</div>
-          <button id="btn-debug-coins" class="btn-small" style="margin-left: auto;">+500 Coins (Debug)</button>
+        </div>
+        <div class="market-bulk-row">
+          <button class="${bulkBtnClass}" data-action="sell-all" data-method="sell" ${bulkBtnDisabled}>Sell All</button>
+          <button class="${bulkBtnClass}" data-action="sell-all" data-method="haggle" ${bulkBtnDisabled}>Haggle All</button>
         </div>
         <ul class="modal-list">${rows || '<li class="row modal-empty">Basket is empty. Go catch something!</li>'}</ul>
       `,
@@ -677,6 +845,22 @@ export class UI {
       });
     };
 
+    const formatMaterialCost = (cost: Partial<Record<string, number>>): string => {
+      return Object.entries(cost)
+        .filter(([, needed]) => !!needed)
+        .map(([mat, needed]) => {
+          const have = state.materials[(mat as any) as keyof typeof state.materials] ?? 0;
+          const short = have < (needed as number);
+          return `<span class="${short ? 'cost-missing' : ''}">${needed} ${mat}${short ? ` (have ${have})` : ''}</span>`;
+        })
+        .join(', ');
+    };
+
+    const formatCoinCost = (coinsNeeded: number): string => {
+      const short = state.coins < coinsNeeded;
+      return `<span class="${short ? 'cost-missing' : ''}">${coinsNeeded}🪙${short ? ` (have ${state.coins})` : ''}</span>`;
+    };
+
     // Materials section at top
     const materialEntries = Object.entries(state.materials).filter(([, amount]) => amount > 0);
     const materialsLine = materialEntries.length
@@ -686,7 +870,7 @@ export class UI {
         }).join('')
       : '<span class="modal-note">No materials yet — recycle trash below.</span>';
 
-    const trashCount = state.basket.filter((item) => item.isTrash).length;
+    const trashCount = this.economy.trashBucket().length;
 
     // Upgrade rows with material availability checks
     const upgradeRows = UPGRADE_CATALOG.map((upgrade) => {
@@ -696,16 +880,14 @@ export class UI {
       const hasCoins = state.coins >= cost.coins;
       const hasMaterials = canAffordMaterials(cost.materials);
       const canCraft = !maxed && hasCoins && hasMaterials;
-      const costLabel = Object.entries(cost.materials)
-        .map(([m, a]) => `${a} ${m}`)
-        .join(', ');
+      const costLabel = formatMaterialCost(cost.materials);
       return `
         <li class="row">
           ${rowIcon(upgrade.id, upgrade.name, icon(ICON.hammer, upgrade.name))}
           <div class="row-body">
             <strong>${upgrade.name}</strong> <span class="tier-badge">${tier}/${upgrade.maxTier}</span>
             <span class="row-meta">${upgrade.description}</span>
-            <span class="row-meta">${maxed ? 'Maxed' : `${cost.coins}🪙${costLabel ? `, ${costLabel}` : ''}`}</span>
+            <span class="row-meta">${maxed ? 'Maxed' : `${formatCoinCost(cost.coins)}${costLabel ? `, ${costLabel}` : ''}`}</span>
           </div>
           <div class="row-actions">
             <button class="btn-small ${!canCraft && !maxed ? 'btn-disabled' : ''}" data-action="buy-upgrade" data-id="${upgrade.id}" ${!canCraft && !maxed ? 'disabled' : maxed ? 'disabled' : ''}>${maxed ? 'Maxed' : 'Craft'}</button>
@@ -736,9 +918,8 @@ export class UI {
             <div class="materials-chips-list">${materialsLine}</div>
           </div>
           <div class="craft-actions-row">
-            <span class="craft-trash-count">Trash in basket: ${trashCount}</span>
+            <span class="craft-trash-count">Trash bucket: ${trashCount} (unlimited)</span>
             <button class="btn-small" data-action="recycle-all" ${trashCount === 0 ? 'disabled' : ''}>Recycle All</button>
-            <button class="btn-small" id="btn-debug-garbage">+5 Trash (Debug)</button>
           </div>
         </div>
 
@@ -754,7 +935,7 @@ export class UI {
             <div class="row-body">
               <strong>Lucky Rubber Ducky</strong>
               <span class="row-meta">Boosts salvage rate to 85% for 5 minutes &middot; have ${state.luckyDuckyCount ?? 0}</span>
-              <span class="row-meta">Cost: 2 rubber, 1 fabric</span>
+              <span class="row-meta">Cost: ${formatMaterialCost({ rubber: 2, fabric: 1 })}</span>
             </div>
             <div class="row-actions">
               <button class="btn-small ${!duckyCanCraft ? 'btn-disabled' : ''}" data-action="craft-ducky" ${!duckyCanCraft ? 'disabled' : ''}>Craft</button>
@@ -1004,11 +1185,14 @@ export class UI {
     this.economy.persist();
   }
 
-  private modalShell(title: string, body: string): string {
+  private modalShell(title: string, body: string, titleExtra = ''): string {
     return `
       <div class="modal">
         <div class="modal-header">
-          <h3>${title}</h3>
+          <div class="modal-title-group">
+            ${titleExtra}
+            <h3>${title}</h3>
+          </div>
           <button class="modal-close" data-action="close" type="button" aria-label="Close">&times;</button>
         </div>
         <div class="modal-body">${body}</div>
@@ -1027,10 +1211,13 @@ export class UI {
 
         if (action === 'close') this.toggleModal(this.openModal);
         else if (action === 'equip-bait') this.craftingSystem.equipBait(id);
-        else if (action === 'buy-bait') this.craftingSystem.purchaseBait(id);
+        else if (action === 'buy-bait') {
+          if (!this.craftingSystem.purchaseBait(id)) this.showToast('Not enough 🪙');
+        }
         else if (action === 'buy-fishbot') this.craftingSystem.purchaseFishbot(id);
         else if (action === 'claim-hopper') this.fishbotSystem.claimHopper();
         else if (action === 'sell' && method) this.marketSystem.sell(index, method);
+        else if (action === 'sell-all' && (method === 'sell' || method === 'haggle')) this.marketSystem.sellAll(method);
         else if (action === 'buy-upgrade') this.craftingSystem.purchaseUpgrade(id as UpgradeId);
         else if (action === 'spend-skill-point') this.craftingSystem.spendSkillPoint(id as ArchetypeId);
         else if (action === 'recycle-all') this.craftingSystem.recycleAllTrash();
@@ -1044,21 +1231,33 @@ export class UI {
         else if (action === 'equip-clothing' && slot) this.craftingSystem.equipClothing(slot, id);
         else if (action === 'unequip-clothing' && slot) this.craftingSystem.equipClothing(slot, null);
         else if (action === 'set-base-tone') this.craftingSystem.setBaseTone(id);
+        else if (action === 'debug-toggle-perfect-cast') this.gameState.debugPerfectCastMode = !this.gameState.debugPerfectCastMode;
+        else if (action === 'debug-toggle-auto-fish') this.gameState.autoFishingEnabled = !this.gameState.autoFishingEnabled;
+        else if (action === 'debug-add-coins') {
+          this.economy.addCoins(500);
+          this.events.emit('coinsChanged', {});
+        } else if (action === 'debug-add-garbage') this.craftingSystem.addRandomGarbage(5);
+        else if (action === 'debug-force-treasure') {
+          this.economy.setDebugForceNextCatch('treasure');
+          this.showToast('Next successful catch will be a Sunken Coin Purse.');
+        } else if (action === 'click-barnaby') {
+          this.barnabyClickCount += 1;
+          if (this.barnabyClickCount >= 5) {
+            this.barnabyClickCount = 0;
+            this.economy.setBakersDozenNextBait(true);
+            this.barnabyMessage = BARNABY_5TH_CLICK_LINE;
+          } else if (Math.random() < 0.25) {
+            this.barnabyMessage = `Welcome, ${this.economy.displayName()}!`;
+          } else {
+            this.barnabyMessage = BARNABY_LINES[Math.floor(Math.random() * BARNABY_LINES.length)];
+          }
+        } else if (action === 'close-barnaby-message') {
+          this.barnabyMessage = null;
+        }
 
         this.renderHud();
         if (action !== 'close') this.renderModal();
       });
-    });
-
-    const debugCoins = this.modalHost.querySelector('#btn-debug-coins');
-    debugCoins?.addEventListener('click', () => {
-      this.economy.addCoins(500);
-      this.events.emit('coinsChanged', {});
-    });
-
-    const debugGarbage = this.modalHost.querySelector('#btn-debug-garbage');
-    debugGarbage?.addEventListener('click', () => {
-      this.craftingSystem.addRandomGarbage(5);
     });
   }
 

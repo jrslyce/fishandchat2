@@ -94,4 +94,14 @@ export class MarketSystem {
 
     return true;
   }
+
+  sellAll(method: 'sell' | 'haggle'): number {
+    const basket = this.economy.snapshot.basket;
+    let count = 0;
+    for (let i = basket.length - 1; i >= 0; i -= 1) {
+      if (basket[i].isTrash) continue;
+      if (this.sell(i, method)) count += 1;
+    }
+    return count;
+  }
 }

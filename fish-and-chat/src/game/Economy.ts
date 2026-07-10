@@ -51,6 +51,11 @@ export interface RecycleResult {
 /** Single mutation surface over GameSaveStateV1. Systems read/write through this, never the raw state. */
 export class Economy {
   private state: GameSaveStateV1;
+  // Debug-only, in-memory (never persisted): forces the next successfully-resolved catch.
+  private debugForceNextCatch: 'treasure' | null = null;
+  // Barnaby's 5th-click secret, in-memory (never persisted): the next bait purchase grants 13
+  // instead of 10.
+  private bakersDozenNextBait = false;
 
   constructor(private readonly saveManager: SaveManager<GameSaveStateV1>) {
     this.state = migrateSaveState(saveManager.load());
@@ -58,6 +63,41 @@ export class Economy {
 
   get snapshot(): Readonly<GameSaveStateV1> {
     return this.state;
+  }
+
+  setDebugForceNextCatch(kind: 'treasure' | null): void {
+    this.debugForceNextCatch = kind;
+  }
+
+  /** Reads and clears the debug override in one step, so it only ever applies to one catch. */
+  consumeDebugForcedCatch(): 'treasure' | null {
+    const kind = this.debugForceNextCatch;
+    this.debugForceNextCatch = null;
+    return kind;
+  }
+
+  setBakersDozenNextBait(active: boolean): void {
+    this.bakersDozenNextBait = active;
+  }
+
+  hasSeenCastTutorial(): boolean {
+    return this.state.hasSeenCastTutorial;
+  }
+
+  markCastTutorialSeen(): void {
+    if (this.state.hasSeenCastTutorial) return;
+    this.state.hasSeenCastTutorial = true;
+    this.persist();
+  }
+
+  hasSeenReelTutorial(): boolean {
+    return this.state.hasSeenReelTutorial;
+  }
+
+  markReelTutorialSeen(): void {
+    if (this.state.hasSeenReelTutorial) return;
+    this.state.hasSeenReelTutorial = true;
+    this.persist();
   }
 
   persist(): void {
@@ -117,8 +157,8 @@ export class Economy {
 
   basketCapacity(): number {
     let capacity = BASKET_BASE_CAPACITY;
-    if (this.hasUpgrade('heavy-duty-basket')) capacity += 6;
-    if (this.hasUpgrade('tackle-apron')) capacity += 6;
+    capacity += this.upgradeTier('heavy-duty-basket') * 6;
+    capacity += this.upgradeTier('tackle-apron') * 6;
     return capacity;
   }
 
@@ -141,7 +181,9 @@ export class Economy {
     if (!def || def.free) return { ok: false, reason: 'max-tier' };
     if (this.state.coins < def.costPerTen) return { ok: false, reason: 'insufficient-coins' };
     this.state.coins -= def.costPerTen;
-    this.state.baitInventory[baitId] = (this.state.baitInventory[baitId] ?? 0) + 10;
+    const grant = this.bakersDozenNextBait ? 13 : 10;
+    this.bakersDozenNextBait = false;
+    this.state.baitInventory[baitId] = (this.state.baitInventory[baitId] ?? 0) + grant;
     return { ok: true };
   }
 
@@ -216,17 +258,39 @@ export class Economy {
     return this.state.basket.splice(index, 1)[0] ?? null;
   }
 
+  // --- Trash bucket (separate from the basket, uncapped) -------------------
+
+  trashBucket(): readonly BasketItem[] {
+    return this.state.trashBucket;
+  }
+
+  /** Unlike addToBasket, this never fails — trash doesn't compete with fish for basket room. */
+  addToTrashBucket(item: BasketItem): boolean {
+    this.state.trashBucket.push(item);
+    if (!this.state.discoveredCatchIds.includes(item.catchId)) {
+      this.state.discoveredCatchIds.push(item.catchId);
+    }
+    return true;
+  }
+
+  removeFromTrashBucket(index: number): BasketItem | null {
+    return this.state.trashBucket.splice(index, 1)[0] ?? null;
+  }
+
   // --- Progression -------------------------------------------------------
 
+  /** A single catch (even a lucky Golden legendary) can only carry the player through one level-up — excess XP is clamped rather than chaining into further levels. */
   addXp(amount: number): LevelUpResult {
     const themeBefore = themeForLevel(this.state.level);
     this.state.xp += amount;
     let leveledUp = false;
-    while (this.state.xp >= xpToNextLevel(this.state.level)) {
+    if (this.state.xp >= xpToNextLevel(this.state.level)) {
       this.state.xp -= xpToNextLevel(this.state.level);
       this.state.level += 1;
       this.state.skillPoints += 1;
       leveledUp = true;
+      const cap = xpToNextLevel(this.state.level) - 1;
+      if (this.state.xp > cap) this.state.xp = cap;
     }
     const newTheme = themeForLevel(this.state.level);
     return { leveledUp, newLevel: this.state.level, themeChanged: newTheme !== themeBefore, newTheme };
@@ -419,14 +483,22 @@ export class Economy {
     return true;
   }
 
+  /** Trash always drains (its bucket is uncapped); fish stays queued in the hopper once the basket is full. */
   claimHopper(): BasketItem[] {
     const claimed: BasketItem[] = [];
-    while (this.state.fishbotHopper.length > 0 && !this.basketFull()) {
-      const item = this.state.fishbotHopper.shift();
-      if (!item) break;
-      this.addToBasket(item);
-      claimed.push(item);
+    const remaining: BasketItem[] = [];
+    for (const item of this.state.fishbotHopper) {
+      if (item.isTrash) {
+        this.addToTrashBucket(item);
+        claimed.push(item);
+      } else if (!this.basketFull()) {
+        this.addToBasket(item);
+        claimed.push(item);
+      } else {
+        remaining.push(item);
+      }
     }
+    this.state.fishbotHopper = remaining;
     return claimed;
   }
 

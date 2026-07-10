@@ -79,6 +79,7 @@ export const TRASH_CATALOG: TrashDefinition[] = [
 export interface BaitDefinition {
   id: string;
   name: string;
+  acronym: string;
   costPerTen: number;
   waitMultiplier: number;
   skillBonus: number;
@@ -86,10 +87,10 @@ export interface BaitDefinition {
 }
 
 export const BAIT_CATALOG: BaitDefinition[] = [
-  { id: 'pleb-bait', name: 'Pleb Bait', costPerTen: 0, waitMultiplier: 1.0, skillBonus: 0, free: true },
-  { id: 'marshmallows', name: 'Marshmallows', costPerTen: 25, waitMultiplier: 0.85, skillBonus: 15 },
-  { id: 'nightcrawlers', name: 'Nightcrawlers', costPerTen: 100, waitMultiplier: 0.75, skillBonus: 25 },
-  { id: 'neon-super-lure', name: 'Neon Super Lure', costPerTen: 500, waitMultiplier: 0.5, skillBonus: 50 },
+  { id: 'pleb-bait', name: 'Pleb Bait', acronym: 'PB', costPerTen: 0, waitMultiplier: 1.0, skillBonus: 0, free: true },
+  { id: 'marshmallows', name: 'Marshmallows', acronym: 'MM', costPerTen: 25, waitMultiplier: 0.85, skillBonus: 15 },
+  { id: 'nightcrawlers', name: 'Nightcrawlers', acronym: 'NC', costPerTen: 100, waitMultiplier: 0.75, skillBonus: 25 },
+  { id: 'neon-super-lure', name: 'Neon Super Lure', acronym: 'NSL', costPerTen: 500, waitMultiplier: 0.5, skillBonus: 50 },
 ];
 
 export type UpgradeId =
@@ -102,7 +103,8 @@ export type UpgradeId =
   | 'tackle-apron'
   | 'salvage-magnet'
   | 'insulated-cooler'
-  | 'sonar-scanner';
+  | 'sonar-scanner'
+  | 'magic-reeler';
 
 export interface UpgradeDefinition {
   id: UpgradeId;
@@ -163,9 +165,14 @@ export const UPGRADE_CATALOG: UpgradeDefinition[] = [
   {
     id: 'heavy-duty-basket',
     name: 'Heavy Duty Basket',
-    description: '+6 basket slots.',
-    maxTier: 1,
-    costPerTier: [{ coins: 120, materials: { fabric: 3, fiber: 2 } }],
+    description: '+6 basket slots per tier.',
+    maxTier: 4,
+    costPerTier: [
+      { coins: 120, materials: { fabric: 3, fiber: 2 } },
+      { coins: 280, materials: { fabric: 5, fiber: 3 } },
+      { coins: 520, materials: { fabric: 7, fiber: 5, rubber: 2 } },
+      { coins: 900, materials: { fabric: 10, fiber: 7, rubber: 4 } },
+    ],
   },
   {
     id: 'tackle-apron',
@@ -194,6 +201,13 @@ export const UPGRADE_CATALOG: UpgradeDefinition[] = [
     description: '+50% chance weight on Rare/Epic/Legendary catches.',
     maxTier: 1,
     costPerTier: [{ coins: 700, materials: { metal: 6, glass: 4 } }],
+  },
+  {
+    id: 'magic-reeler',
+    name: 'Magic Reeler',
+    description: 'Auto-reels every catch the instant it bites — no more escapes.',
+    maxTier: 1,
+    costPerTier: [{ coins: 1200, materials: { metal: 4, glass: 4, fiber: 4 } }],
   },
 ];
 
@@ -242,14 +256,19 @@ export function themeForLevel(level: number): ThemeId {
 
 export interface RarityWeights extends Record<Rarity, number> {}
 
-export function computeRarityWeights(effectiveSkill: number, sonarScanner: boolean): RarityWeights {
+/** Ramps from a small fraction at level 1 up to full weight at `unlockLevel` — ties big-fish odds to the same thresholds that unlock their themes (ocean-trench at 10, cosmic-lake at 20), instead of being purely skill-driven. */
+function levelRarityScale(level: number, unlockLevel: number): number {
+  return Math.min(1, 0.15 + (0.85 * level) / unlockLevel);
+}
+
+export function computeRarityWeights(effectiveSkill: number, sonarScanner: boolean, level: number): RarityWeights {
   const s = Math.max(0, effectiveSkill);
   let trash = Math.max(8, 35 - 0.2 * s);
   let common = Math.max(20, 40 - 0.1 * s);
   let uncommon = 15 + 0.05 * s;
-  let rare = 7 + 0.12 * s;
-  let epic = 2.5 + 0.08 * s;
-  let legendary = 0.5 + 0.05 * s;
+  let rare = (7 + 0.12 * s) * levelRarityScale(level, 5);
+  let epic = (2.5 + 0.08 * s) * levelRarityScale(level, 10);
+  let legendary = (0.5 + 0.05 * s) * levelRarityScale(level, 20);
 
   if (sonarScanner) {
     rare *= 1.5;
@@ -440,6 +459,14 @@ export const CLOTHING_CATALOG: ClothingDefinition[] = [
     flavor: 'Wide-brimmed and woven from old cattails.',
     textures: { head: './images/clothing/straw-hat-head.png' },
     unlock: { type: 'craft', coins: 60, materials: { fiber: 2 } },
+  },
+  {
+    id: 'cowboy-hat',
+    slot: 'hat',
+    name: 'Cowboy Hat',
+    flavor: 'Wide-brimmed felt with a proper band — built for long days at the water.',
+    textures: { head: './images/clothing/cowboy-hat-head.png' },
+    unlock: { type: 'craft', coins: 70, materials: { fabric: 2 } },
   },
   {
     // Not a new catalog item — this equips the SaveState.ownedPremiumItemIds

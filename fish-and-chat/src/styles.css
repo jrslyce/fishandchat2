@@ -223,9 +223,25 @@ body {
   cursor: pointer;
 }
 
-.icon-img {
+#btn-debug {
+  position: absolute;
+  top: max(2px, env(safe-area-inset-top));
+  left: max(2px, env(safe-area-inset-left));
   width: 22px;
   height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.35);
+  font-size: 13px;
+  line-height: 22px;
+  text-align: center;
+  z-index: 50;
+}
+
+.icon-img {
+  width: 18px;
+  height: 18px;
   object-fit: contain;
   display: block;
   flex-shrink: 0;
@@ -253,17 +269,17 @@ body {
 #hud-level-block {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px 14px;
+  gap: 3px;
+  padding: 6px 10px;
   border-radius: var(--radius-md);
   background: var(--paper);
   box-shadow: var(--shadow-panel);
-  min-width: 130px;
+  min-width: 104px;
 }
 
 #hud-level {
   font-weight: 800;
-  font-size: 0.9rem;
+  font-size: 0.76rem;
   color: var(--ink);
 }
 
@@ -290,20 +306,20 @@ body {
 .hud-pill {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
+  gap: 5px;
+  padding: 6px 9px;
   border-radius: 999px;
   background: var(--paper);
   box-shadow: var(--shadow-panel);
   font-weight: 800;
-  font-size: 0.85rem;
+  font-size: 0.74rem;
   white-space: nowrap;
   border: none;
   color: var(--ink);
 }
 
 .hud-pill-button {
-  min-height: 44px;
+  min-height: 36px;
 }
 
 #hud-lucky-ducky-pill {
@@ -322,25 +338,24 @@ body {
 
 #hud-rail {
   position: absolute;
-  top: max(72px, calc(env(safe-area-inset-top) + 66px));
+  top: max(58px, calc(env(safe-area-inset-top) + 52px));
   right: max(12px, env(safe-area-inset-right));
   display: flex;
-  flex-direction: column;
+  flex-direction: row-reverse;
+  align-items: flex-start;
   gap: 8px;
   pointer-events: auto;
-  max-height: calc(100vh - 160px);
 }
 
-/* Nested behind the toggle (the bait-can rail-btn) so the collapsed rail is a single
-   button — a 496px-tall Twitch panel can't fit every item stacked open at once. Scrolls
-   (rather than shrinking buttons further) once there are more items than fit vertically. */
+/* Nested behind the hamburger toggle so the collapsed rail is a single button. Expands
+   leftward (row-reverse on the parent keeps the toggle pinned to the right) as a 2x4 grid —
+   8 items comfortably fit two short rows without the vertical-stack overflow a 496px panel
+   used to force a scrollable column for. */
 #hud-rail-items {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(4, 40px);
+  grid-auto-flow: row;
   gap: 8px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  min-height: 0;
 }
 
 #hud-rail-items.hidden {
@@ -348,10 +363,10 @@ body {
 }
 
 .rail-btn {
-  width: 48px;
-  height: 48px;
-  min-width: 44px;
-  min-height: 44px;
+  width: 40px;
+  height: 40px;
+  min-width: 36px;
+  min-height: 36px;
   border: none;
   border-radius: var(--radius-md);
   background: var(--paper);
@@ -366,12 +381,12 @@ body {
 }
 
 .rail-btn .icon-img {
-  width: 26px;
-  height: 26px;
+  width: 20px;
+  height: 20px;
 }
 
 .gear-glyph {
-  font-size: 1.3rem;
+  font-size: 1.05rem;
   line-height: 1;
   color: var(--wood-dark);
 }
@@ -380,19 +395,19 @@ body {
 
 #basket-badge {
   position: absolute;
-  bottom: max(24px, env(safe-area-inset-bottom));
+  bottom: max(18px, env(safe-area-inset-bottom));
   left: max(12px, env(safe-area-inset-left));
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 48px;
-  padding: 8px 16px 8px 12px;
+  gap: 6px;
+  min-height: 40px;
+  padding: 6px 13px 6px 10px;
   border: none;
   border-radius: 999px;
   background: var(--paper);
   box-shadow: var(--shadow-panel);
   font-weight: 800;
-  font-size: 0.9rem;
+  font-size: 0.78rem;
   color: var(--ink);
 }
 
@@ -404,7 +419,7 @@ body {
 
 #phase-indicator {
   position: absolute;
-  bottom: max(96px, calc(env(safe-area-inset-bottom) + 90px));
+  bottom: max(80px, calc(env(safe-area-inset-bottom) + 74px));
   left: 50%;
   transform: translateX(-50%);
   width: min(320px, 80vw);
@@ -424,7 +439,6 @@ body {
   color: #6a6a6a;
 }
 
-.progress-track,
 .gauge-track {
   position: relative;
   height: 14px;
@@ -432,14 +446,6 @@ body {
   background: rgba(255, 255, 255, 0.75);
   box-shadow: inset 0 0 0 2px rgba(44, 58, 48, 0.12);
   overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: #3f8fb0;
-}
-.progress-fill.bite {
-  background: var(--danger);
 }
 
 .gauge-sweet {
@@ -482,6 +488,44 @@ body {
   box-shadow: var(--shadow-panel);
 }
 
+/* Bite feedback: border flash + "BITE" pop text */
+
+#bite-flash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+  opacity: 0;
+}
+
+#bite-flash.flashing {
+  animation: bite-border-flash 0.9s ease-out 2;
+}
+
+@keyframes bite-border-flash {
+  0% { opacity: 0; box-shadow: inset 0 0 0 0 rgba(217, 79, 53, 0); }
+  15% { opacity: 1; box-shadow: inset 0 0 24px 6px rgba(217, 79, 53, 0.85); }
+  100% { opacity: 0; box-shadow: inset 0 0 0 0 rgba(217, 79, 53, 0); }
+}
+
+.bite-pop {
+  position: fixed;
+  z-index: 61;
+  transform: translate(-50%, -50%) scale(0.2);
+  font-weight: 800;
+  font-size: 1.6rem;
+  color: var(--danger);
+  text-shadow: 0 2px 0 rgba(255, 255, 255, 0.6), 0 0 10px rgba(217, 79, 53, 0.5);
+  pointer-events: none;
+  animation: bite-pop-zoom 0.6s ease-out forwards;
+}
+
+@keyframes bite-pop-zoom {
+  0% { transform: translate(-50%, -50%) scale(0.2); opacity: 0; }
+  25% { opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(2.4); opacity: 0; }
+}
+
 /* Catch celebration card */
 
 #catch-card {
@@ -494,7 +538,7 @@ body {
 }
 
 .catch-card-inner {
-  padding: 18px 24px;
+  padding: 14px 18px;
   border-radius: var(--radius-lg);
   background: var(--paper);
   color: var(--ink);
@@ -508,20 +552,20 @@ body {
 .catch-card-inner.rarity-legendary { border-color: #f2b33a; }
 
 .catch-sprite {
-  width: 72px;
-  height: 72px;
+  width: 56px;
+  height: 56px;
   object-fit: contain;
   display: block;
-  margin: 0 auto 6px;
+  margin: 0 auto 5px;
 }
 .catch-rarity {
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   letter-spacing: 0.14em;
   font-weight: 800;
   opacity: 0.65;
 }
 .catch-name {
-  font-size: 1.3rem;
+  font-size: 1.1rem;
   font-weight: 800;
 }
 .catch-weight {
@@ -560,7 +604,7 @@ body {
 }
 
 .modal {
-  width: min(440px, 100%);
+  width: min(400px, 100%);
   max-height: min(80vh, 640px);
   display: flex;
   flex-direction: column;
@@ -575,13 +619,26 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 18px 10px;
+  padding: 12px 14px 8px;
   border-bottom: 2px solid var(--paper-dark);
+}
+
+.modal-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.barnaby-header-slot {
+  position: relative;
+  flex-shrink: 0;
+  line-height: 0;
 }
 
 .modal-header h3 {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: 1.02rem;
   font-weight: 800;
 }
 
@@ -637,8 +694,8 @@ body {
 .row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 0;
+  gap: 8px;
+  padding: 7px 0;
   border-bottom: 1px solid rgba(44, 58, 48, 0.1);
 }
 .row:last-child {
@@ -646,8 +703,8 @@ body {
 }
 
 .row-icon {
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -656,8 +713,8 @@ body {
   border-radius: var(--radius-sm);
 }
 .row-icon .icon-img {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
 }
 
 .row-body {
@@ -676,6 +733,11 @@ body {
   font-size: 0.74rem;
   color: var(--ink-soft);
   font-weight: 600;
+}
+
+.cost-missing {
+  color: var(--danger);
+  font-weight: 800;
 }
 
 .row-actions {
@@ -733,12 +795,64 @@ body {
   margin-bottom: 10px;
 }
 
+.market-bulk-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.market-bulk-row .btn-small {
+  flex: 1;
+}
+
 .barnaby-portrait {
   width: 64px;
   height: 64px;
   object-fit: cover;
   border-radius: var(--radius-md);
   box-shadow: 0 4px 10px rgba(44, 30, 10, 0.25);
+}
+
+.barnaby-portrait-btn {
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.barnaby-portrait-small {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 5px rgba(44, 30, 10, 0.25);
+  display: block;
+}
+
+.barnaby-bubble {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: -4px;
+  max-width: 200px;
+  width: max-content;
+  padding: 8px 12px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shadow-panel);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: left;
+  z-index: 5;
+  cursor: pointer;
+}
+
+.barnaby-bubble em {
+  font-style: italic;
+  opacity: 0.7;
 }
 
 .bones-row {
@@ -889,27 +1003,53 @@ body {
   z-index: 30;
 }
 
-#action-button {
+/* Barnaby's one-time onboarding bubbles ("click to cast" / "tap to reel") */
+
+#tutorial-bubble {
   position: absolute;
-  left: max(20px, env(safe-area-inset-left));
-  right: max(20px, env(safe-area-inset-right));
-  bottom: max(24px, env(safe-area-inset-bottom));
-  min-width: 96px;
-  min-height: 56px;
-  padding: 12px 20px;
-  border: none;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--ink);
-  font-family: inherit;
-  font-weight: 800;
-  font-size: 1rem;
-  box-shadow: var(--shadow-panel);
-  touch-action: none;
+  left: max(16px, env(safe-area-inset-left));
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: auto;
 }
 
-#action-button:active {
-  transform: translateY(1px) scale(0.98);
+#tutorial-bubble.hidden {
+  display: none;
+}
+
+.tutorial-bubble-text {
+  position: relative;
+  flex: 1;
+  min-height: 46px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-align: left;
+  box-shadow: var(--shadow-panel);
+  cursor: pointer;
+}
+
+.tutorial-bubble-text::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-width: 8px 10px 8px 0;
+  border-style: solid;
+  border-color: transparent var(--paper) transparent transparent;
+}
+
+.tutorial-bubble-text:active {
+  transform: translateY(1px) scale(0.99);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1161,19 +1301,19 @@ body {
 
 @media (max-width: 420px) {
   #hud-level-block {
-    min-width: 100px;
-    padding: 7px 11px;
+    min-width: 92px;
+    padding: 5px 9px;
   }
   .hud-pill {
-    padding: 7px 10px;
-    font-size: 0.78rem;
+    padding: 5px 8px;
+    font-size: 0.7rem;
   }
   #hud-rail {
-    top: max(64px, calc(env(safe-area-inset-top) + 58px));
+    top: max(52px, calc(env(safe-area-inset-top) + 46px));
   }
   .rail-btn {
-    width: 44px;
-    height: 44px;
+    width: 36px;
+    height: 36px;
   }
   #phase-indicator {
     width: 88vw;

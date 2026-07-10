@@ -27,7 +27,7 @@ export interface GameEventMap {
   patienceBonusAwarded: Record<string, never>;
   trashRecycled: { result: RecycleResult; catchId: string };
   recycleFinished: { successCount: number; failCount: number; salvaged: Record<string, number> };
-  missed: { reason: 'early' | 'late' | 'no-react' | 'escaped' };
+  missed: { reason: 'early' | 'late' | 'no-react' | 'escaped' | 'no-catch' | 'bait-stolen' | 'reeled-early' };
   basketFull: Record<string, never>;
 
   xpGained: { amount: number } & LevelUpResult;

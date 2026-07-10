@@ -5,8 +5,14 @@ import {
   precisionSkillBonus,
   randomSweetSpot,
 } from '../systems/CastingSystem';
-import { isWithinReactionWindow, rollWaitSeconds } from '../systems/BiteSystem';
-import { computeReactionWindowMs, computeSuccessChance, rollFightValue } from '../systems/FightSystem';
+import { rollWaitSeconds } from '../systems/BiteSystem';
+import {
+  computeEscapeHazardPerSecond,
+  computeReactionWindowMs,
+  computeSuccessChance,
+  rollFightValue,
+  HAZARD_BACKSTOP_SECONDS,
+} from '../systems/FightSystem';
 import { resolveCatch } from '../systems/CatchResolver';
 import { computeRarityWeights, rollRarity, type Rarity } from './data';
 import type { Economy } from './Economy';
@@ -27,6 +33,9 @@ export type FishingPhase =
 export const CASTING_ANIM_SECONDS = 0.4;
 const CELEBRATING_SECONDS = 2.5;
 const MISSED_TOAST_SECONDS = 1.4;
+/** Odds, on an otherwise-successful reel, that it turns out to be nothing after all. */
+const BAIT_STOLEN_CHANCE = 0.05;
+const NO_CATCH_CHANCE = 0.07;
 
 export interface FishingSnapshot {
   phase: FishingPhase;
@@ -71,6 +80,12 @@ export class FishingStateMachine {
     return this.phase;
   }
 
+  /** Used by Game.ts's tap-anywhere-during-a-bite handler. No-ops outside the bite phase. */
+  manualReelAttempt(): void {
+    if (this.phase !== 'bite') return;
+    this.attemptReel(false);
+  }
+
   snapshot(): FishingSnapshot {
     return {
       phase: this.phase,
@@ -78,8 +93,7 @@ export class FishingStateMachine {
       sweetSpot: this.gauge.sweetSpot,
       sweetSpotWidth: this.gauge.sweetSpotWidth,
       waitProgress: this.phase === 'waiting' ? Math.min(1, this.phaseElapsed / this.waitDurationSeconds) : 0,
-      biteProgress:
-        this.phase === 'bite' ? Math.min(1, (this.phaseElapsed * 1000) / this.currentReactionWindowMs) : 0,
+      biteProgress: this.phase === 'bite' ? Math.min(1, this.phaseElapsed / HAZARD_BACKSTOP_SECONDS) : 0,
       lastCatch: this.lastCatch,
     };
   }
@@ -101,17 +115,29 @@ export class FishingStateMachine {
         if (this.phaseElapsed >= CASTING_ANIM_SECONDS) this.enterWaiting();
         break;
       case 'waiting':
-        if (this.phaseElapsed >= this.waitDurationSeconds) this.enterBite();
+        if (input.justPressed()) this.reelInEarly();
+        else if (this.phaseElapsed >= this.waitDurationSeconds) this.enterBite();
         break;
-      case 'bite':
+      case 'bite': {
+        const hasAutoReel = this.autoFishingEnabled || this.economy.hasUpgrade('magic-reeler');
         if (input.justPressed()) {
           this.attemptReel(false);
-        } else if (this.autoFishingEnabled) {
+        } else if (hasAutoReel) {
           this.attemptReel(true);
-        } else if (!isWithinReactionWindow(this.phaseElapsed, this.currentReactionWindowMs)) {
-          this.attemptReel(true);
+        } else if (this.phaseElapsed >= HAZARD_BACKSTOP_SECONDS) {
+          this.enterMissed('escaped');
+        } else {
+          const hazardPerSecond = computeEscapeHazardPerSecond(
+            this.skillValueForBite,
+            this.fightValue,
+            this.phaseElapsed,
+            this.currentReactionWindowMs,
+          );
+          const escapeChanceThisFrame = 1 - Math.pow(1 - hazardPerSecond, delta);
+          if (Math.random() < escapeChanceThisFrame) this.enterMissed('escaped');
         }
         break;
+      }
       case 'resolving':
         // Transient: resolveBiteSuccess() moves straight through to 'celebrating'
         // in the same tick, so this case should never be observed mid-frame.
@@ -170,11 +196,25 @@ export class FishingStateMachine {
     this.setPhase('waiting');
   }
 
+  /**
+   * The player gave up waiting and reeled in before anything bit. No cost beyond the bait
+   * already spent at cast time — unless a fish had quietly nibbled the bait off already,
+   * which is only revealed now, on pulling the line back in.
+   */
+  private reelInEarly(): void {
+    if (Math.random() < BAIT_STOLEN_CHANCE) {
+      this.economy.consumeBaitForCast();
+      this.enterMissed('bait-stolen');
+    } else {
+      this.enterMissed('reeled-early');
+    }
+  }
+
   private enterBite(): void {
     const precisionBonus = precisionSkillBonus(this.lockedPrecision);
     const S = this.lockedRolls ? this.lockedRolls.S : 0;
     const skill = this.economy.effectiveSkill(precisionBonus + S * 5);
-    const weights = computeRarityWeights(skill, this.economy.hasSonarScanner());
+    const weights = computeRarityWeights(skill, this.economy.hasSonarScanner(), this.economy.snapshot.level);
     const rarity = rollRarity(weights);
     const fight = rollFightValue(rarity, this.economy.charmerVarianceReduction());
 
@@ -208,6 +248,18 @@ export class FishingStateMachine {
       return;
     }
 
+    // Even a mechanically-successful reel sometimes comes up empty — the hook slips at the
+    // last second, or the fish strips the bait clean off without ever getting caught.
+    const twist = Math.random();
+    if (twist < BAIT_STOLEN_CHANCE) {
+      this.economy.consumeBaitForCast();
+      this.enterMissed('bait-stolen');
+      return;
+    } else if (twist < BAIT_STOLEN_CHANCE + NO_CATCH_CHANCE) {
+      this.enterMissed('no-catch');
+      return;
+    }
+
     this.setPhase('resolving');
 
     const precisionBonus = precisionSkillBonus(this.lockedPrecision);
@@ -232,9 +284,15 @@ export class FishingStateMachine {
     this.setPhase('celebrating');
   }
 
-  private enterMissed(reason: 'early' | 'late' | 'no-react' | 'escaped'): void {
+  private enterMissed(reason: 'early' | 'late' | 'no-react' | 'escaped' | 'no-catch' | 'bait-stolen' | 'reeled-early'): void {
     this.events.emit('missed', { reason });
-    this.events.emit('toast', { message: reason === 'escaped' ? 'It broke free!' : 'It got away...' });
+    const message =
+      reason === 'escaped' ? 'It broke free!' :
+      reason === 'bait-stolen' ? 'It stole your bait and bolted!' :
+      reason === 'no-catch' ? 'It slipped off the hook!' :
+      reason === 'reeled-early' ? 'Reeled in early.' :
+      'It got away...';
+    this.events.emit('toast', { message });
     this.setPhase('missed');
   }
 
