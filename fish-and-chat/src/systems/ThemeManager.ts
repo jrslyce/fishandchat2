@@ -66,6 +66,20 @@ export class ThemeManager {
     void this.audio.playAmbience(AMBIENCE_MANIFEST[config.ambienceKey]);
   }
 
+  /**
+   * Rebuilds the current theme's diorama in place, without touching sky, fog or
+   * ambience. Used when an asset the builder can only consume synchronously —
+   * the imported nature-prop pack — finishes loading after the first build.
+   */
+  rebuildProps(): void {
+    this.scene.remove(this.diorama.root);
+    disposeGroup(this.diorama.root);
+
+    this.diorama = buildDiorama(this.currentTheme, this.materials);
+    this.scene.add(this.diorama.root);
+    this.onRebuilt(this.diorama);
+  }
+
   async setTheme(theme: ThemeId): Promise<void> {
     if (theme === this.currentTheme) return;
     this.currentTheme = theme;
@@ -111,6 +125,10 @@ function disposeGroup(root: THREE.Object3D): void {
   root.traverse((child) => {
     const mesh = child as THREE.Mesh;
     if (mesh.isMesh || (mesh as unknown as THREE.InstancedMesh).isInstancedMesh) {
+      // Imported nature props are Object3D.clone()s, which share geometry and
+      // material with the library's prototype. Disposing them here would gut
+      // the pack for every later rebuild — the library owns their lifetime.
+      if (mesh.userData.sharedPrototype) return;
       mesh.geometry?.dispose();
       // Ad-hoc materials created inside buildDiorama (lilypad buds, clouds)
       // are tagged ownedClone; MaterialLibrary materials are shared across

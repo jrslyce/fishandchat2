@@ -11,6 +11,7 @@ import { Bobber } from '../entities/Bobber';
 import { FishingLine } from '../entities/FishingLine';
 import { PlayerCharacter } from '../entities/character/PlayerCharacter';
 import { loadImportedAsset, normalizedClone, type ImportedAsset } from '../assets/ImportedAssetRegistry';
+import { preloadNatureProps } from '../world/NaturePropLibrary';
 import { MODEL_SOURCE_MANIFEST_PUBLIC, SFX_MANIFEST } from '../assets/manifest';
 import { CraftingSystem } from '../systems/CraftingSystem';
 import { FishbotSystem } from '../systems/FishbotSystem';
@@ -252,6 +253,7 @@ export class Game {
 
     this.wireAudioTriggers();
     this.loadHeroAssets();
+    this.loadNatureProps();
     this.fishbotSystem.simulateOfflineProgress(this.economy.currentTheme());
     window.addEventListener('pagehide', this.onPageHide);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
@@ -428,6 +430,17 @@ export class Game {
     landingPos.y = WATER_Y;
 
     this.bobber.throwTo(startPos, landingPos, CASTING_ANIM_SECONDS);
+  }
+
+  /**
+   * The imported nature-prop pack (trees/rocks/grass) can only be consumed by
+   * the synchronous DioramaBuilder once it's resident, so the first diorama is
+   * always built from procedural VoxelKit props and swapped here when the pack
+   * lands. onDioramaRebuilt re-attaches Barnaby/fishbot/player, so this is safe
+   * to run whether or not loadHeroAssets has finished.
+   */
+  private async loadNatureProps(): Promise<void> {
+    if (await preloadNatureProps()) this.themeManager.rebuildProps();
   }
 
   private async loadHeroAssets(): Promise<void> {
