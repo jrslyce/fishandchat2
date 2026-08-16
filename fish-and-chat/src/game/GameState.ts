@@ -14,6 +14,8 @@ import {
   HAZARD_BACKSTOP_SECONDS,
 } from '../systems/FightSystem';
 import { resolveCatch } from '../systems/CatchResolver';
+import { BattleSession, shouldBattle, type BattleSnapshot } from '../systems/MathBattle';
+import { battleConfig } from '../systems/BattleSettings';
 import { computeRarityWeights, rollRarity, type Rarity } from './data';
 import type { Economy } from './Economy';
 import type { EventBus } from '../core/EventBus';
@@ -26,6 +28,7 @@ export type FishingPhase =
   | 'casting'
   | 'waiting'
   | 'bite'
+  | 'battle'
   | 'resolving'
   | 'celebrating'
   | 'missed';
@@ -36,6 +39,21 @@ const MISSED_TOAST_SECONDS = 1.4;
 /** Odds, on an otherwise-successful reel, that it turns out to be nothing after all. */
 const BAIT_STOLEN_CHANCE = 0.05;
 const NO_CATCH_CHANCE = 0.07;
+
+/**
+ * What the battle calls its opponent. Rarity is known at bite time but the
+ * species is not — CatchResolver only picks that once the fish is landed — so
+ * an encounter names the tier rather than risk announcing a koi and awarding
+ * an eel.
+ */
+const RARITY_BATTLE_LABEL: Record<Rarity, string> = {
+  trash: 'Something snagged',
+  common: 'A common fish',
+  uncommon: 'An uncommon fish',
+  rare: 'A rare fish',
+  epic: 'An epic fish',
+  legendary: 'A legendary fish',
+};
 
 export interface FishingSnapshot {
   phase: FishingPhase;
@@ -67,6 +85,7 @@ export class FishingStateMachine {
   private fightValue = 0;
   private skillValueForBite = 0;
   private currentReactionWindowMs = 0;
+  private battle: BattleSession | null = null;
   
   public debugPerfectCastMode = false;
   public autoFishingEnabled = false;
@@ -136,6 +155,15 @@ export class FishingStateMachine {
           const escapeChanceThisFrame = 1 - Math.pow(1 - hazardPerSecond, delta);
           if (Math.random() < escapeChanceThisFrame) this.enterMissed('escaped');
         }
+        break;
+      }
+      case 'battle': {
+        // The session owns the per-problem clock; a timeout resolves exactly as
+        // a wrong answer does. Input is not read here — the battle is answered
+        // through the UI, not the single action intent, so a stray tap can't
+        // burn a question.
+        const timedOut = this.battle?.tick(delta) ?? null;
+        if (timedOut) this.applyBattleOutcome(timedOut);
         break;
       }
       case 'resolving':
@@ -248,6 +276,20 @@ export class FishingStateMachine {
       return;
     }
 
+    // A won reel is where the battle slots in: the fish is on the line, and the
+    // encounter decides whether it stays there. `auto` covers the fishbot and
+    // magic-reeler paths, which never battle — see shouldBattle.
+    const rarityHooked = this.hookedRarity ?? 'common';
+    if (
+      shouldBattle(
+        { rarity: rarityHooked, baitId: this.economy.equippedBait().id, automated: auto },
+        battleConfig(),
+      )
+    ) {
+      this.enterBattle(rarityHooked);
+      return;
+    }
+
     // Even a mechanically-successful reel sometimes comes up empty — the hook slips at the
     // last second, or the fish strips the bait clean off without ever getting caught.
     const twist = Math.random();
@@ -260,6 +302,15 @@ export class FishingStateMachine {
       return;
     }
 
+    this.resolveBiteSuccess();
+  }
+
+  /**
+   * Turns a won bite into an actual catch. Split out of attemptReel so the
+   * battle can sit between the two — a won battle lands here unchanged, and a
+   * lost one never arrives.
+   */
+  private resolveBiteSuccess(): void {
     this.setPhase('resolving');
 
     const precisionBonus = precisionSkillBonus(this.lockedPrecision);
@@ -284,7 +335,48 @@ export class FishingStateMachine {
     this.setPhase('celebrating');
   }
 
-  private enterMissed(reason: 'early' | 'late' | 'no-react' | 'escaped' | 'no-catch' | 'bait-stolen' | 'reeled-early'): void {
+  /** Opens the encounter. The fish is labelled by rarity, not species — species is only picked at resolve time. */
+  private enterBattle(rarity: Rarity): void {
+    this.battle = new BattleSession(rarity, RARITY_BATTLE_LABEL[rarity], battleConfig());
+    this.setPhase('battle');
+    this.events.emit('battleStarted', { snapshot: this.battle.snapshot() });
+  }
+
+  /**
+   * Relays the player's answer. Called by the UI, and a no-op outside the
+   * battle phase so a stray click can never advance an encounter that isn't
+   * running. `null` submits a timeout.
+   */
+  submitBattleAnswer(value: number | null): void {
+    if (this.phase !== 'battle' || !this.battle) return;
+    this.applyBattleOutcome(this.battle.submit(value));
+  }
+
+  private applyBattleOutcome(outcome: ReturnType<BattleSession['submit']>): void {
+    if (!this.battle) return;
+    this.events.emit('battleAnswered', {
+      correct: outcome.correct,
+      fast: outcome.fast,
+      damage: outcome.damage,
+      snapshot: this.battle.snapshot(),
+    });
+
+    if (!outcome.finished) return;
+
+    const won = outcome.finished === 'won';
+    this.events.emit('battleEnded', { won });
+    this.battle = null;
+
+    if (won) this.resolveBiteSuccess();
+    else this.enterMissed('battle-lost');
+  }
+
+  /** Snapshot of the running encounter for the UI, or null when no battle is active. */
+  battleSnapshot(): BattleSnapshot | null {
+    return this.battle?.snapshot() ?? null;
+  }
+
+  private enterMissed(reason: 'early' | 'late' | 'no-react' | 'escaped' | 'no-catch' | 'bait-stolen' | 'reeled-early' | 'battle-lost'): void {
     this.events.emit('missed', { reason });
     this.setPhase('missed');
   }

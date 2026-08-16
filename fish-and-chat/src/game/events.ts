@@ -1,5 +1,6 @@
 import type { ArchetypeId, ClothingSlot, Rarity, ThemeId, UpgradeId } from './data';
 import type { FishingPhase } from './GameState';
+import type { BattleSnapshot } from '../systems/MathBattle';
 import type { LevelUpResult } from './Economy';
 import type { RecycleResult } from './Economy';
 
@@ -28,7 +29,11 @@ export interface GameEventMap {
   patienceBonusAwarded: Record<string, never>;
   trashRecycled: { result: RecycleResult; catchId: string };
   recycleFinished: { successCount: number; failCount: number; salvaged: Record<string, number> };
-  missed: { reason: 'early' | 'late' | 'no-react' | 'escaped' | 'no-catch' | 'bait-stolen' | 'reeled-early' };
+  missed: { reason: 'early' | 'late' | 'no-react' | 'escaped' | 'no-catch' | 'bait-stolen' | 'reeled-early' | 'battle-lost' };
+
+  battleStarted: { snapshot: BattleSnapshot };
+  battleAnswered: { correct: boolean; fast: boolean; damage: number; snapshot: BattleSnapshot };
+  battleEnded: { won: boolean };
   basketFull: Record<string, never>;
 
   xpGained: { amount: number } & LevelUpResult;

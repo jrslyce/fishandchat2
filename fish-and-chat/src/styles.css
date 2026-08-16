@@ -1332,3 +1332,190 @@ body {
     width: 88vw;
   }
 }
+
+/* --- Fish battle -----------------------------------------------------------
+   Pokemon-style encounter overlay: enemy top-left facing its sprite top-right,
+   the player bottom-left facing their panel bottom-right, command box beneath.
+   Laid out as a grid rather than absolute offsets — the panel is short and wide
+   on a Twitch overlay, and fixed offsets collide the moment it drops under a
+   few hundred pixels tall. The fish and character are placeholder blocks; the
+   layout is final, the art is not. */
+#battle-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(30, 24, 14, 0.42);
+  pointer-events: auto;
+  padding: 12px;
+  z-index: 55;
+}
+
+.battle-screen {
+  display: flex;
+  flex-direction: column;
+  width: min(520px, 100%);
+  max-height: 100%;
+  background: #efdcc6;
+  border: 3px solid #3b2e20;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.battle-arena {
+  flex: 1 1 auto;
+  min-height: 96px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  background: linear-gradient(#efdcc6 0 52%, #7fae5c 52% 100%);
+}
+
+.battle-panel {
+  background: #f7efe2;
+  border: 3px solid #3b2e20;
+  border-radius: 7px;
+  padding: 5px 8px;
+  min-width: 0;
+}
+
+.battle-panel-enemy { grid-area: 1 / 1; }
+.battle-panel-you { grid-area: 2 / 2; }
+
+.battle-panel-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #3b2e20;
+}
+
+.battle-meta {
+  font-weight: 500;
+  font-size: 11px;
+  color: #7a6a55;
+  font-variant-numeric: tabular-nums;
+}
+
+.battle-bar {
+  height: 9px;
+  margin-top: 4px;
+  background: #d8c9b2;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.battle-bar > i {
+  display: block;
+  height: 100%;
+  background: #5c8b22;
+  transition: width 220ms ease;
+}
+
+.battle-bar-tension > i { background: #e08a1e; }
+
+.battle-sub {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #7a6a55;
+  font-variant-numeric: tabular-nums;
+}
+
+.battle-sprite { display: flex; align-items: center; justify-content: center; }
+.battle-sprite-fish { grid-area: 1 / 2; }
+.battle-sprite-hero { grid-area: 2 / 1; }
+
+.battle-block { border-radius: 5px; }
+.battle-block-fish { width: 56px; height: 30px; background: #2e6f8e; }
+.battle-block-hero { width: 34px; height: 38px; background: #9e3b2c; }
+
+.battle-command {
+  flex: 0 0 auto;
+  background: #f7efe2;
+  border-top: 3px solid #3b2e20;
+  padding: 8px 12px 10px;
+}
+
+.battle-prompt {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.battle-question {
+  font-size: 15px;
+  font-weight: 700;
+  color: #3b2e20;
+  font-variant-numeric: tabular-nums;
+}
+
+.battle-clock {
+  font-size: 13px;
+  color: #b03a2e;
+  font-variant-numeric: tabular-nums;
+}
+
+.battle-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.battle-choices button,
+.battle-typed button {
+  font: inherit;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  padding: 6px 10px;
+  border: 2px solid #3b2e20;
+  border-radius: 5px;
+  background: transparent;
+  color: #3b2e20;
+  cursor: pointer;
+}
+
+.battle-choices button:hover,
+.battle-typed button:hover { background: #ebdfca; }
+
+.battle-choices button:focus-visible,
+.battle-typed button:focus-visible,
+.battle-typed input:focus-visible {
+  outline: 3px solid #2e6f8e;
+  outline-offset: 2px;
+}
+
+.battle-typed {
+  display: flex;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.battle-typed input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 16px;
+  padding: 6px 10px;
+  border: 2px solid #3b2e20;
+  border-radius: 5px;
+  background: #fffdf8;
+  color: #3b2e20;
+}
+
+.battle-typed button {
+  background: #3b2e20;
+  color: #f7efe2;
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .battle-bar > i { transition: none; }
+}
