@@ -18,6 +18,7 @@ import { CraftingSystem } from '../systems/CraftingSystem';
 import { FishbotSystem } from '../systems/FishbotSystem';
 import { MuxySystem } from '../systems/MuxySystem';
 import { TwitchAuthSystem } from '../systems/TwitchAuthSystem';
+import { FireflySystem } from '../systems/FireflySystem';
 import { MarketSystem } from '../systems/MarketSystem';
 import { RenderPipeline } from '../systems/RenderPipeline';
 import { ThemeManager } from '../systems/ThemeManager';
@@ -100,6 +101,7 @@ export class Game {
   private readonly themeManager: ThemeManager;
   private readonly renderPipeline: RenderPipeline;
   private readonly vfx: VfxSystem;
+  private readonly fireflies: FireflySystem;
 
   private diorama: DioramaResult;
   private barnabyGroup: THREE.Group | null = null;
@@ -259,6 +261,7 @@ export class Game {
       getBarnabyPosition: () => this.diorama.barnabySlot.position,
       getCraftingBenchPosition: () => new THREE.Vector3(-3.6, 0.7, -1.6),
     });
+    this.fireflies = new FireflySystem(this.scene);
 
     this.events.on('themeChanged', ({ theme }) => void this.themeManager.setTheme(theme));
     this.events.on('catchResolved', ({ result }) => {
@@ -365,6 +368,7 @@ export class Game {
     this.water.dispose();
     this.themeManager.dispose();
     this.vfx.dispose();
+    this.fireflies.dispose();
     this.renderPipeline.dispose();
     this.economy.persist();
     this.events.clear();
@@ -1052,6 +1056,7 @@ export class Game {
     this.updatePlayerCharacter(delta);
 
     this.vfx.update(delta);
+    this.fireflies.update(elapsed);
     this.ui.update();
     this.cameraRig.update(delta);
 
