@@ -18,6 +18,7 @@ import { CraftingSystem } from '../systems/CraftingSystem';
 import { FishbotSystem } from '../systems/FishbotSystem';
 import { MuxySystem } from '../systems/MuxySystem';
 import { TwitchAuthSystem } from '../systems/TwitchAuthSystem';
+import { CloudSaveSystem } from '../systems/CloudSaveSystem';
 import { FireflySystem } from '../systems/FireflySystem';
 import { MarketSystem } from '../systems/MarketSystem';
 import { RenderPipeline } from '../systems/RenderPipeline';
@@ -101,6 +102,7 @@ export class Game {
   private readonly fishbotSystem: FishbotSystem;
   private readonly muxySystem: MuxySystem;
   private readonly twitchAuthSystem: TwitchAuthSystem;
+  private readonly cloudSave: CloudSaveSystem;
   private readonly fishingState: FishingStateMachine;
   private readonly ui: UI;
   private readonly bobber: Bobber;
@@ -207,6 +209,14 @@ export class Game {
     void this.muxySystem.init();
     this.twitchAuthSystem = new TwitchAuthSystem(this.events);
     void this.twitchAuthSystem.init();
+    this.cloudSave = new CloudSaveSystem(this.economy, this.events);
+    // A pulled save replaces everything at once, so re-derive what was built from the
+    // old one rather than waiting for the per-field events that never fired.
+    this.events.on('cloudSaveAdopted', () => {
+      void this.refreshPlayerSkin();
+      this.playerCharacter.setName(this.economy.displayName());
+      this.events.emit('coinsChanged', {});
+    });
     this.events.on('twitchIdentityResolved', ({ displayName }) => {
       this.ui.showWelcomeName(displayName);
       this.economy.setTwitchDisplayName(displayName);
@@ -386,6 +396,7 @@ export class Game {
     this.themeManager.dispose();
     this.vfx.dispose();
     this.fireflies.dispose();
+    this.cloudSave.dispose();
     this.renderPipeline.dispose();
     this.economy.persist();
     this.events.clear();
@@ -1037,6 +1048,7 @@ export class Game {
 
     this.vfx.update(delta);
     this.fireflies.update(elapsed);
+    this.cloudSave.update(delta);
     this.ui.update();
     this.cameraRig.update(delta);
 

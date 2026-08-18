@@ -331,6 +331,7 @@ export class UI {
     this.events.on('clothingPurchased', () => this.refreshOpenModal());
     this.events.on('clothingEquipped', () => this.refreshOpenModal());
     this.events.on('baseToneChanged', () => this.refreshOpenModal());
+    this.events.on('cloudSaveAdopted', () => this.refreshOpenModal());
     this.events.on('marketSold', (event) => {
       this.refreshOpenModal();
       if (event.method === 'haggle') {

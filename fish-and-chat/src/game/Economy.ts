@@ -105,6 +105,21 @@ export class Economy {
     this.saveManager.save(this.state);
   }
 
+  /**
+   * Replaces local state wholesale with a save pulled from the EBS. Runs the same
+   * migration as the constructor, since a save written by an older client build can
+   * come back from the server at any time — the server stores an opaque blob and
+   * never validates its shape.
+   *
+   * Callers must announce this (CloudSaveSystem emits `cloudSaveAdopted`): anything
+   * holding derived state from the old save — the composited character skin, an open
+   * modal — is stale the moment this returns.
+   */
+  adoptState(state: GameSaveStateV1): void {
+    this.state = migrateSaveState(state);
+    this.saveManager.save(this.state);
+  }
+
   // --- Upgrades -------------------------------------------------------
 
   upgradeTier(id: UpgradeId): number {
