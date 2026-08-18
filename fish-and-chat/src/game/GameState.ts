@@ -86,6 +86,18 @@ export class FishingStateMachine {
     this.attemptReel(false);
   }
 
+  /**
+   * Starts a cast without an input edge. Game.ts's long-press-to-walk gesture
+   * can't know whether a press on land is a tap (cast) or a hold (walk) until
+   * the pointer lifts, so it swallows the press edge and calls this on release
+   * instead — by which point `justPressed()` is long gone. No-ops outside idle,
+   * so a late release during a bite can't inject a phantom cast.
+   */
+  requestCast(): void {
+    if (this.phase !== 'idle') return;
+    this.tryStartCast();
+  }
+
   snapshot(): FishingSnapshot {
     return {
       phase: this.phase,
@@ -154,7 +166,7 @@ export class FishingStateMachine {
   private tryStartCast(): void {
     if (this.economy.basketFull()) {
       this.events.emit('basketFull', {});
-      this.events.emit('toast', { message: 'Basket is full — visit the market to sell some catches!' });
+      this.events.emit('toast', { message: 'Basket full — sell at the market, or craft a Heavy Duty Basket for +6 slots.' });
       return;
     }
     this.gauge = randomSweetSpot();

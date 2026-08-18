@@ -1,3 +1,5 @@
+import type { HatShape } from '../entities/character/hatGeometry';
+
 export type Rarity = 'trash' | 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 export type ThemeId = 'forest-pond' | 'ocean-trench' | 'cosmic-lake';
 export type MaterialId = 'rubber' | 'metal' | 'wood' | 'fabric' | 'fiber' | 'glass';
@@ -404,8 +406,12 @@ export interface ClothingDefinition {
    * is just a uniformly-scaled-up copy of the head cube (see PlayerObject.ts's
    * `head2Box`), so it can never silhouette wider than the head — a brim that
    * actually overhangs needs its own mesh. See entities/character/hatGeometry.ts.
+   *
+   * Silhouette is the only cosmetic detail that survives the portrait Twitch
+   * panel's small character render, so geometry hats — not texture recolors —
+   * carry the visible variety in this catalog.
    */
-  hatGeometry?: { crown: string; band: string; brim: string };
+  hatGeometry?: { shape: HatShape; crown: string; band: string; brim: string };
   /**
    * How this item is unlocked. `craft` spends coins+materials directly (this
    * catalog owns that purchase). `premium` defers entirely to the existing
@@ -474,8 +480,71 @@ export const CLOTHING_CATALOG: ClothingDefinition[] = [
     name: 'Cowboy Hat',
     flavor: 'Wide-brimmed felt with a proper band — built for long days at the water.',
     textures: {},
-    hatGeometry: { crown: '#a37547', band: '#4a3020', brim: '#7a5636' },
+    hatGeometry: { shape: 'brimmed', crown: '#a37547', band: '#4a3020', brim: '#7a5636' },
     unlock: { type: 'craft', coins: 70, materials: { fabric: 2 } },
+  },
+  {
+    id: 'bucket-hat',
+    slot: 'hat',
+    name: 'Bucket Hat',
+    flavor: 'Floppy, forgiving, and faintly smells of sunscreen.',
+    textures: {},
+    hatGeometry: { shape: 'bucket', crown: '#7d9463', band: '#5e7049', brim: '#6c8355' },
+    unlock: { type: 'craft', coins: 55, materials: { fabric: 2 } },
+  },
+  {
+    id: 'ball-cap',
+    slot: 'hat',
+    name: 'Ball Cap',
+    flavor: 'Brim bent to a perfect curve over about nine hundred casts.',
+    textures: {},
+    hatGeometry: { shape: 'cap', crown: '#c1452f', band: '#8e2f1f', brim: '#8e2f1f' },
+    unlock: { type: 'craft', coins: 65, materials: { fabric: 2 } },
+  },
+  {
+    id: 'sun-visor',
+    slot: 'hat',
+    name: 'Sun Visor',
+    flavor: 'All the shade, none of the hat hair.',
+    textures: {},
+    hatGeometry: { shape: 'visor', crown: '#f0e0b8', band: '#f0e0b8', brim: '#3f8a6e' },
+    unlock: { type: 'craft', coins: 50, materials: { rubber: 1, fabric: 1 } },
+  },
+  {
+    id: 'wool-cap',
+    slot: 'hat',
+    name: 'Wool Cap',
+    flavor: 'Hand-knit, pom included, warm enough for a dawn start.',
+    textures: {},
+    hatGeometry: { shape: 'beanie', crown: '#4a6d94', band: '#39567a', brim: '#e8e2d4' },
+    unlock: { type: 'craft', coins: 60, materials: { fabric: 2, fiber: 1 } },
+  },
+  {
+    id: 'harbormaster-cap',
+    slot: 'hat',
+    name: "Harbormaster's Cap",
+    flavor: 'Crisp white, gold band. Nobody appointed you, but nobody asked either.',
+    textures: {},
+    hatGeometry: { shape: 'cap', crown: '#f2efe6', band: '#1e2b45', brim: '#1e2b45' },
+    unlock: { type: 'craft', coins: 180, materials: { fabric: 3, metal: 1 } },
+  },
+  {
+    id: 'top-hat',
+    slot: 'hat',
+    name: 'Stovepipe Hat',
+    flavor: 'Absurdly formal for a pond. Wear it anyway.',
+    textures: {},
+    hatGeometry: { shape: 'top', crown: '#23202b', band: '#8a1f3d', brim: '#23202b' },
+    unlock: { type: 'craft', coins: 240, materials: { fabric: 4, glass: 1 } },
+  },
+  {
+    id: 'anglers-crown',
+    slot: 'hat',
+    name: "Angler's Crown",
+    flavor: 'Beaten brass and river-glass. Awarded by nobody, earned regardless.',
+    textures: {},
+    hatGeometry: { shape: 'top', crown: '#d9a441', band: '#3f8a6e', brim: '#b8862d' },
+    unlock: { type: 'craft', coins: 600, materials: { metal: 5, glass: 3 } },
   },
   {
     // Not a new catalog item — this equips the SaveState.ownedPremiumItemIds

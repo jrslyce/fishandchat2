@@ -62,4 +62,8 @@ export interface GameEventMap {
   closetClosed: Record<string, never>;
 
   twitchIdentityResolved: { displayName: string };
+  /** The signed Extension JWT, forwarded to CloudSaveSystem as the EBS bearer token. */
+  twitchAuthorized: { token: string };
+  /** A newer save was pulled from the EBS and replaced local state — listeners must re-read. */
+  cloudSaveAdopted: Record<string, never>;
 }

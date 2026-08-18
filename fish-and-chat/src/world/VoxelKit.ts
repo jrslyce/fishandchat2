@@ -50,6 +50,21 @@ export function buildVoxelCluster(
 }
 
 /**
+ * Whether the island's grassy top tier has a voxel at this integer cell.
+ *
+ * Exported because the terrain's outer silhouette is deliberately ragged, and
+ * anything that needs to know where the ground actually is (PlayerNavigation,
+ * so the character can't walk off the edge) must ask the same question the
+ * builder answers rather than approximating it with a radius — the two drift
+ * by up to 0.8 units depending on direction.
+ */
+export function hasTopTerrainCell(cellX: number, cellZ: number, radius = 5, pondRadius = 3): boolean {
+  const dist = Math.sqrt(cellX * cellX + cellZ * cellZ);
+  const edgeNoise = (Math.sin(cellX * 1.7) + Math.cos(cellZ * 1.3)) * 0.4;
+  return dist <= radius + edgeNoise && dist >= pondRadius;
+}
+
+/**
  * Layered island terrain block with a carved-out pond basin: grass top,
  * dirt mid-band, dark stone base, irregular footprint. Cells inside
  * `pondRadius` are left empty on the top layer so the WaterSystem disc
@@ -70,9 +85,7 @@ export function buildIslandTerrain(
 
   for (let x = -radius; x <= radius; x++) {
     for (let z = -radius; z <= radius; z++) {
-      const dist = Math.sqrt(x * x + z * z);
-      const edgeNoise = (Math.sin(x * 1.7) + Math.cos(z * 1.3)) * 0.4;
-      if (dist <= radius + edgeNoise && dist >= pondRadius) {
+      if (hasTopTerrainCell(x, z, radius, pondRadius)) {
         topCells.push({ x, y: 0, z, color: 0xffffff });
       }
     }

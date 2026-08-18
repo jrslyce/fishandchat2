@@ -33,6 +33,9 @@ export class TwitchAuthSystem {
     twitch.ext.onAuthorized((auth) => {
       this.helixToken = auth.helixToken ?? null;
       this.clientId = auth.clientId;
+      // onAuthorized re-fires periodically as the JWT is rotated, so this is the
+      // token's only reliable source — CloudSaveSystem takes each new one.
+      this.events.emit('twitchAuthorized', { token: auth.token });
       if (!this.requestedIdShare) {
         this.requestedIdShare = true;
         twitch.ext?.actions?.requestIdShare?.();

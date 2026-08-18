@@ -30,6 +30,14 @@ import {
 export const POND_RADIUS = 3.0;
 export const WATER_DISC_RADIUS = 2.85;
 
+/**
+ * Where the dock is planted. Exported because the dock is the one walkable
+ * surface that overhangs the water — PlayerNavigation needs its footprint to
+ * tell "standing on planks" from "standing in the pond", and both must move
+ * together if the dock is ever repositioned.
+ */
+export const DOCK_ANCHOR = { x: 1.4, z: POND_RADIUS - 0.15 };
+
 export interface DioramaResult {
   root: THREE.Group;
   /** Empty anchor group where Barnaby's GLB is attached, positioned at the market stall. */
@@ -138,7 +146,7 @@ export function buildDiorama(theme: ThemeId, materials: MaterialLibrary): Dioram
   track(terrain, 'terrain');
 
   const dock = buildDock(materials.wood, materials.woodDark, 4);
-  dock.position.set(1.4, 0.45, POND_RADIUS - 0.15); // raised to 0.45
+  dock.position.set(DOCK_ANCHOR.x, 0.45, DOCK_ANCHOR.z); // raised to 0.45
   root.add(dock);
   track(dock, 'dock');
 

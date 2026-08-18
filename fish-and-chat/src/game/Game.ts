@@ -12,11 +12,14 @@ import { FishingLine } from '../entities/FishingLine';
 import { PlayerCharacter } from '../entities/character/PlayerCharacter';
 import { loadImportedAsset, normalizedClone, type ImportedAsset } from '../assets/ImportedAssetRegistry';
 import { preloadNatureProps } from '../world/NaturePropLibrary';
+import { findPath, isWalkable, stepTowardTarget } from '../systems/PlayerNavigation';
 import { MODEL_SOURCE_MANIFEST_PUBLIC, SFX_MANIFEST } from '../assets/manifest';
 import { CraftingSystem } from '../systems/CraftingSystem';
 import { FishbotSystem } from '../systems/FishbotSystem';
 import { MuxySystem } from '../systems/MuxySystem';
 import { TwitchAuthSystem } from '../systems/TwitchAuthSystem';
+import { CloudSaveSystem } from '../systems/CloudSaveSystem';
+import { FireflySystem } from '../systems/FireflySystem';
 import { MarketSystem } from '../systems/MarketSystem';
 import { RenderPipeline } from '../systems/RenderPipeline';
 import { ThemeManager } from '../systems/ThemeManager';
@@ -34,10 +37,25 @@ const AUTOSAVE_INTERVAL_SECONDS = 5;
 const WATER_Y = -0.05;
 const AMBIENT_FISH_COUNT = 3;
 const FISH_TINTS = ['#8fb7c9', '#e0a860', '#7fa876'];
+/**
+ * Backstop for a commanded walk. findPath only returns routes it has proven
+ * walkable, so this should never fire in practice — it exists so a future
+ * change that invalidates a route mid-walk (a moved dock, a new obstacle)
+ * degrades into "stops walking" rather than "character frozen forever".
+ */
+const WALK_COMMAND_TIMEOUT_SECONDS = 15;
 // How far off the player's own facing a cast can be aimed — clamped so a cast can never
 // throw backward over the dock/land, only vary left-right while still landing in the pond.
 const CAST_CONE_RADIANS = THREE.MathUtils.degToRad(50);
 const CAST_DISTANCE = 1.8;
+/**
+ * How long a press on land must be held before it walks instead of casting.
+ * In the portrait Twitch panel only ~18% of the viewport is water, so letting
+ * any land tap walk meant a tap was 2.5x more likely to move the character than
+ * to cast — the primary action lost the majority of the screen. Gating walking
+ * behind a hold gives every short tap back to casting, wherever it lands.
+ */
+const WALK_LONG_PRESS_SECONDS = 0.35;
 
 interface AmbientFish {
   group: THREE.Object3D;
@@ -84,6 +102,7 @@ export class Game {
   private readonly fishbotSystem: FishbotSystem;
   private readonly muxySystem: MuxySystem;
   private readonly twitchAuthSystem: TwitchAuthSystem;
+  private readonly cloudSave: CloudSaveSystem;
   private readonly fishingState: FishingStateMachine;
   private readonly ui: UI;
   private readonly bobber: Bobber;
@@ -92,6 +111,7 @@ export class Game {
   private readonly themeManager: ThemeManager;
   private readonly renderPipeline: RenderPipeline;
   private readonly vfx: VfxSystem;
+  private readonly fireflies: FireflySystem;
 
   private diorama: DioramaResult;
   private barnabyGroup: THREE.Group | null = null;
@@ -103,18 +123,37 @@ export class Game {
   private readonly ambientFish: AmbientFish[] = [];
   private readonly leapingFish: LeapingFish[] = [];
 
+  // Barnaby is a stationary stallkeeper: he idles in place and never wanders.
+  // The portrait/mobile Twitch panel frames only a narrow slice of the bank, so
+  // a wandering vendor spent most of his time off-frame — and when he was in
+  // frame he pulled the eye away from the bobber, which is the only thing the
+  // player is actually watching. See git history for the removed walk loop.
   private barnabyMixer: THREE.AnimationMixer | null = null;
   private barnabyIdleAction: THREE.AnimationAction | null = null;
-  private barnabyWalkAction: THREE.AnimationAction | null = null;
-  private barnabyIsWalking = false;
-  private barnabyWalkTimer = 2;
-  private barnabyTargetPos: THREE.Vector3 | null = null;
 
   private readonly playerCharacter = new PlayerCharacter();
   private playerIsWalking = false;
   private playerWalkTimer = 2 + Math.random() * 2;
   private playerTargetLocal = new THREE.Vector3();
   private playerFishingActive = false;
+  /** Remaining WORLD-space waypoints of a commanded walk; empty when the idle wander owns the character. */
+  private playerWalkRoute: THREE.Vector3[] = [];
+  private playerWalkTimeout = 0;
+  /**
+   * A press on non-water that hasn't resolved into either a cast or a walk yet.
+   * Water presses cast on the press edge as before (an aimed cast should feel
+   * instant); everywhere else the press edge is swallowed and held here until
+   * the pointer either lifts (short = cast) or crosses
+   * WALK_LONG_PRESS_SECONDS (long = walk, when the spot is walkable).
+   */
+  private pendingTap: { walkTarget: THREE.Vector3 | null; heldSeconds: number } | null = null;
+  /**
+   * Slot-local anchor the idle shuffle stays near. Without an anchor the
+   * shuffle is an unbounded random walk and the character drifts off across the
+   * island over a few minutes of idling; it moves only when a commanded walk
+   * finishes somewhere new.
+   */
+  private playerWanderHomeLocal = new THREE.Vector3();
   private readonly defaultCameraFocus = new THREE.Vector3(0, 0.3, 0.5);
 
   // Closet live preview: a second small render (same renderer/scene, no
@@ -170,6 +209,14 @@ export class Game {
     void this.muxySystem.init();
     this.twitchAuthSystem = new TwitchAuthSystem(this.events);
     void this.twitchAuthSystem.init();
+    this.cloudSave = new CloudSaveSystem(this.economy, this.events);
+    // A pulled save replaces everything at once, so re-derive what was built from the
+    // old one rather than waiting for the per-field events that never fired.
+    this.events.on('cloudSaveAdopted', () => {
+      void this.refreshPlayerSkin();
+      this.playerCharacter.setName(this.economy.displayName());
+      this.events.emit('coinsChanged', {});
+    });
     this.events.on('twitchIdentityResolved', ({ displayName }) => {
       this.ui.showWelcomeName(displayName);
       this.economy.setTwitchDisplayName(displayName);
@@ -241,6 +288,7 @@ export class Game {
       getBarnabyPosition: () => this.diorama.barnabySlot.position,
       getCraftingBenchPosition: () => new THREE.Vector3(-3.6, 0.7, -1.6),
     });
+    this.fireflies = new FireflySystem(this.scene);
 
     this.events.on('themeChanged', ({ theme }) => void this.themeManager.setTheme(theme));
     this.events.on('catchResolved', ({ result }) => {
@@ -249,6 +297,9 @@ export class Game {
 
     if (import.meta.env.DEV) {
       (window as unknown as { __game_scene?: THREE.Scene }).__game_scene = this.scene;
+      // Sibling of __game_scene: reaching the live instance is what makes input
+      // routing (which click became a walk, which became a cast) debuggable.
+      (window as unknown as { __game?: Game }).__game = this;
     }
 
     this.wireAudioTriggers();
@@ -344,6 +395,8 @@ export class Game {
     this.water.dispose();
     this.themeManager.dispose();
     this.vfx.dispose();
+    this.fireflies.dispose();
+    this.cloudSave.dispose();
     this.renderPipeline.dispose();
     this.economy.persist();
     this.events.clear();
@@ -372,6 +425,9 @@ export class Game {
       case 'waiting':
       case 'bite':
         this.playerFishingActive = true;
+        // Casting roots the character — drop any walk still in progress rather
+        // than letting it fight the fishing pose for the transform.
+        this.playerWalkRoute = [];
         this.playerCharacter.setPose('fishing');
         this.playerCharacter.setFishingSubPose(phase);
         if (phase === 'casting') this.throwBobber();
@@ -394,6 +450,38 @@ export class Game {
    * (Game.ts's updatePlayerCharacter freezes it), so an unclamped throw could otherwise aim
    * at the dock or grass instead of the pond.
    */
+  /** Builds a picking ray from a pointer event in canvas coordinates. */
+  private raycasterFromPointer(event: PointerEvent): THREE.Raycaster {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+    return raycaster;
+  }
+
+  /**
+   * What the player meant by clicking here: cast into the water, walk to a spot
+   * on land, or nothing at all.
+   *
+   * 'none' covers the sky, the water beyond the pond disc, and scenery standing
+   * somewhere the character can't reach. Those deliberately do NOT fall through
+   * to a cast — casting is a water-click gesture now, so a stray click on the
+   * horizon should be inert rather than flinging the bobber out on the fallback
+   * cone. Walk tests use the hit point's XZ, so clicking high up a tree walks to
+   * the tree's base instead of refusing the click.
+   */
+  private classifyPointer(event: PointerEvent): { kind: 'water' | 'land' | 'none'; point?: THREE.Vector3 } {
+    const raycaster = this.raycasterFromPointer(event);
+    const hits = raycaster.intersectObjects([this.water.mesh, this.diorama.root], true);
+    if (hits.length === 0) return { kind: 'none' };
+
+    const hit = hits[0];
+    if (hit.object === this.water.mesh) return { kind: 'water', point: hit.point.clone() };
+    if (!isWalkable(hit.point.x, hit.point.z)) return { kind: 'none' };
+    return { kind: 'land', point: hit.point.clone() };
+  }
+
   private throwBobber(): void {
     const playerWorldPos = new THREE.Vector3();
     this.playerCharacter.group.getWorldPosition(playerWorldPos);
@@ -457,10 +545,7 @@ export class Game {
     if (barnaby.status === 'fulfilled') {
       const fbxLoader = new FBXLoader();
       try {
-        const [idleFbx, walkFbx] = await Promise.all([
-          fbxLoader.loadAsync('./models/barnaby-anim/idle.fbx'),
-          fbxLoader.loadAsync('./models/barnaby-anim/walk.fbx')
-        ]);
+        const idleFbx = await fbxLoader.loadAsync('./models/barnaby-anim/idle.fbx');
 
         idleFbx.traverse((child) => {
           const mesh = child as THREE.Mesh;
@@ -513,12 +598,9 @@ export class Game {
         };
 
         const idleClip = stripHorizontalMovement(idleFbx.animations[0]);
-        const walkClip = stripHorizontalMovement(walkFbx.animations[0]);
 
         this.barnabyIdleAction = this.barnabyMixer.clipAction(idleClip);
-        this.barnabyWalkAction = this.barnabyMixer.clipAction(walkClip);
         this.barnabyIdleAction.play();
-        this.barnabyIsWalking = false;
       } catch (e) {
         console.warn("Failed to load FBX, falling back to static", e);
         this.barnabyGroup = normalizedClone(barnaby.value, 1.1);
@@ -699,11 +781,108 @@ export class Game {
    * already sits in a small pre-cleared exclusion zone (no bank-radius
    * checks needed).
    */
+  /**
+   * Drives one frame of a click-commanded walk.
+   *
+   * The character is parented to the diorama's playerSlot, but walkability is
+   * defined in world space (the pond is at the world origin), so this converts
+   * out and back each frame rather than trying to express the pond in slot-local
+   * terms — the slot is rotated 180 degrees, which would make that error-prone.
+   */
+  /**
+   * Resolves a deferred non-water press into either a walk or a cast.
+   *
+   * Held past WALK_LONG_PRESS_SECONDS on walkable ground: walk there. Released
+   * before that: a plain tap, so cast — which is what hands casting the entire
+   * canvas, including the ~38% of the portrait frame that raycasts to neither
+   * water nor standable ground. Held long on ground that can't be stood on does
+   * neither; holding still is the one gesture that shouldn't fling a bobber.
+   */
+  private updatePendingTap(delta: number): void {
+    const pending = this.pendingTap;
+    if (!pending) return;
+
+    // Anything that takes control away mid-gesture voids it rather than letting
+    // a stale press resolve into a cast on top of whatever now owns the screen.
+    if (this.closetOpen || this.playerFishingActive) {
+      this.pendingTap = null;
+      return;
+    }
+
+    if (this.input.isHeld()) {
+      pending.heldSeconds += delta;
+      if (pending.heldSeconds >= WALK_LONG_PRESS_SECONDS) {
+        this.pendingTap = null;
+        if (pending.walkTarget) {
+          const from = this.playerCharacter.group.getWorldPosition(new THREE.Vector3());
+          this.playerWalkRoute = findPath(from, pending.walkTarget);
+          this.playerWalkTimeout = WALK_COMMAND_TIMEOUT_SECONDS;
+          this.playerIsWalking = false;
+        }
+      }
+      return;
+    }
+
+    this.pendingTap = null;
+    this.fishingState.requestCast();
+  }
+
+  private walkTowardCommandedTarget(delta: number): void {
+    const waypoint = this.playerWalkRoute[0];
+    if (!waypoint) return;
+
+    this.playerWalkTimeout -= delta;
+    const slot = this.diorama.playerSlot;
+    const group = this.playerCharacter.group;
+    slot.updateWorldMatrix(true, false);
+
+    const worldPosition = group.getWorldPosition(new THREE.Vector3());
+    const step = stepTowardTarget(worldPosition, waypoint, delta);
+
+    if (step.arrived && this.playerWalkRoute.length > 1) {
+      // Reached an intermediate waypoint; carry on along the path next frame.
+      this.playerWalkRoute.shift();
+      return;
+    }
+
+    if (step.arrived || this.playerWalkTimeout <= 0) {
+      // Hand back to the wander loop, but idle for a beat first so arriving
+      // doesn't immediately snap into an unrelated wander. Wherever we stopped
+      // is the new home the shuffle stays near.
+      this.playerWalkRoute = [];
+      this.playerIsWalking = false;
+      this.playerWalkTimer = 2 + Math.random() * 3;
+      this.playerWanderHomeLocal.copy(group.position);
+      this.playerCharacter.setPose('idle');
+      return;
+    }
+
+    group.position.copy(slot.worldToLocal(step.position));
+    if (step.heading !== null) {
+      // step.heading is a world yaw; the slot's own rotation has to come back
+      // out of it before it can be applied to the character's local transform.
+      const slotYaw = new THREE.Euler().setFromQuaternion(
+        slot.getWorldQuaternion(new THREE.Quaternion()),
+        'YXZ',
+      ).y;
+      const targetAngle = step.heading - slotYaw;
+      const diff = ((targetAngle - group.rotation.y + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+      group.rotation.y += diff * 8 * delta;
+    }
+    this.playerCharacter.setPose('walking');
+  }
+
   private updatePlayerCharacter(delta: number): void {
     if (this.closetOpen) {
       // Frozen for the live preview — still advance the idle animation clock
       // (so it doesn't look like a paused screenshot) but skip wander/pose
       // changes entirely.
+      this.playerCharacter.update(delta);
+      return;
+    }
+
+    if (this.playerWalkRoute.length > 0 && !this.playerFishingActive) {
+      this.walkTowardCommandedTarget(delta);
       this.playerCharacter.update(delta);
       return;
     }
@@ -715,16 +894,27 @@ export class Game {
         this.playerWalkTimer = this.playerIsWalking ? 2.5 + Math.random() * 2 : 2 + Math.random() * 3;
 
         if (this.playerIsWalking) {
-          // Player's slot sits on the dock itself (world 1.4, 1.65 — see
-          // DioramaBuilder's playerSlot), close to its water-end edge (the
-          // dock's local z bottoms out at -1.35 relative to its own anchor,
-          // and our slot is already at local z=-1.2 there). Wander is
-          // constrained to a small rectangle biased landward (away from the
-          // water-end edge) rather than a circle, so the character can't
-          // step off the narrow (0.9-wide) planks on any side.
-          const localX = (Math.random() - 0.5) * 0.4; // +/-0.2, well inside the 0.45 half-width
-          const localZ = Math.random() * 0.5 - 0.05; // -0.05..0.45, biased landward off the water-end edge
-          this.playerTargetLocal.set(localX, 0, localZ);
+          // The idle shuffle is no longer always on the dock now that clicks can
+          // walk the character onto the bank, so it samples an offset from its
+          // current home and keeps the first one that's actually standable —
+          // reusing PlayerNavigation's test rather than a hardcoded rectangle,
+          // so the two can't disagree about where the planks end.
+          const slot = this.diorama.playerSlot;
+          slot.updateWorldMatrix(true, false);
+          for (let attempt = 0; attempt < 8; attempt++) {
+            const candidateLocal = new THREE.Vector3(
+              this.playerWanderHomeLocal.x + (Math.random() - 0.5) * 0.6,
+              0,
+              this.playerWanderHomeLocal.z + (Math.random() - 0.5) * 0.6,
+            );
+            const world = slot.localToWorld(candidateLocal.clone());
+            if (isWalkable(world.x, world.z)) {
+              this.playerTargetLocal.copy(candidateLocal);
+              break;
+            }
+            // Every offset blocked (backed into a corner): stay put this cycle.
+            if (attempt === 7) this.playerIsWalking = false;
+          }
         }
       }
 
@@ -789,6 +979,25 @@ export class Game {
       }
     }
 
+    // Land clicks walk, water clicks cast, everything else is inert. This has to
+    // sit ahead of fishingState.update — that's what turns a press into a cast,
+    // so anything that isn't a cast must consume the press before it gets there.
+    //
+    // Only while idle, and only for pointer input: during aiming/waiting/bite
+    // the press is the player's reaction input and stealing it would break the
+    // core loop, and Space/Enter (which carry no click position) must keep
+    // casting unconditionally.
+    if (this.input.justPressed() && this.input.lastClickEvent && !this.playerFishingActive && !this.closetOpen) {
+      const pick = this.classifyPointer(this.input.lastClickEvent);
+      if (pick.kind !== 'water') {
+        // Not water: defer. Swallow the press edge so it can't cast yet, and
+        // remember whether this spot is somewhere the character could stand.
+        this.pendingTap = { walkTarget: pick.kind === 'land' ? pick.point ?? null : null, heldSeconds: 0 };
+        this.input.consumePressEdge();
+      }
+    }
+    this.updatePendingTap(delta);
+
     if (this.input.justPressed()) this.events.emit('actionPressed', {});
     this.fishingState.update(delta, this.input);
     if (this.input.justReleased()) this.events.emit('actionReleased', { heldSeconds: this.input.lastHoldSeconds() });
@@ -833,76 +1042,13 @@ export class Game {
     this.updateLilypads(delta);
     this.updateClouds(delta);
 
-    if (this.barnabyMixer && this.barnabyGroup) {
-      this.barnabyMixer.update(delta);
-      this.barnabyWalkTimer -= delta;
-
-      if (this.barnabyWalkTimer <= 0) {
-        this.barnabyIsWalking = !this.barnabyIsWalking;
-        this.barnabyWalkTimer = this.barnabyIsWalking ? 3 + Math.random() * 2 : 2 + Math.random() * 3;
-        
-        if (this.barnabyIsWalking) {
-          this.barnabyIdleAction?.crossFadeTo(this.barnabyWalkAction!, 0.3, false);
-          this.barnabyWalkAction?.reset().play();
-          
-          let valid = false;
-          let targetLocal = new THREE.Vector3();
-          for (let i = 0; i < 10; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const rad = Math.random() * 4.5;
-            targetLocal.set(Math.cos(angle) * rad, 0, Math.sin(angle) * rad);
-            
-            // Barnaby's slot is at (-1.0, 3.1) in world space
-            const worldX = -1.0 + targetLocal.x;
-            const worldZ = 3.1 + targetLocal.z;
-            const distToCenter = Math.hypot(worldX, worldZ);
-            
-            // Grassy bank is approx between radius 3.2 and 4.8
-            if (distToCenter > 3.2 && distToCenter < 4.8) {
-              // Avoid the market stall area (-3.2, 2.0)
-              if (Math.hypot(worldX - -3.2, worldZ - 2.0) > 1.5) {
-                valid = true;
-                break;
-              }
-            }
-          }
-          if (valid) {
-            this.barnabyTargetPos = targetLocal;
-          } else {
-            // No valid bank point found in 10 tries — stay put rather than fall
-            // back to an unchecked small offset, which could still land inside
-            // the pond (his slot is only ~3.26 from center, barely past the
-            // 3.0 pond radius).
-            this.barnabyTargetPos = this.barnabyGroup?.position.clone() ?? new THREE.Vector3();
-          }
-        } else {
-          this.barnabyWalkAction?.crossFadeTo(this.barnabyIdleAction!, 0.3, false);
-          this.barnabyIdleAction?.reset().play();
-        }
-      }
-
-      if (this.barnabyIsWalking && this.barnabyTargetPos) {
-        const speed = 0.3;
-        const currentPos = this.barnabyGroup.position;
-        const dist = currentPos.distanceTo(this.barnabyTargetPos);
-        if (dist > 0.05) {
-          const dir = new THREE.Vector3().subVectors(this.barnabyTargetPos, this.barnabyGroup.position).normalize();
-          this.barnabyGroup.position.addScaledVector(dir, speed * delta);
-          
-          // Model faces -X natively, so we offset the atan2 by -PI/2 to face forward
-          const targetAngle = Math.atan2(dir.x, dir.z) - Math.PI / 2;
-          let currentAngle = this.barnabyGroup.rotation.y;
-          const diff = ((targetAngle - currentAngle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-          this.barnabyGroup.rotation.y += diff * 5 * delta;
-        } else {
-          this.barnabyWalkTimer = 0; // stop walking
-        }
-      }
-    }
+    this.barnabyMixer?.update(delta);
 
     this.updatePlayerCharacter(delta);
 
     this.vfx.update(delta);
+    this.fireflies.update(elapsed);
+    this.cloudSave.update(delta);
     this.ui.update();
     this.cameraRig.update(delta);
 

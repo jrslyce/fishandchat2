@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fish and Chat &mdash; Configuration</title>
+    <style>
+      :root {
+        --paper: #fbf6ea;
+        --ink: #2c3a30;
+        --ink-soft: rgba(44, 58, 48, 0.68);
+        --wood: #a5713f;
+        --accent: #f2a65a;
+        --accent-dark: #d9863f;
+        --radius-md: 14px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 20px;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: 'Avenir Next', Avenir, 'Segoe UI', sans-serif;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 0 4px;
+      }
+      .config-hint {
+        margin: 0 0 16px;
+        color: var(--ink-soft);
+        font-size: 13px;
+      }
+      .config-option {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 12px;
+        margin-bottom: 10px;
+        border: 2px solid var(--wood);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        background: #fff;
+      }
+      .config-option:has(input:checked) {
+        border-color: var(--accent-dark);
+        background: #fff7ec;
+      }
+      .config-option input {
+        margin-top: 3px;
+        accent-color: var(--accent-dark);
+      }
+      .config-option span {
+        font-size: 13px;
+        line-height: 1.4;
+      }
+      .config-status {
+        font-size: 12px;
+        color: var(--accent-dark);
+        min-height: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="config-root">Loading&hellip;</div>
+    <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+    <script type="module" src="/src/config.ts"></script>
+  </body>
+</html>

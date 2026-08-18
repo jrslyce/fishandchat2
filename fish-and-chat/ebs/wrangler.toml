@@ -2,7 +2,20 @@ name = "fish-and-chat-ebs"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 
+# Save storage. `database_id` comes from `wrangler d1 create fish-and-chat-saves`
+# — paste the printed id here. Schema lives in migrations/, applied with
+# `wrangler d1 migrations apply fish-and-chat-saves [--remote]`.
+[[d1_databases]]
+binding = "DB"
+database_name = "fish-and-chat-saves"
+database_id = "558df479-413b-4a4e-8884-5e58d2ea4ace"
+migrations_dir = "migrations"
+
+# Not a secret — the extension's client ID is public (it ships in the frontend bundle
+# and is registered with Twitch), so it lives here rather than costing a `secret put`.
+[vars]
+TWITCH_CLIENT_ID = "5z87t9tu2hvecwn9ci05kaung057xh"
+
 # Secrets (never set here — use `wrangler secret put <NAME>` / .dev.vars locally):
 #   TWITCH_EXTENSION_SECRET  — base64 JWT-signing secret from the Twitch dev console
-#   TWITCH_CLIENT_SECRET     — OAuth client secret for the extension's client ID (Helix app tokens)
 #   TWITCH_CLIENT_ID         — the extension's client ID (not secret, but set alongside the above)
