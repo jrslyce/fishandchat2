@@ -17,6 +17,14 @@ import {
   buildPineTree,
   buildRock,
 } from './VoxelKit';
+import {
+  GRASS_PROPS,
+  ROCK_PROPS,
+  TREE_PROPS,
+  naturePropsReady,
+  pickNatureProp,
+  spawnNatureProp,
+} from './NaturePropLibrary';
 
 /** Radius of the carved-out pond hole in the island terrain; WaterSystem's disc should be slightly smaller so the terrain rim overlaps its edge. */
 export const POND_RADIUS = 3.0;
@@ -26,7 +34,7 @@ export interface DioramaResult {
   root: THREE.Group;
   /** Empty anchor group where Barnaby's GLB is attached, positioned at the market stall. */
   barnabySlot: THREE.Group;
-  /** Empty anchor group where the fishbot's GLB is attached, positioned on the dock. */
+  /** Empty anchor group where the equipped fishbot's GLB is attached, positioned on the dock. */
   fishbotSlot: THREE.Group;
   /** Empty anchor group where the player's voxel character is attached, on its own patch of bank. */
   playerSlot: THREE.Group;
@@ -71,7 +79,12 @@ function isExcluded(x: number, z: number, margin = 0): boolean {
   });
 }
 
-function scatterOnRing(count: number, minRadius: number, maxRadius: number): { x: number; z: number }[] {
+function scatterOnRing(
+  count: number,
+  minRadius: number,
+  maxRadius: number,
+  margin = 0,
+): { x: number; z: number }[] {
   const points: { x: number; z: number }[] = [];
   for (let i = 0; i < count; i++) {
     let found: { x: number; z: number } | null = null;
@@ -80,13 +93,21 @@ function scatterOnRing(count: number, minRadius: number, maxRadius: number): { x
       const radius = minRadius + Math.random() * (maxRadius - minRadius);
       const x = Math.cos(angle) * radius;
       const z = Math.sin(angle) * radius;
-      if (!isExcluded(x, z)) found = { x, z };
+      if (!isExcluded(x, z, margin)) found = { x, z };
     }
     // Drop the point rather than force an overlap if 12 samples all collide.
     if (found) points.push(found);
   }
   return points;
 }
+
+/**
+ * Extra clearance the foliage ring keeps from every structure when the imported
+ * nature props are in use. The exclusion zones are tuned to the procedural
+ * pine's narrow cone; the imported canopies are roughly twice as wide at the
+ * same height, so at the original radii they hang over the market stall roof.
+ */
+const IMPORTED_CANOPY_MARGIN = 0.75;
 
 /**
  * Builds the full pond diorama for a theme: island terrain, dock, market
@@ -145,7 +166,10 @@ export function buildDiorama(theme: ThemeId, materials: MaterialLibrary): Dioram
   root.add(bench);
   track(bench, 'craftingBench');
 
-  // Aligned with the dock's plank line (x=1.4) near its far end, so the bot reads as standing on the dock.
+  // Aligned with the dock's plank line (x=1.4) near its far end, so the bot reads as standing
+  // on the dock. Only one fishbot is ever equipped/active at a time (see Economy.equipFishbot),
+  // so Mk I's and Mk II's models share this single slot — Game.ts toggles which one is
+  // parented/visible rather than needing two separate dock positions.
   const fishbotSlot = new THREE.Group();
   fishbotSlot.name = 'fishbotSlot';
   fishbotSlot.position.set(1.4, 0.56, 2.05); // nudged landward to make room for lantern
@@ -180,12 +204,18 @@ export function buildDiorama(theme: ThemeId, materials: MaterialLibrary): Dioram
   }
 
   // Theme-specific tall foliage ring around the pond edge.
-  const foliagePoints = scatterOnRing(6, 3.6, 4.6);
+  const usingImportedTrees = theme === 'forest-pond' && naturePropsReady();
+  const foliagePoints = scatterOnRing(6, 3.6, 4.6, usingImportedTrees ? IMPORTED_CANOPY_MARGIN : 0);
   for (const point of foliagePoints) {
     let foliage: THREE.Object3D;
     if (theme === 'forest-pond') {
-      foliage = buildPineTree(materials.woodDark, materials.foliage, 1.8 + Math.random() * 0.8);
-      track(foliage, 'pineTree');
+      // Imported tree when the nature pack is resident, procedural pine otherwise.
+      // The imported canopies are far broader than the procedural pine at the
+      // same height, so they get a shorter target to keep them off the pond.
+      const height = 1.8 + Math.random() * 0.8;
+      const imported = spawnNatureProp(pickNatureProp(TREE_PROPS), height * 0.9);
+      foliage = imported ?? buildPineTree(materials.woodDark, materials.foliage, height);
+      track(foliage, imported ? 'importedTree' : 'pineTree');
     } else if (theme === 'ocean-trench') {
       foliage = buildCoral(materials.foliage, materials.foliageAccent, 1.0 + Math.random() * 0.6);
       track(foliage, 'coral');
@@ -201,8 +231,9 @@ export function buildDiorama(theme: ThemeId, materials: MaterialLibrary): Dioram
   // Static tree directly across the lake (middle top) so it is not in the way of the player's view
   let staticFoliage: THREE.Object3D;
   if (theme === 'forest-pond') {
-    staticFoliage = buildPineTree(materials.woodDark, materials.foliage, 2.4);
-    track(staticFoliage, 'pineTree');
+    const importedHero = spawnNatureProp(pickNatureProp(TREE_PROPS), 2.2);
+    staticFoliage = importedHero ?? buildPineTree(materials.woodDark, materials.foliage, 2.4);
+    track(staticFoliage, importedHero ? 'importedTree' : 'pineTree');
   } else if (theme === 'ocean-trench') {
     staticFoliage = buildCoral(materials.foliage, materials.foliageAccent, 1.5);
     track(staticFoliage, 'coral');
@@ -216,11 +247,23 @@ export function buildDiorama(theme: ThemeId, materials: MaterialLibrary): Dioram
   // Rocks scattered near the shoreline, theme-agnostic.
   const rockPoints = scatterOnRing(5, 2.6, 3.6);
   for (const point of rockPoints) {
-    const rock = buildRock(materials.stone, 0.25 + Math.random() * 0.25);
-    rock.position.set(point.x, 0.1, point.z);
-    rock.rotation.set(Math.random(), Math.random(), Math.random());
-    root.add(rock);
-    track(rock, 'rock');
+    const size = 0.25 + Math.random() * 0.25;
+    const imported = spawnNatureProp(pickNatureProp(ROCK_PROPS), size, 'largest-axis');
+    if (imported) {
+      // Imported rocks are modelled upright on a flat base, so they sit at
+      // ground level and only spin about Y — tumbling them on all three axes
+      // (as the procedural cube-rock is) would bury or float them.
+      imported.position.set(point.x, 0, point.z);
+      imported.rotation.y = Math.random() * Math.PI * 2;
+      root.add(imported);
+      track(imported, 'importedRock');
+    } else {
+      const rock = buildRock(materials.stone, size);
+      rock.position.set(point.x, 0.1, point.z);
+      rock.rotation.set(Math.random(), Math.random(), Math.random());
+      root.add(rock);
+      track(rock, 'rock');
+    }
   }
 
   // Cattails right at the shoreline (straddling the pond's carved edge, not floating mid-pond).
@@ -237,10 +280,18 @@ export function buildDiorama(theme: ThemeId, materials: MaterialLibrary): Dioram
   if (theme === 'forest-pond') {
     const bushPoints = scatterOnRing(4, 3.0, 4.0);
     for (const point of bushPoints) {
-      const bush = buildBush(materials.foliageAccent);
+      // Grass tufts read better than the voxel bush under the imported trees;
+      // without the pack, keep the bush.
+      const imported = spawnNatureProp(
+        pickNatureProp(GRASS_PROPS),
+        0.5 + Math.random() * 0.2,
+        'largest-axis',
+      );
+      const bush = imported ?? buildBush(materials.foliageAccent);
       bush.position.set(point.x, 0, point.z);
+      if (imported) imported.rotation.y = Math.random() * Math.PI * 2;
       root.add(bush);
-      track(bush, 'bush');
+      track(bush, imported ? 'importedGrass' : 'bush');
     }
     const mushroomPoints = scatterOnRing(3, 2.8, 3.6);
     for (const point of mushroomPoints) {

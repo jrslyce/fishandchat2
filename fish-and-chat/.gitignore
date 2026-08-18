@@ -8,3 +8,6 @@ artifacts/
 .env.*
 !.env.example
 *.zip
+
+# Curation-only build from scripts/pack-nature-props.mjs --audit; too large to ship.
+public/models/nature-props-audit.glb

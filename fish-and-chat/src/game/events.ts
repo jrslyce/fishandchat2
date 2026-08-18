@@ -48,6 +48,7 @@ export interface GameEventMap {
   baitEquipped: { id: string };
 
   fishbotPurchased: { id: string; ok: boolean };
+  fishbotEquipped: { id: string };
   fishbotClaimed: { count: number };
 
   themeChanged: { theme: ThemeId };

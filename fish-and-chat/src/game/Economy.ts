@@ -455,6 +455,28 @@ export class Economy {
     return FISHBOT_CATALOG.filter((bot) => this.state.fishbots[bot.id]?.owned);
   }
 
+  equippedFishbotId(): string | null {
+    return this.state.equippedFishbotId;
+  }
+
+  /**
+   * Only one fishbot works the dock at a time — swapping lets a player trade
+   * Mk II's precision-bonus odds for Mk I's trash-inclusive rarity bias (e.g.
+   * to farm crafting materials) without needing to own just one bot.
+   */
+  equipFishbot(id: string): boolean {
+    const bot = this.state.fishbots[id];
+    if (!bot?.owned) return false;
+    if (this.state.equippedFishbotId === id) return true;
+    const def = this.fishbotDefinition(id)!;
+    this.state.equippedFishbotId = id;
+    // Fresh timer on swap-in so a bot that's been sitting unequipped can't
+    // immediately fire off a catch from a stale nextReadyAtMs.
+    bot.nextReadyAtMs = Date.now() + def.baseIntervalSeconds * 1000 * this.fishbotIntervalMultiplier();
+    this.persist();
+    return true;
+  }
+
   buyFishbot(id: string): UpgradePurchaseResult {
     const def = this.fishbotDefinition(id);
     const bot = this.state.fishbots[id];
@@ -464,6 +486,7 @@ export class Economy {
     this.state.coins -= def.cost;
     bot.owned = true;
     bot.nextReadyAtMs = Date.now() + def.baseIntervalSeconds * 1000 * this.fishbotIntervalMultiplier();
+    if (this.state.equippedFishbotId === null) this.state.equippedFishbotId = id;
     return { ok: true };
   }
 

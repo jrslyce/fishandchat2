@@ -97,6 +97,12 @@ export class CraftingSystem {
     return result.ok;
   }
 
+  equipFishbot(id: string): boolean {
+    const ok = this.economy.equipFishbot(id);
+    if (ok) this.events.emit('fishbotEquipped', { id });
+    return ok;
+  }
+
   addRandomGarbage(count: number): void {
     this.economy.addRandomGarbage(count);
     this.events.emit('upgradePurchased', { id: 'carbon-rod', ok: false }); // cheap way to refresh open modal

@@ -52,35 +52,6 @@ def make_hat(name: str, color: tuple[int, int, int], forehead_coverage: float = 
     img.save(OUT_DIR / f"{name}.png")
 
 
-def make_cowboy_hat(name: str, color: tuple[int, int, int], band_color: tuple[int, int, int], forehead_coverage: float = 0.45) -> None:
-    """Like make_hat, but with a wide brim (darker overhang on the bottom two
-    rows of every side face) and a hat-band stripe one row above the brim."""
-    img = Image.new("RGBA", (HEAD_W, HEAD_H), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    light = shade(color, 1.15)
-    dark = shade(color, 0.8)
-    brim = shade(color, 0.65)
-
-    draw.rectangle([8, 0, 15, 7], fill=light)  # top (crown)
-    draw.rectangle([16, 0, 23, 7], fill=dark)  # bottom (brim underside)
-
-    # Sides: crown color for the upper rows, band stripe, then brim overhang
-    # on the bottom two rows so it reads as a wide flat brim from any angle.
-    for x0, x1, side_color in ((0, 7, color), (16, 23, color), (24, 31, dark)):
-        draw.rectangle([x0, 8, x1, 12], fill=side_color)
-        draw.rectangle([x0, 13, x1, 13], fill=band_color)
-        draw.rectangle([x0, 14, x1, 15], fill=brim)
-
-    front_bottom = 8 + max(1, round((HEAD_H - 8) * forehead_coverage)) - 1
-    draw.rectangle([8, 8, 15, min(front_bottom, 12)], fill=color)  # front, forehead only
-    if front_bottom >= 13:
-        draw.rectangle([8, 13, 15, 13], fill=band_color)
-    if front_bottom >= 14:
-        draw.rectangle([8, 14, 15, front_bottom], fill=brim)
-
-    img.save(OUT_DIR / f"{name}.png")
-
-
 def make_full_wrap(name: str, w: int, h: int, color: tuple[int, int, int]) -> None:
     """Fills the whole island — for body/arm/leg overlays that wrap fully around the limb (no face to protect)."""
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
@@ -113,7 +84,9 @@ def main() -> None:
     make_hat("red-beanie-head", (196, 46, 46), forehead_coverage=0.35)
     make_hat("straw-hat-head", (222, 186, 111), forehead_coverage=0.55)
     make_hat("party-hat-head", (233, 92, 190), forehead_coverage=0.3)
-    make_cowboy_hat("cowboy-hat-head", (163, 117, 71), (74, 48, 32), forehead_coverage=0.45)
+    # Cowboy hat is real 3D geometry (see entities/character/hatGeometry.ts),
+    # not a texture overlay — a flat texture can't silhouette wider than the
+    # head, which a brim needs to.
 
     # Starter outfit — free, owned+equipped from the default save state.
     make_full_wrap("basic-shirt-body", BODY_W, BODY_H, (120, 140, 150))

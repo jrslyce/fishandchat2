@@ -11,6 +11,7 @@ import { Bobber } from '../entities/Bobber';
 import { FishingLine } from '../entities/FishingLine';
 import { PlayerCharacter } from '../entities/character/PlayerCharacter';
 import { loadImportedAsset, normalizedClone, type ImportedAsset } from '../assets/ImportedAssetRegistry';
+import { preloadNatureProps } from '../world/NaturePropLibrary';
 import { MODEL_SOURCE_MANIFEST_PUBLIC, SFX_MANIFEST } from '../assets/manifest';
 import { CraftingSystem } from '../systems/CraftingSystem';
 import { FishbotSystem } from '../systems/FishbotSystem';
@@ -95,6 +96,8 @@ export class Game {
   private diorama: DioramaResult;
   private barnabyGroup: THREE.Group | null = null;
   private fishbotGroup: THREE.Group | null = null;
+  private fishbotGroup2: THREE.Group | null = null;
+  private fishbotStandbyLight: THREE.Mesh | null = null;
   private genericFishAsset: ImportedAsset | null = null;
   private prismKoiAsset: ImportedAsset | null = null;
   private readonly ambientFish: AmbientFish[] = [];
@@ -250,10 +253,19 @@ export class Game {
 
     this.wireAudioTriggers();
     this.loadHeroAssets();
+    this.loadNatureProps();
     this.fishbotSystem.simulateOfflineProgress(this.economy.currentTheme());
     window.addEventListener('pagehide', this.onPageHide);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
+    // RenderPipeline's EffectComposer is constructed above at whatever pixel ratio/size
+    // the renderer had at that point (default 1x) — resizeRenderer() alone corrects the
+    // renderer's own output resolution but never touches the composer's render targets,
+    // so bloom/vignette silently kept compositing at 1x and got upscaled onto the real
+    // (often 2x/3x retina) canvas ever since. This is why the whole game reads as blurry:
+    // every frame passes through that under-resolved composer. Mirror the per-frame
+    // resize-then-composer-resize pairing here too so the very first frame is sharp.
     resizeRenderer(this.renderer, this.camera);
+    this.renderPipeline.resize(this.canvas.clientWidth, this.canvas.clientHeight);
     this.publishDiagnostics();
   }
 
@@ -308,6 +320,14 @@ export class Game {
     });
     this.events.on('fishbotPurchased', ({ ok }) => {
       if (ok) void this.audio.playSfx(SFX_MANIFEST.coinClink);
+      if (ok) {
+        this.updateFishbotVisibility();
+        this.updateFishbotGlow();
+      }
+    });
+    this.events.on('fishbotEquipped', () => {
+      this.updateFishbotVisibility();
+      this.updateFishbotGlow();
     });
     this.events.on('fishbotClaimed', () => void this.audio.playSfx(SFX_MANIFEST.catchJingle, 0.8));
   }
@@ -335,6 +355,7 @@ export class Game {
     this.diorama = diorama;
     if (this.barnabyGroup) diorama.barnabySlot.add(this.barnabyGroup);
     if (this.fishbotGroup) diorama.fishbotSlot.add(this.fishbotGroup);
+    if (this.fishbotGroup2) diorama.fishbotSlot.add(this.fishbotGroup2);
     diorama.playerSlot.add(this.playerCharacter.group);
     this.updateFishbotVisibility();
   }
@@ -411,10 +432,22 @@ export class Game {
     this.bobber.throwTo(startPos, landingPos, CASTING_ANIM_SECONDS);
   }
 
+  /**
+   * The imported nature-prop pack (trees/rocks/grass) can only be consumed by
+   * the synchronous DioramaBuilder once it's resident, so the first diorama is
+   * always built from procedural VoxelKit props and swapped here when the pack
+   * lands. onDioramaRebuilt re-attaches Barnaby/fishbot/player, so this is safe
+   * to run whether or not loadHeroAssets has finished.
+   */
+  private async loadNatureProps(): Promise<void> {
+    if (await preloadNatureProps()) this.themeManager.rebuildProps();
+  }
+
   private async loadHeroAssets(): Promise<void> {
-    const [barnaby, fishbot, genericFish, prismKoi, oldBoot, bobberAsset] = await Promise.allSettled([
+    const [barnaby, fishbot, fishbotMk2, genericFish, prismKoi, oldBoot, bobberAsset] = await Promise.allSettled([
       loadImportedAsset(MODEL_SOURCE_MANIFEST_PUBLIC.barnaby),
       loadImportedAsset(MODEL_SOURCE_MANIFEST_PUBLIC.fishbot),
+      loadImportedAsset(MODEL_SOURCE_MANIFEST_PUBLIC.fishbotMk2),
       loadImportedAsset(MODEL_SOURCE_MANIFEST_PUBLIC.genericFish),
       loadImportedAsset(MODEL_SOURCE_MANIFEST_PUBLIC.prismKoi),
       loadImportedAsset(MODEL_SOURCE_MANIFEST_PUBLIC.oldBoot),
@@ -496,6 +529,26 @@ export class Game {
       this.fishbotGroup = normalizedClone(fishbot.value, 0.6);
       this.diorama.fishbotSlot.add(this.fishbotGroup);
       this.updateFishbotVisibility();
+    }
+    if (fishbotMk2.status === 'fulfilled') {
+      this.fishbotGroup2 = normalizedClone(fishbotMk2.value, 0.6);
+      this.diorama.fishbotSlot.add(this.fishbotGroup2);
+
+      // Small standby LED on top, shown only while Mk II is equipped but idle (not
+      // auto-fishing) — the "full" glow (boosting the model's own baked-in cyan
+      // highlights) only kicks in once auto-fishing is toggled on.
+      const bounds = new THREE.Box3().setFromObject(this.fishbotGroup2);
+      const center = new THREE.Vector3();
+      bounds.getCenter(center);
+      this.fishbotStandbyLight = new THREE.Mesh(
+        new THREE.SphereGeometry(0.018, 8, 8),
+        new THREE.MeshStandardMaterial({ color: 0x113311, emissive: 0x33ff55, emissiveIntensity: 1.5 }),
+      );
+      this.fishbotStandbyLight.position.set(center.x, bounds.max.y + 0.012, center.z);
+      this.fishbotGroup2.add(this.fishbotStandbyLight);
+
+      this.updateFishbotVisibility();
+      this.updateFishbotGlow();
     }
     if (genericFish.status === 'fulfilled') {
       this.genericFishAsset = genericFish.value;
@@ -590,22 +643,52 @@ export class Game {
   }
 
   private updateFishbotGlow(): void {
-    if (!this.fishbotGroup) return;
     const isAuto = this.fishingState.autoFishingEnabled;
-    const targetEmissive = isAuto ? 0x66ff66 : 0x000000;
-    this.fishbotGroup.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        if (!child.userData.originalMaterial) child.userData.originalMaterial = child.material;
-        child.material = child.userData.originalMaterial.clone();
-        child.material.emissive.setHex(targetEmissive);
-        child.material.emissiveIntensity = isAuto ? 0.8 : 0;
-      }
-    });
+    const equippedId = this.economy.equippedFishbotId();
+
+    // Mk I: the original blanket full-body green tint.
+    if (this.fishbotGroup) {
+      const targetEmissive = equippedId === 'fishbot-mk1' && isAuto ? 0x66ff66 : 0x000000;
+      this.fishbotGroup.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          if (!child.userData.originalMaterial) child.userData.originalMaterial = child.material;
+          child.material = child.userData.originalMaterial.clone();
+          child.material.emissive.setHex(targetEmissive);
+          child.material.emissiveIntensity = targetEmissive ? 0.8 : 0;
+        }
+      });
+    }
+
+    // Mk II: no blanket tint. When active, reuse its own baked-in color texture as
+    // an emissive map — the already-bright/cyan-painted panels (scope, antenna,
+    // hover lights) glow on their own, everything else (dark gunmetal) stays dark.
+    // When idle, drop the boosted glow and show a small standby LED on top instead.
+    if (this.fishbotGroup2) {
+      const active = equippedId === 'fishbot-mk2' && isAuto;
+      this.fishbotGroup2.traverse((child) => {
+        if (child === this.fishbotStandbyLight) return;
+        if (child instanceof THREE.Mesh) {
+          if (!child.userData.originalMaterial) child.userData.originalMaterial = child.material;
+          child.material = child.userData.originalMaterial.clone();
+          if (active) {
+            child.material.emissiveMap = child.material.map;
+            child.material.emissive.setHex(0xffffff);
+            child.material.emissiveIntensity = 1.4;
+          } else {
+            child.material.emissiveMap = null;
+            child.material.emissive.setHex(0x000000);
+            child.material.emissiveIntensity = 0;
+          }
+        }
+      });
+      if (this.fishbotStandbyLight) this.fishbotStandbyLight.visible = equippedId === 'fishbot-mk2' && !isAuto;
+    }
   }
 
   private updateFishbotVisibility(): void {
-    if (!this.fishbotGroup) return;
-    this.fishbotGroup.visible = this.economy.ownedFishbots().length > 0;
+    const equippedId = this.economy.equippedFishbotId();
+    if (this.fishbotGroup) this.fishbotGroup.visible = equippedId === 'fishbot-mk1';
+    if (this.fishbotGroup2) this.fishbotGroup2.visible = equippedId === 'fishbot-mk2';
   }
 
   /**
@@ -677,7 +760,10 @@ export class Game {
       this.renderPipeline.resize(this.canvas.clientWidth, this.canvas.clientHeight);
     }
 
-    if (this.input.justPressed() && this.input.lastClickEvent && this.fishbotGroup && this.fishbotGroup.visible) {
+    const visibleFishbotGroups = [this.fishbotGroup, this.fishbotGroup2].filter(
+      (group): group is THREE.Group => !!group && group.visible,
+    );
+    if (this.input.justPressed() && this.input.lastClickEvent && visibleFishbotGroups.length > 0) {
       if (this.fishingState.autoFishingEnabled) {
         this.fishingState.autoFishingEnabled = false;
         this.input.consumePress();
@@ -690,14 +776,14 @@ export class Game {
         const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
-        const intersects = raycaster.intersectObject(this.fishbotGroup, true);
+        const intersects = raycaster.intersectObjects(visibleFishbotGroups, true);
         if (intersects.length > 0) {
           this.fishingState.autoFishingEnabled = true;
           this.input.consumePress();
           this.updateFishbotGlow();
-          
-          const activeBots = this.economy.ownedFishbots();
-          const botName = activeBots.length > 0 ? activeBots[0].name : 'Fishbot';
+
+          const equippedId = this.economy.equippedFishbotId();
+          const botName = (equippedId && this.economy.fishbotDefinition(equippedId)?.name) ?? 'Fishbot';
           this.events.emit('fishbotToggled', { enabled: true, name: botName });
         }
       }
