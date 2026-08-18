@@ -92,6 +92,7 @@ export class UI {
   private readonly hudCandyBars: HTMLElement;
   private readonly hudBaitName: HTMLElement;
   private readonly hudBasketCount: HTMLElement;
+  private readonly basketBadge: HTMLElement;
   private readonly phaseIndicator: HTMLElement;
   private readonly fishbotStatus: HTMLElement;
   private readonly toastLine: HTMLElement;
@@ -186,6 +187,7 @@ export class UI {
     this.hudCandyBars = this.el('#hud-candy-bars');
     this.hudBaitName = this.el('#hud-bait-name');
     this.hudBasketCount = this.el('#hud-basket-count');
+    this.basketBadge = this.el('#basket-badge');
     this.phaseIndicator = this.el('#phase-indicator');
     this.fishbotStatus = this.el('#fishbot-status');
     this.biteFlash = document.querySelector<HTMLElement>('#bite-flash')!;
@@ -484,7 +486,13 @@ export class UI {
     const equippedBait = this.economy.equippedBait();
     const baitOwned = state.baitInventory[equippedBait.id] ?? 0;
     this.hudBaitName.textContent = `${equippedBait.free ? '∞' : baitOwned} ${equippedBait.acronym}`;
-    this.hudBasketCount.textContent = `${state.basket.length}/${this.economy.basketCapacity()}`;
+    const basketCap = this.economy.basketCapacity();
+    this.hudBasketCount.textContent = `${state.basket.length}/${basketCap}`;
+    // The badge is the only always-visible surface for capacity, so it carries
+    // the pressure that motivates the Heavy Duty Basket upgrade: amber when
+    // two slots from full, red once catches start bouncing.
+    this.basketBadge.classList.toggle('basket-full', state.basket.length >= basketCap);
+    this.basketBadge.classList.toggle('basket-warn', state.basket.length < basketCap && state.basket.length >= basketCap - 2);
 
     const duckyActive = this.economy.isLuckyDuckyActive();
     const duckyPill = this.root.querySelector('#hud-lucky-ducky-pill');
@@ -807,11 +815,6 @@ export class UI {
 
   private renderMarket(): void {
     const state = this.economy.snapshot;
-    const bonesTotal = 3;
-    const bones = this.marketSystem.patienceBones;
-    const bonesMarkup = Array.from({ length: bonesTotal }, (_, i) =>
-      `<span class="bone-icon ${i < bones ? '' : 'bone-spent'}">${icon(ICON.bone, 'patience bone', 'bone-img')}</span>`,
-    ).join('');
 
     const rows = state.basket.map((item, index) => {
       if (item.isTrash) return '';
@@ -826,8 +829,6 @@ export class UI {
           </div>
           <div class="row-actions">
             <button class="btn-small" data-action="sell" data-method="sell" data-index="${index}">Sell</button>
-            <button class="btn-small" data-action="sell" data-method="haggle" data-index="${index}">Haggle</button>
-            <button class="btn-small" data-action="sell" data-method="desperate" data-index="${index}">Desperate</button>
           </div>
         </li>`;
     }).join('');
@@ -841,16 +842,36 @@ export class UI {
       `
         <div class="market-header">
           <img class="barnaby-portrait" src="./images/barnaby-portrait.png" alt="Monger Barnaby" />
-          <div class="bones-row" title="Patience bones">${bonesMarkup}</div>
+          ${this.basketCapacityMarkup()}
         </div>
         <div class="market-bulk-row">
           <button class="${bulkBtnClass}" data-action="sell-all" data-method="sell" ${bulkBtnDisabled}>Sell All</button>
-          <button class="${bulkBtnClass}" data-action="sell-all" data-method="haggle" ${bulkBtnDisabled}>Haggle All</button>
         </div>
         <ul class="modal-list">${rows || '<li class="row modal-empty">Basket is empty. Go catch something!</li>'}</ul>
       `,
     );
     this.bindModalActions();
+  }
+
+  /**
+   * Capacity readout + a route to the upgrade that raises it. Basket size is
+   * already upgradable (Heavy Duty Basket / Tackle Apron in UPGRADE_CATALOG),
+   * but it was only reachable by scrolling the generic upgrade list — so the
+   * cap read as a fixed wall rather than something to grind toward. Shown
+   * wherever the player is confronted with the limit.
+   */
+  private basketCapacityMarkup(): string {
+    const used = this.economy.snapshot.basket.length;
+    const cap = this.economy.basketCapacity();
+    const tight = used >= cap;
+    const nearlyFull = !tight && used >= cap - 2;
+    const state = tight ? 'capacity-full' : nearlyFull ? 'capacity-warn' : '';
+    const canExpand = this.economy.upgradeTier('heavy-duty-basket') < 4 || this.economy.upgradeTier('tackle-apron') < 1;
+    return `
+      <div class="capacity-readout ${state}">
+        <span>Basket ${used}/${cap}</span>
+        ${canExpand ? '<button class="btn-small" data-action="open-craft">Expand</button>' : ''}
+      </div>`;
   }
 
   private renderCraft(): void {
@@ -1051,7 +1072,12 @@ export class UI {
       return `<button class="tone-swatch ${active ? 'tone-swatch-active' : ''}" data-action="set-base-tone" data-id="${tone.id}" style="background:${tone.color}" title="${tone.name}" aria-label="${tone.name}"></button>`;
     }).join('');
 
-    const slots: ClothingSlot[] = ['hat', 'jacket', 'pants', 'shoes'];
+    // Hat and jacket only. At the size the character renders in a portrait
+    // Twitch panel, legs and feet are a handful of pixels — pants/shoes cost
+    // closet scrolling and art budget for variety nobody can actually see.
+    // Their slots still exist in save state and still render their basics
+    // (see SaveState's equippedClothing defaults); they're just not customizable.
+    const slots: ClothingSlot[] = ['hat', 'jacket'];
     const slotSections = slots.map((slot) => {
       const items = CLOTHING_CATALOG.filter((item) => item.slot === slot);
       const rows = items.map((item) => {
@@ -1235,7 +1261,8 @@ export class UI {
         else if (action === 'equip-fishbot') this.craftingSystem.equipFishbot(id);
         else if (action === 'claim-hopper') this.fishbotSystem.claimHopper();
         else if (action === 'sell' && method) this.marketSystem.sell(index, method);
-        else if (action === 'sell-all' && (method === 'sell' || method === 'haggle')) this.marketSystem.sellAll(method);
+        else if (action === 'sell-all' && method === 'sell') this.marketSystem.sellAll(method);
+        else if (action === 'open-craft') this.toggleModal('craft');
         else if (action === 'buy-upgrade') this.craftingSystem.purchaseUpgrade(id as UpgradeId);
         else if (action === 'spend-skill-point') this.craftingSystem.spendSkillPoint(id as ArchetypeId);
         else if (action === 'recycle-all') this.craftingSystem.recycleAllTrash();

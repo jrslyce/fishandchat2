@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CLOTHING_CATALOG, type ClothingSlot } from '../../game/data';
 import { compositeSkinTexture } from './compositeSkin';
-import { buildCowboyHatGeometry } from './hatGeometry';
+import { buildHatGeometry } from './hatGeometry';
 import { PlayerObject } from './PlayerObject';
 import { FishingAnimation, IdleAnimation, PlayerAnimation, WalkingAnimation, WaveAnimation, type FishingPose } from './animations';
 
@@ -140,7 +140,7 @@ export class PlayerCharacter {
     const item = hatId ? CLOTHING_CATALOG.find((c) => c.id === hatId) : null;
     if (!item?.hatGeometry) return;
 
-    this.hatGeometry = buildCowboyHatGeometry(item.hatGeometry);
+    this.hatGeometry = buildHatGeometry(item.hatGeometry.shape, item.hatGeometry);
     this.player.skin.head.add(this.hatGeometry);
   }
 

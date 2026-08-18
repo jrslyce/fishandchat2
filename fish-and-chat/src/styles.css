@@ -415,6 +415,50 @@ body {
   transform: translateY(1px) scale(0.97);
 }
 
+/* Capacity pressure: amber approaching the cap, red once catches bounce. */
+#basket-badge.basket-warn {
+  background: #f6d08a;
+  color: #4a3110;
+}
+
+#basket-badge.basket-full {
+  background: #e8896f;
+  color: #3d1408;
+  animation: basket-full-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes basket-full-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #basket-badge.basket-full { animation: none; }
+}
+
+/* Capacity readout + upgrade route, shown in the market header. */
+.capacity-readout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  font-weight: 800;
+  font-size: 0.78rem;
+}
+
+.capacity-readout.capacity-warn {
+  background: #f6d08a;
+  color: #4a3110;
+}
+
+.capacity-readout.capacity-full {
+  background: #e8896f;
+  color: #3d1408;
+}
+
 /* Phase indicator (cast gauge / wait / bite) */
 
 #phase-indicator,

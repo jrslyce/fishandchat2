@@ -47,6 +47,14 @@ const WALK_COMMAND_TIMEOUT_SECONDS = 15;
 // throw backward over the dock/land, only vary left-right while still landing in the pond.
 const CAST_CONE_RADIANS = THREE.MathUtils.degToRad(50);
 const CAST_DISTANCE = 1.8;
+/**
+ * How long a press on land must be held before it walks instead of casting.
+ * In the portrait Twitch panel only ~18% of the viewport is water, so letting
+ * any land tap walk meant a tap was 2.5x more likely to move the character than
+ * to cast — the primary action lost the majority of the screen. Gating walking
+ * behind a hold gives every short tap back to casting, wherever it lands.
+ */
+const WALK_LONG_PRESS_SECONDS = 0.35;
 
 interface AmbientFish {
   group: THREE.Object3D;
@@ -113,12 +121,13 @@ export class Game {
   private readonly ambientFish: AmbientFish[] = [];
   private readonly leapingFish: LeapingFish[] = [];
 
+  // Barnaby is a stationary stallkeeper: he idles in place and never wanders.
+  // The portrait/mobile Twitch panel frames only a narrow slice of the bank, so
+  // a wandering vendor spent most of his time off-frame — and when he was in
+  // frame he pulled the eye away from the bobber, which is the only thing the
+  // player is actually watching. See git history for the removed walk loop.
   private barnabyMixer: THREE.AnimationMixer | null = null;
   private barnabyIdleAction: THREE.AnimationAction | null = null;
-  private barnabyWalkAction: THREE.AnimationAction | null = null;
-  private barnabyIsWalking = false;
-  private barnabyWalkTimer = 2;
-  private barnabyTargetPos: THREE.Vector3 | null = null;
 
   private readonly playerCharacter = new PlayerCharacter();
   private playerIsWalking = false;
@@ -128,6 +137,14 @@ export class Game {
   /** Remaining WORLD-space waypoints of a commanded walk; empty when the idle wander owns the character. */
   private playerWalkRoute: THREE.Vector3[] = [];
   private playerWalkTimeout = 0;
+  /**
+   * A press on non-water that hasn't resolved into either a cast or a walk yet.
+   * Water presses cast on the press edge as before (an aimed cast should feel
+   * instant); everywhere else the press edge is swallowed and held here until
+   * the pointer either lifts (short = cast) or crosses
+   * WALK_LONG_PRESS_SECONDS (long = walk, when the spot is walkable).
+   */
+  private pendingTap: { walkTarget: THREE.Vector3 | null; heldSeconds: number } | null = null;
   /**
    * Slot-local anchor the idle shuffle stays near. Without an anchor the
    * shuffle is an unbounded random walk and the character drifts off across the
@@ -517,10 +534,7 @@ export class Game {
     if (barnaby.status === 'fulfilled') {
       const fbxLoader = new FBXLoader();
       try {
-        const [idleFbx, walkFbx] = await Promise.all([
-          fbxLoader.loadAsync('./models/barnaby-anim/idle.fbx'),
-          fbxLoader.loadAsync('./models/barnaby-anim/walk.fbx')
-        ]);
+        const idleFbx = await fbxLoader.loadAsync('./models/barnaby-anim/idle.fbx');
 
         idleFbx.traverse((child) => {
           const mesh = child as THREE.Mesh;
@@ -573,12 +587,9 @@ export class Game {
         };
 
         const idleClip = stripHorizontalMovement(idleFbx.animations[0]);
-        const walkClip = stripHorizontalMovement(walkFbx.animations[0]);
 
         this.barnabyIdleAction = this.barnabyMixer.clipAction(idleClip);
-        this.barnabyWalkAction = this.barnabyMixer.clipAction(walkClip);
         this.barnabyIdleAction.play();
-        this.barnabyIsWalking = false;
       } catch (e) {
         console.warn("Failed to load FBX, falling back to static", e);
         this.barnabyGroup = normalizedClone(barnaby.value, 1.1);
@@ -767,6 +778,44 @@ export class Game {
    * out and back each frame rather than trying to express the pond in slot-local
    * terms — the slot is rotated 180 degrees, which would make that error-prone.
    */
+  /**
+   * Resolves a deferred non-water press into either a walk or a cast.
+   *
+   * Held past WALK_LONG_PRESS_SECONDS on walkable ground: walk there. Released
+   * before that: a plain tap, so cast — which is what hands casting the entire
+   * canvas, including the ~38% of the portrait frame that raycasts to neither
+   * water nor standable ground. Held long on ground that can't be stood on does
+   * neither; holding still is the one gesture that shouldn't fling a bobber.
+   */
+  private updatePendingTap(delta: number): void {
+    const pending = this.pendingTap;
+    if (!pending) return;
+
+    // Anything that takes control away mid-gesture voids it rather than letting
+    // a stale press resolve into a cast on top of whatever now owns the screen.
+    if (this.closetOpen || this.playerFishingActive) {
+      this.pendingTap = null;
+      return;
+    }
+
+    if (this.input.isHeld()) {
+      pending.heldSeconds += delta;
+      if (pending.heldSeconds >= WALK_LONG_PRESS_SECONDS) {
+        this.pendingTap = null;
+        if (pending.walkTarget) {
+          const from = this.playerCharacter.group.getWorldPosition(new THREE.Vector3());
+          this.playerWalkRoute = findPath(from, pending.walkTarget);
+          this.playerWalkTimeout = WALK_COMMAND_TIMEOUT_SECONDS;
+          this.playerIsWalking = false;
+        }
+      }
+      return;
+    }
+
+    this.pendingTap = null;
+    this.fishingState.requestCast();
+  }
+
   private walkTowardCommandedTarget(delta: number): void {
     const waypoint = this.playerWalkRoute[0];
     if (!waypoint) return;
@@ -929,18 +978,14 @@ export class Game {
     // casting unconditionally.
     if (this.input.justPressed() && this.input.lastClickEvent && !this.playerFishingActive && !this.closetOpen) {
       const pick = this.classifyPointer(this.input.lastClickEvent);
-      if (pick.kind === 'land' && pick.point) {
-        const from = this.playerCharacter.group.getWorldPosition(new THREE.Vector3());
-        this.playerWalkRoute = findPath(from, pick.point);
-        this.playerWalkTimeout = WALK_COMMAND_TIMEOUT_SECONDS;
-        this.playerIsWalking = false;
-        // Consume regardless of whether a route was found: an unreachable spot
-        // should read as "can't go there", never fall through into a cast.
-        this.input.consumePress();
-      } else if (pick.kind === 'none') {
-        this.input.consumePress();
+      if (pick.kind !== 'water') {
+        // Not water: defer. Swallow the press edge so it can't cast yet, and
+        // remember whether this spot is somewhere the character could stand.
+        this.pendingTap = { walkTarget: pick.kind === 'land' ? pick.point ?? null : null, heldSeconds: 0 };
+        this.input.consumePressEdge();
       }
     }
+    this.updatePendingTap(delta);
 
     if (this.input.justPressed()) this.events.emit('actionPressed', {});
     this.fishingState.update(delta, this.input);
@@ -986,72 +1031,7 @@ export class Game {
     this.updateLilypads(delta);
     this.updateClouds(delta);
 
-    if (this.barnabyMixer && this.barnabyGroup) {
-      this.barnabyMixer.update(delta);
-      this.barnabyWalkTimer -= delta;
-
-      if (this.barnabyWalkTimer <= 0) {
-        this.barnabyIsWalking = !this.barnabyIsWalking;
-        this.barnabyWalkTimer = this.barnabyIsWalking ? 3 + Math.random() * 2 : 2 + Math.random() * 3;
-        
-        if (this.barnabyIsWalking) {
-          this.barnabyIdleAction?.crossFadeTo(this.barnabyWalkAction!, 0.3, false);
-          this.barnabyWalkAction?.reset().play();
-          
-          let valid = false;
-          let targetLocal = new THREE.Vector3();
-          for (let i = 0; i < 10; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const rad = Math.random() * 4.5;
-            targetLocal.set(Math.cos(angle) * rad, 0, Math.sin(angle) * rad);
-            
-            // Barnaby's slot is at (-1.0, 3.1) in world space
-            const worldX = -1.0 + targetLocal.x;
-            const worldZ = 3.1 + targetLocal.z;
-            const distToCenter = Math.hypot(worldX, worldZ);
-            
-            // Grassy bank is approx between radius 3.2 and 4.8
-            if (distToCenter > 3.2 && distToCenter < 4.8) {
-              // Avoid the market stall area (-3.2, 2.0)
-              if (Math.hypot(worldX - -3.2, worldZ - 2.0) > 1.5) {
-                valid = true;
-                break;
-              }
-            }
-          }
-          if (valid) {
-            this.barnabyTargetPos = targetLocal;
-          } else {
-            // No valid bank point found in 10 tries — stay put rather than fall
-            // back to an unchecked small offset, which could still land inside
-            // the pond (his slot is only ~3.26 from center, barely past the
-            // 3.0 pond radius).
-            this.barnabyTargetPos = this.barnabyGroup?.position.clone() ?? new THREE.Vector3();
-          }
-        } else {
-          this.barnabyWalkAction?.crossFadeTo(this.barnabyIdleAction!, 0.3, false);
-          this.barnabyIdleAction?.reset().play();
-        }
-      }
-
-      if (this.barnabyIsWalking && this.barnabyTargetPos) {
-        const speed = 0.3;
-        const currentPos = this.barnabyGroup.position;
-        const dist = currentPos.distanceTo(this.barnabyTargetPos);
-        if (dist > 0.05) {
-          const dir = new THREE.Vector3().subVectors(this.barnabyTargetPos, this.barnabyGroup.position).normalize();
-          this.barnabyGroup.position.addScaledVector(dir, speed * delta);
-          
-          // Model faces -X natively, so we offset the atan2 by -PI/2 to face forward
-          const targetAngle = Math.atan2(dir.x, dir.z) - Math.PI / 2;
-          let currentAngle = this.barnabyGroup.rotation.y;
-          const diff = ((targetAngle - currentAngle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-          this.barnabyGroup.rotation.y += diff * 5 * delta;
-        } else {
-          this.barnabyWalkTimer = 0; // stop walking
-        }
-      }
-    }
+    this.barnabyMixer?.update(delta);
 
     this.updatePlayerCharacter(delta);
 

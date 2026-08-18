@@ -65,6 +65,16 @@ export class InputController {
     this.held = false;
   }
 
+  /**
+   * Swallows the press edge but leaves `held` intact, so the caller can claim
+   * "a press happened this frame" and still measure how long the gesture runs.
+   * consumePress() drops both, which is what a one-shot toggle wants but would
+   * blind a hold-duration check (see Game.ts's long-press-to-walk).
+   */
+  consumePressEdge(): void {
+    this.pressedThisFrame = false;
+  }
+
   justReleased(): boolean {
     return this.releasedThisFrame;
   }
