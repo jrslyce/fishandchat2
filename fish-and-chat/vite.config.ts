@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
@@ -17,5 +18,14 @@ export default defineConfig({
     // and local debugging already has the dev server's own maps.
     sourcemap: false,
     chunkSizeWarningLimit: 900,
+    rollupOptions: {
+      // config.html is a genuinely separate page (broadcaster settings, no game) — unlike
+      // panel/mobile/video_component, which the build script copies from index.html as-is
+      // since those views all boot the same game.
+      input: {
+        index: resolve(__dirname, 'index.html'),
+        config: resolve(__dirname, 'config.html'),
+      },
+    },
   },
 });
