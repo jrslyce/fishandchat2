@@ -18,7 +18,6 @@ import {
   type ClothingSlot,
   type UpgradeId,
 } from '../game/data';
-import type { BattleSnapshot } from '../systems/MathBattle';
 import type { Economy, RecycleResult } from '../game/Economy';
 import { SPRITE_MANIFEST } from '../assets/spriteManifest';
 import type { AudioEngine } from '../core/AudioEngine';
@@ -98,7 +97,6 @@ export class UI {
   private readonly toastLine: HTMLElement;
   private readonly catchCard: HTMLElement;
   private readonly modalHost: HTMLElement;
-  private readonly battleOverlay: HTMLElement;
   private readonly biteFlash: HTMLElement;
   private readonly titleScreen: HTMLElement;
   private readonly titleWelcome: HTMLElement;
@@ -120,7 +118,6 @@ export class UI {
   private barnabyClickCount = 0;
   private biteLabel = 'BITE! Tap now!';
   private missedLabel = 'It got away&hellip;';
-  private battleFlash = '';
 
   constructor(
     private readonly economy: Economy,
@@ -179,7 +176,6 @@ export class UI {
       </div>
       <div id="toast-line" class="hidden"></div>
       <div id="catch-card" class="hidden"></div>
-      <div id="battle-overlay" class="hidden" role="dialog" aria-label="Fish battle"></div>
       <div id="modal-host" class="hidden"></div>
       <div id="bite-flash"></div>
     `;
@@ -196,7 +192,6 @@ export class UI {
     this.toastLine = document.querySelector<HTMLElement>('#toast-line')!;
     this.catchCard = document.querySelector<HTMLElement>('#catch-card')!;
     this.modalHost = document.querySelector<HTMLElement>('#modal-host')!;
-    this.battleOverlay = document.querySelector<HTMLElement>('#battle-overlay')!;
     this.titleScreen = document.querySelector<HTMLElement>('#title-screen')!;
     this.titleWelcome = document.querySelector<HTMLElement>('#title-welcome')!;
     this.titleStart = document.querySelector<HTMLButtonElement>('#title-start')!;
@@ -315,16 +310,9 @@ export class UI {
         reason === 'escaped' ? 'It broke free!' :
         reason === 'bait-stolen' ? 'It stole your bait and bolted!' :
         reason === 'no-catch' ? 'It slipped off the hook!' :
-        reason === 'battle-lost' ? 'The line snapped!' :
         reason === 'reeled-early' ? 'Reeled in early.' :
         'It got away&hellip;';
     });
-    this.events.on('battleStarted', ({ snapshot }) => this.renderBattle(snapshot));
-    this.events.on('battleAnswered', ({ correct, fast, snapshot }) => {
-      this.battleFlash = correct ? (fast ? 'Clean hit!' : 'Hit!') : 'The line jerks!';
-      this.renderBattle(snapshot);
-    });
-    this.events.on('battleEnded', () => this.hideBattle());
     this.events.on('catchResolved', ({ result }) => this.showCatchCard(result));
     this.events.on('coinsChanged', () => this.refreshOpenModal());
     this.events.on('upgradePurchased', () => this.refreshOpenModal());
@@ -526,93 +514,6 @@ export class UI {
     }
   }
 
-  /**
-   * Draws the battle overlay: a Pokemon-style encounter with the fish's panel
-   * top-left and the player's line tension bottom-right.
-   *
-   * Placeholder art — coloured blocks stand in for the fish and the character
-   * so the mechanic can be played and tuned before anything is drawn. The
-   * layout is the real one, so swapping in sprites later is a CSS change.
-   */
-  private renderBattle(snapshot: BattleSnapshot): void {
-    const hpPct = (snapshot.hp / snapshot.hpMax) * 100;
-    const tensionPct = (snapshot.tension / snapshot.tensionMax) * 100;
-    const solved = snapshot.hpMax - snapshot.hp;
-    const clock = snapshot.timerEnabled ? `${snapshot.secondsLeft.toFixed(1)}s` : 'no timer';
-
-    const answerMarkup =
-      snapshot.inputMode === 'typed'
-        ? `<form id="battle-typed" class="battle-typed">
-             <input id="battle-answer" type="text" inputmode="numeric" autocomplete="off"
-                    aria-label="Your answer" placeholder="Type your answer" />
-             <button type="submit">Strike</button>
-           </form>`
-        : `<div class="battle-choices">${snapshot.problem.choices
-            .map((choice: number) => `<button type="button" data-answer="${choice}">${choice}</button>`)
-            .join('')}</div>`;
-
-    this.battleOverlay.classList.remove('hidden');
-    this.battleOverlay.innerHTML = `
-      <div class="battle-screen">
-        <div class="battle-arena">
-          <div class="battle-panel battle-panel-enemy">
-            <div class="battle-panel-top"><span>${snapshot.fishName}</span><span class="battle-meta">${snapshot.rarity}</span></div>
-            <div class="battle-bar"><i style="width:${hpPct}%"></i></div>
-            <div class="battle-sub">${solved} of ${snapshot.hpMax} solved</div>
-          </div>
-          <div class="battle-sprite battle-sprite-fish"><div class="battle-block battle-block-fish"></div></div>
-          <div class="battle-sprite battle-sprite-hero"><div class="battle-block battle-block-hero"></div></div>
-          <div class="battle-panel battle-panel-you">
-            <div class="battle-panel-top"><span>Line tension</span><span class="battle-meta">${snapshot.tension} left</span></div>
-            <div class="battle-bar battle-bar-tension"><i style="width:${tensionPct}%"></i></div>
-            <div class="battle-sub">Snaps at zero</div>
-          </div>
-        </div>
-        <div class="battle-command">
-          <div class="battle-prompt">
-            <span class="battle-question">${this.battleFlash} ${snapshot.problem.text} = ?</span>
-            <span class="battle-clock">${clock}</span>
-          </div>
-          ${answerMarkup}
-        </div>
-      </div>
-    `;
-
-    const submit = (raw: string) => {
-      const value = Number(raw);
-      this.gameState.submitBattleAnswer(Number.isFinite(value) ? value : null);
-    };
-
-    this.battleOverlay.querySelectorAll<HTMLButtonElement>('.battle-choices button').forEach((button) => {
-      button.addEventListener('click', () => submit(button.dataset.answer ?? ''));
-    });
-
-    const form = this.battleOverlay.querySelector<HTMLFormElement>('#battle-typed');
-    if (form) {
-      const field = this.battleOverlay.querySelector<HTMLInputElement>('#battle-answer');
-      form.addEventListener('submit', (event) => {
-        event.preventDefault();
-        const raw = field?.value.trim() ?? '';
-        if (raw !== '') submit(raw);
-      });
-      field?.focus();
-    }
-  }
-
-  /** Ticks the on-screen clock without rebuilding the overlay — a full re-render would steal focus from the typed field every frame. */
-  private refreshBattleClock(): void {
-    const snapshot = this.gameState.battleSnapshot();
-    if (!snapshot || !snapshot.timerEnabled) return;
-    const clock = this.battleOverlay.querySelector<HTMLElement>('.battle-clock');
-    if (clock) clock.textContent = `${snapshot.secondsLeft.toFixed(1)}s`;
-  }
-
-  private hideBattle(): void {
-    this.battleFlash = '';
-    this.battleOverlay.classList.add('hidden');
-    this.battleOverlay.innerHTML = '';
-  }
-
   private renderPhaseIndicator(): void {
     const snap = this.gameState.snapshot();
 
@@ -622,10 +523,6 @@ export class UI {
         break;
       case 'bite':
         this.phaseIndicator.innerHTML = `<div class="phase-label bite">${this.biteLabel}</div>`;
-        break;
-      case 'battle':
-        this.phaseIndicator.innerHTML = '';
-        this.refreshBattleClock();
         break;
       case 'missed':
         this.phaseIndicator.innerHTML = `<div class="phase-label missed">${this.missedLabel}</div>`;
