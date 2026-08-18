@@ -11,6 +11,11 @@ database_name = "fish-and-chat-saves"
 database_id = "558df479-413b-4a4e-8884-5e58d2ea4ace"
 migrations_dir = "migrations"
 
+# Not a secret — the extension's client ID is public (it ships in the frontend bundle
+# and is registered with Twitch), so it lives here rather than costing a `secret put`.
+[vars]
+TWITCH_CLIENT_ID = "5z87t9tu2hvecwn9ci05kaung057xh"
+
 # Secrets (never set here — use `wrangler secret put <NAME>` / .dev.vars locally):
 #   TWITCH_EXTENSION_SECRET  — base64 JWT-signing secret from the Twitch dev console
 #   TWITCH_CLIENT_ID         — the extension's client ID (not secret, but set alongside the above)
