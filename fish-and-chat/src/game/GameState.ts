@@ -174,6 +174,17 @@ export class FishingStateMachine {
     }
   }
 
+  /**
+   * Spends one bait and announces the moment a paid stack runs dry. Every path that can
+   * consume bait goes through here — a normal cast and both bait-stolen twists — so running
+   * out is reported the same way regardless of how the last unit went, and the silent swap
+   * back to Pleb Bait never costs the player a skill bonus without them noticing.
+   */
+  private consumeBait(): void {
+    const { spent, exhausted } = this.economy.consumeBaitForCast();
+    if (spent && exhausted) this.events.emit('baitExhausted', { id: spent.id, name: spent.name });
+  }
+
   private tryStartCast(): void {
     if (this.economy.basketFull()) {
       this.events.emit('basketFull', {});
@@ -204,7 +215,7 @@ export class FishingStateMachine {
     if (this.lockedRolls && (this.lockedRolls.L === 1 || this.lockedRolls.L === 7) && Math.random() < 0.25) {
       this.events.emit('toast', { message: 'Bait Saver! Your bait was not consumed.' });
     } else {
-      this.economy.consumeBaitForCast();
+      this.consumeBait();
     }
     
     this.setPhase('casting');
@@ -226,7 +237,7 @@ export class FishingStateMachine {
    */
   private reelInEarly(): void {
     if (Math.random() < BAIT_STOLEN_CHANCE) {
-      this.economy.consumeBaitForCast();
+      this.consumeBait();
       this.enterMissed('bait-stolen');
     } else {
       this.enterMissed('reeled-early');
@@ -275,7 +286,7 @@ export class FishingStateMachine {
     // last second, or the fish strips the bait clean off without ever getting caught.
     const twist = Math.random();
     if (twist < BAIT_STOLEN_CHANCE) {
-      this.economy.consumeBaitForCast();
+      this.consumeBait();
       this.enterMissed('bait-stolen');
       return;
     } else if (twist < BAIT_STOLEN_CHANCE + NO_CATCH_CHANCE) {

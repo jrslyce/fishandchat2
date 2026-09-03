@@ -46,6 +46,8 @@ export interface GameEventMap {
   skillPointSpent: { id: ArchetypeId; ok: boolean };
   baitPurchased: { id: string; ok: boolean };
   baitEquipped: { id: string };
+  /** The last unit of a paid bait was just spent; the player is back on Pleb Bait. */
+  baitExhausted: { id: string; name: string };
 
   fishbotPurchased: { id: string; ok: boolean };
   fishbotClaimed: { count: number };
