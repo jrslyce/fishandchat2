@@ -230,6 +230,80 @@ export function buildDock(
   return group;
 }
 
+/** Outer size of the tipped-over crate the angler sits on. `height` is the seat height. */
+export const CRATE_SIZE = { length: 0.66, height: 0.38, depth: 0.48 };
+
+/**
+ * A wooden shipping crate knocked onto its side and used as a seat. Built
+ * directly in its final (tipped) orientation rather than upright-then-rotated,
+ * so the caller places it by its footprint like every other prop here:
+ * local +X runs along the crate, +Y is up, and the open mouth faces local +Z.
+ *
+ * Slat gaps are what sell it as a crate at diorama distance, so the faces are
+ * assembled from separated planks instead of solid boxes, with dark corner
+ * battens framing the mouth.
+ */
+export function buildCrate(woodMaterial: THREE.Material, darkWoodMaterial: THREE.Material): THREE.Group {
+  const group = new THREE.Group();
+  group.name = 'crate';
+
+  const { length, height, depth } = CRATE_SIZE;
+  const slatThickness = 0.045;
+  const slatCount = 3;
+  const slatGap = 0.02;
+
+  const add = (mesh: THREE.Mesh) => {
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  };
+
+  // Seat (up-facing) and floor (ground-facing) slats, running across the crate.
+  const seatSlatDepth = (depth - slatGap * (slatCount - 1)) / slatCount;
+  const seatSlatGeometry = new THREE.BoxGeometry(length, slatThickness, seatSlatDepth);
+  for (const y of [height - slatThickness / 2, slatThickness / 2]) {
+    for (let i = 0; i < slatCount; i++) {
+      const slat = new THREE.Mesh(seatSlatGeometry, woodMaterial);
+      slat.position.set(0, y, -depth / 2 + seatSlatDepth / 2 + i * (seatSlatDepth + slatGap));
+      add(slat);
+    }
+  }
+
+  // Back panel (opposite the open mouth), slatted the same way.
+  const backSlatHeight = (height - slatGap * (slatCount - 1)) / slatCount;
+  const backSlatGeometry = new THREE.BoxGeometry(length, backSlatHeight, slatThickness);
+  for (let i = 0; i < slatCount; i++) {
+    const slat = new THREE.Mesh(backSlatGeometry, woodMaterial);
+    slat.position.set(0, backSlatHeight / 2 + i * (backSlatHeight + slatGap), -depth / 2 + slatThickness / 2);
+    add(slat);
+  }
+
+  // End caps, left solid so the crate still reads as a box from the side.
+  const endGeometry = new THREE.BoxGeometry(slatThickness, height, depth);
+  for (const x of [-length / 2 + slatThickness / 2, length / 2 - slatThickness / 2]) {
+    const cap = new THREE.Mesh(endGeometry, woodMaterial);
+    cap.position.set(x, height / 2, 0);
+    add(cap);
+  }
+
+  // Dark battens framing the open mouth — the detail that reads as "crate"
+  // rather than "box" once the interior is in shadow.
+  const battenGeometry = new THREE.BoxGeometry(slatThickness * 1.4, height, slatThickness * 1.4);
+  for (const x of [-length / 2 + slatThickness, length / 2 - slatThickness]) {
+    const batten = new THREE.Mesh(battenGeometry, darkWoodMaterial);
+    batten.position.set(x, height / 2, depth / 2 - slatThickness);
+    add(batten);
+  }
+  const lipGeometry = new THREE.BoxGeometry(length, slatThickness * 1.4, slatThickness * 1.4);
+  for (const y of [slatThickness, height - slatThickness]) {
+    const lip = new THREE.Mesh(lipGeometry, darkWoodMaterial);
+    lip.position.set(0, y, depth / 2 - slatThickness);
+    add(lip);
+  }
+
+  return group;
+}
+
 /** Market-stall shell: posts, roof slab, counter — Barnaby's GLB stands behind it. */
 export function buildMarketStall(woodMaterial: THREE.Material, roofMaterial: THREE.Material): THREE.Group {
   const group = new THREE.Group();

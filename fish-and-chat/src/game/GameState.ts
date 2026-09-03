@@ -32,6 +32,13 @@ export type FishingPhase =
 
 export const CASTING_ANIM_SECONDS = 0.4;
 const CELEBRATING_SECONDS = 2.5;
+/**
+ * How long before the bite the float starts twitching. This is a real tell,
+ * not decoration: it is the player's only warning that the reaction window is
+ * about to open, so it has to be long enough to notice and short enough that
+ * it can't be treated as a countdown.
+ */
+export const NIBBLE_TELL_SECONDS = 1.1;
 const MISSED_TOAST_SECONDS = 1.4;
 /** Odds, on an otherwise-successful reel, that it turns out to be nothing after all. */
 const BAIT_STOLEN_CHANCE = 0.05;
@@ -43,6 +50,8 @@ export interface FishingSnapshot {
   sweetSpot: number;
   sweetSpotWidth: number;
   waitProgress: number;
+  /** 0 outside the tell, ramping 0 -> 1 across the last NIBBLE_TELL_SECONDS of the wait. */
+  nibbleProgress: number;
   biteProgress: number;
   lastCatch: CatchResult | null;
 }
@@ -93,9 +102,23 @@ export class FishingStateMachine {
       sweetSpot: this.gauge.sweetSpot,
       sweetSpotWidth: this.gauge.sweetSpotWidth,
       waitProgress: this.phase === 'waiting' ? Math.min(1, this.phaseElapsed / this.waitDurationSeconds) : 0,
+      nibbleProgress: this.nibbleProgress(),
       biteProgress: this.phase === 'bite' ? Math.min(1, this.phaseElapsed / HAZARD_BACKSTOP_SECONDS) : 0,
       lastCatch: this.lastCatch,
     };
+  }
+
+  /**
+   * How far into the pre-bite tell the current wait is. Clamped rather than
+   * assumed positive: a short roll can leave the whole wait shorter than
+   * NIBBLE_TELL_SECONDS, in which case the float twitches from the moment it
+   * lands instead of ramping from a negative time.
+   */
+  private nibbleProgress(): number {
+    if (this.phase !== 'waiting') return 0;
+    const remaining = this.waitDurationSeconds - this.phaseElapsed;
+    if (remaining > NIBBLE_TELL_SECONDS) return 0;
+    return Math.min(1, Math.max(0, 1 - remaining / NIBBLE_TELL_SECONDS));
   }
 
   update(delta: number, input: InputController): void {
@@ -151,6 +174,17 @@ export class FishingStateMachine {
     }
   }
 
+  /**
+   * Spends one bait and announces the moment a paid stack runs dry. Every path that can
+   * consume bait goes through here — a normal cast and both bait-stolen twists — so running
+   * out is reported the same way regardless of how the last unit went, and the silent swap
+   * back to Pleb Bait never costs the player a skill bonus without them noticing.
+   */
+  private consumeBait(): void {
+    const { spent, exhausted } = this.economy.consumeBaitForCast();
+    if (spent && exhausted) this.events.emit('baitExhausted', { id: spent.id, name: spent.name });
+  }
+
   private tryStartCast(): void {
     if (this.economy.basketFull()) {
       this.events.emit('basketFull', {});
@@ -181,7 +215,7 @@ export class FishingStateMachine {
     if (this.lockedRolls && (this.lockedRolls.L === 1 || this.lockedRolls.L === 7) && Math.random() < 0.25) {
       this.events.emit('toast', { message: 'Bait Saver! Your bait was not consumed.' });
     } else {
-      this.economy.consumeBaitForCast();
+      this.consumeBait();
     }
     
     this.setPhase('casting');
@@ -203,7 +237,7 @@ export class FishingStateMachine {
    */
   private reelInEarly(): void {
     if (Math.random() < BAIT_STOLEN_CHANCE) {
-      this.economy.consumeBaitForCast();
+      this.consumeBait();
       this.enterMissed('bait-stolen');
     } else {
       this.enterMissed('reeled-early');
@@ -252,7 +286,7 @@ export class FishingStateMachine {
     // last second, or the fish strips the bait clean off without ever getting caught.
     const twist = Math.random();
     if (twist < BAIT_STOLEN_CHANCE) {
-      this.economy.consumeBaitForCast();
+      this.consumeBait();
       this.enterMissed('bait-stolen');
       return;
     } else if (twist < BAIT_STOLEN_CHANCE + NO_CATCH_CHANCE) {

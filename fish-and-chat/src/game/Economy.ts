@@ -40,6 +40,14 @@ export interface BoxOpenResult extends UpgradePurchaseResult {
   itemsGranted: number;
 }
 
+/** What a single cast's bait consumption did — see `consumeBaitForCast`. */
+export interface BaitConsumption {
+  /** The paid bait spent on this cast, or null when the cast ran on free bait. */
+  spent: BaitDefinition | null;
+  /** True when `spent` was the player's last unit, so they have been dropped back to Pleb Bait. */
+  exhausted: boolean;
+}
+
 export interface RecycleResult {
   success: boolean;
   materialId: MaterialId | null;
@@ -187,15 +195,23 @@ export class Economy {
     return { ok: true };
   }
 
-  /** Consumes one unit of the equipped bait for a cast; falls back to Pleb Bait if exhausted. */
-  consumeBaitForCast(): void {
+  /**
+   * Consumes one unit of the equipped bait for a cast; falls back to Pleb Bait if exhausted.
+   *
+   * Returns what happened rather than swapping silently: running out drops the player back to
+   * free bait and takes its skill bonus and wait multiplier with it, which is worth telling
+   * them about. Economy has no event bus of its own, so the caller owns announcing it.
+   */
+  consumeBaitForCast(): BaitConsumption {
     const bait = this.equippedBait();
-    if (bait.free) return;
+    if (bait.free) return { spent: null, exhausted: false };
     const remaining = (this.state.baitInventory[bait.id] ?? 0) - 1;
     this.state.baitInventory[bait.id] = Math.max(0, remaining);
     if (remaining <= 0) {
       this.state.equippedBaitId = 'pleb-bait';
+      return { spent: bait, exhausted: true };
     }
+    return { spent: bait, exhausted: false };
   }
 
   effectiveSkill(castPrecisionBonus: number): number {

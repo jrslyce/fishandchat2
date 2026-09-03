@@ -1018,6 +1018,76 @@ body {
 
 /* Barnaby's one-time onboarding bubbles ("click to cast" / "tap to reel") */
 
+/* Out-of-bait alert: a one-shot pop-up card naming the paid bait the player just ran out
+   of, with a direct route to restock. Sits above the tutorial bubble and the basket badge,
+   and is placed before #modal-host in the shell so an open modal covers it. */
+#bait-alert {
+  position: absolute;
+  left: max(16px, env(safe-area-inset-left));
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(76px, calc(env(safe-area-inset-bottom) + 72px));
+  /* width:auto with both insets set fills the gap between them; max-width caps it on wide
+     screens and the auto margins then centre it. NOT width:min(380px,100%) — percentages
+     resolve against #ui-root's full-viewport box, not this element's inset box, so on a
+     narrow phone that computes 380px against a 358px slot and overflows the right edge. */
+  width: auto;
+  max-width: 380px;
+  margin-inline: auto;
+  z-index: 55;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--paper);
+  border: 3px solid var(--accent);
+  box-shadow: var(--shadow-panel);
+  color: var(--ink);
+  pointer-events: auto;
+}
+
+.bait-alert-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+#bait-alert-title {
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+#bait-alert-note {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+#bait-alert .modal-close {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  font-size: 1.1rem;
+}
+
+.bait-alert-pop {
+  animation: bait-alert-in 0.28s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+
+@keyframes bait-alert-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 #tutorial-bubble {
   position: absolute;
   left: max(16px, env(safe-area-inset-left));

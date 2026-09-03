@@ -43,6 +43,12 @@ const ICON = {
 
 const CANDY_EMOJI = '🍫';
 
+/**
+ * How long the out-of-bait alert stays up. Long enough to read and act on mid-cast, short
+ * enough that it is gone before the catch card for that same cast can appear over it.
+ */
+const BAIT_ALERT_MS = 6000;
+
 /** Barnaby's small talk when you click his portrait in the Shop — always followed by "*gulp*". */
 const BARNABY_LINES = [
   "Looks like fine fishing weather out there.",
@@ -95,6 +101,7 @@ export class UI {
   private readonly phaseIndicator: HTMLElement;
   private readonly fishbotStatus: HTMLElement;
   private readonly toastLine: HTMLElement;
+  private readonly baitAlert: HTMLElement;
   private readonly catchCard: HTMLElement;
   private readonly modalHost: HTMLElement;
   private readonly biteFlash: HTMLElement;
@@ -111,6 +118,7 @@ export class UI {
   private openModal: ModalId = null;
   private railExpanded = false;
   private toastTimeout: number | null = null;
+  private baitAlertTimeout: number | null = null;
   private catchCardTimeout: number | null = null;
   private resetArmed = false;
   private lastDuckySecond = 0;
@@ -175,6 +183,15 @@ export class UI {
         <button type="button" id="tutorial-bubble-text" class="tutorial-bubble-text"></button>
       </div>
       <div id="toast-line" class="hidden"></div>
+      <div id="bait-alert" class="hidden" role="alert" aria-live="assertive">
+        <div id="bait-alert-icon"></div>
+        <div class="bait-alert-body">
+          <strong id="bait-alert-title"></strong>
+          <span id="bait-alert-note"></span>
+        </div>
+        <button class="btn-small" id="bait-alert-buy" type="button">Buy more</button>
+        <button class="modal-close" id="bait-alert-close" type="button" aria-label="Dismiss">&times;</button>
+      </div>
       <div id="catch-card" class="hidden"></div>
       <div id="modal-host" class="hidden"></div>
       <div id="bite-flash"></div>
@@ -190,6 +207,7 @@ export class UI {
     this.fishbotStatus = this.el('#fishbot-status');
     this.biteFlash = document.querySelector<HTMLElement>('#bite-flash')!;
     this.toastLine = document.querySelector<HTMLElement>('#toast-line')!;
+    this.baitAlert = this.el('#bait-alert');
     this.catchCard = document.querySelector<HTMLElement>('#catch-card')!;
     this.modalHost = document.querySelector<HTMLElement>('#modal-host')!;
     this.titleScreen = document.querySelector<HTMLElement>('#title-screen')!;
@@ -218,6 +236,11 @@ export class UI {
     this.el('#btn-settings').addEventListener('click', () => railSelect('settings'));
     this.el('#btn-debug').addEventListener('click', () => this.toggleModal('debug'));
     this.el('#hud-bait-pill').addEventListener('click', () => this.toggleModal('shop'));
+    this.el('#bait-alert-buy').addEventListener('click', () => {
+      this.hideBaitAlert();
+      if (this.openModal !== 'shop') this.toggleModal('shop');
+    });
+    this.el('#bait-alert-close').addEventListener('click', () => this.hideBaitAlert());
     this.el('#hud-candy-pill').addEventListener('click', () => this.toggleModal('candy'));
     this.el('#basket-badge').addEventListener('click', () => this.toggleModal('market'));
 
@@ -243,6 +266,7 @@ export class UI {
 
   dispose(): void {
     if (this.toastTimeout) window.clearTimeout(this.toastTimeout);
+    if (this.baitAlertTimeout) window.clearTimeout(this.baitAlertTimeout);
     if (this.catchCardTimeout) window.clearTimeout(this.catchCardTimeout);
     this.root.remove();
   }
@@ -317,6 +341,7 @@ export class UI {
     this.events.on('coinsChanged', () => this.refreshOpenModal());
     this.events.on('upgradePurchased', () => this.refreshOpenModal());
     this.events.on('skillPointSpent', () => this.refreshOpenModal());
+    this.events.on('baitExhausted', ({ id, name }) => this.showBaitAlert(id, name));
     this.events.on('baitPurchased', () => this.refreshOpenModal());
     this.events.on('baitEquipped', () => this.refreshOpenModal());
     this.events.on('fishbotPurchased', () => this.refreshOpenModal());
@@ -583,6 +608,33 @@ export class UI {
     this.toastTimeout = window.setTimeout(() => this.toastLine.classList.add('hidden'), 2200);
   }
 
+  /**
+   * One-shot pop-up for running out of a paid bait. Louder than a toast on purpose: the
+   * swap back to Pleb Bait silently costs the player that bait's skill bonus and wait
+   * multiplier, and this is the exact moment they'd want to restock — hence the direct
+   * route to the shop rather than just a line of text.
+   */
+  private showBaitAlert(baitId: string, baitName: string): void {
+    this.el('#bait-alert-icon').innerHTML = rowIcon(baitId, baitName, icon(ICON.bait, baitName));
+    this.el('#bait-alert-title').textContent = `Out of ${baitName}`;
+    this.el('#bait-alert-note').textContent = 'That was your last one — back to Pleb Bait.';
+    this.baitAlert.classList.remove('hidden');
+    // Restart the pop animation if a second alert lands while one is still showing.
+    this.baitAlert.classList.remove('bait-alert-pop');
+    void this.baitAlert.offsetWidth;
+    this.baitAlert.classList.add('bait-alert-pop');
+    if (this.baitAlertTimeout) window.clearTimeout(this.baitAlertTimeout);
+    this.baitAlertTimeout = window.setTimeout(() => this.hideBaitAlert(), BAIT_ALERT_MS);
+  }
+
+  private hideBaitAlert(): void {
+    this.baitAlert.classList.add('hidden');
+    if (this.baitAlertTimeout) {
+      window.clearTimeout(this.baitAlertTimeout);
+      this.baitAlertTimeout = null;
+    }
+  }
+
   /** Brief pulsing border cue when a bite starts. */
   private showBiteFlash(): void {
     this.biteFlash.classList.remove('flashing');
@@ -628,6 +680,7 @@ export class UI {
   private toggleModal(id: ModalId): void {
     const previous = this.openModal;
     this.openModal = this.openModal === id ? null : id;
+    if (this.openModal) this.hideBaitAlert();
     if (this.openModal === 'market') this.marketSystem.onMarketOpened();
     if (previous === 'closet' && this.openModal !== 'closet') this.events.emit('closetClosed', {});
     if (this.openModal === 'closet' && previous !== 'closet') this.events.emit('closetOpened', {});
