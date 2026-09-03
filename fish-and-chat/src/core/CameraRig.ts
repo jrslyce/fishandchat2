@@ -3,6 +3,23 @@ import * as THREE from 'three';
 const UP = new THREE.Vector3(0, 1, 0);
 
 /**
+ * The aspect ratio `ShoulderFraming` numbers are authored against. A
+ * PerspectiveCamera's fov is VERTICAL, so the horizontal field of view is
+ * whatever the viewport's aspect makes it — on a portrait phone that is less
+ * than a third of the 16:9 width. A shoulder offset tuned on a desktop screen
+ * therefore slides the angler clean off the side of a phone.
+ */
+const REFERENCE_ASPECT = 16 / 9;
+/**
+ * Bounds on that correction. The lower bound keeps some shoulder framing even
+ * on the narrowest screens rather than collapsing to a dead-centre view; the
+ * upper bound stops an ultrawide window from sliding the camera so far along
+ * the bank that it shoots past the angler entirely.
+ */
+const MIN_SHOULDER_SCALE = 0.3;
+const MAX_SHOULDER_SCALE = 1.15;
+
+/**
  * How the over-the-shoulder shot is framed, in intent rather than world
  * coordinates: the rig derives the camera's actual position from the angler's
  * seat and the point out on the water they are facing.
@@ -15,6 +32,8 @@ export interface ShoulderFraming {
   /**
    * Slide along the camera's own right axis. Positive pushes the angler
    * toward screen-LEFT and opens the rest of the frame onto the water.
+   * Authored for REFERENCE_ASPECT and scaled down on narrower viewports so
+   * the angler holds their place in the FRAME rather than in world space.
    */
   shoulderOffset: number;
 }
@@ -33,6 +52,7 @@ export class CameraRig {
   private readonly focusTarget = new THREE.Vector3();
   private readonly desiredFocus = new THREE.Vector3();
   private driftTime = 0;
+  private framedAspect = 0;
 
   constructor(
     private readonly camera: THREE.PerspectiveCamera,
@@ -66,6 +86,11 @@ export class CameraRig {
   }
 
   update(delta: number): void {
+    // The canvas can be resized at any time (rotating a phone, dragging a
+    // window), and the shot's horizontal framing depends on aspect — so
+    // re-derive the camera position whenever it actually changes.
+    if (this.camera.aspect !== this.framedAspect) this.recomputeBasePosition();
+
     this.driftTime += delta;
     // Small at this distance on purpose — the old diorama rig sat ~10 units
     // out, where a 0.35 sway was invisible; from over the shoulder the same
@@ -100,10 +125,20 @@ export class CameraRig {
       .crossVectors(UP, forward.clone().negate())
       .normalize();
 
+    // Hold the angler's position in frame across aspect ratios: the offset
+    // needed to put them a given fraction off-centre scales with the
+    // horizontal field of view, which scales with aspect.
+    this.framedAspect = this.camera.aspect;
+    const shoulderScale = THREE.MathUtils.clamp(
+      this.framedAspect / REFERENCE_ASPECT,
+      MIN_SHOULDER_SCALE,
+      MAX_SHOULDER_SCALE,
+    );
+
     this.basePosition
       .copy(this.anchor)
       .addScaledVector(forward, -this.framing.distance)
-      .addScaledVector(right, this.framing.shoulderOffset);
+      .addScaledVector(right, this.framing.shoulderOffset * shoulderScale);
     this.basePosition.y = this.anchor.y + this.framing.height;
   }
 }
