@@ -8,6 +8,23 @@ import { FishingAnimation, IdleAnimation, PlayerAnimation, WalkingAnimation, Wav
 const CHARACTER_SCALE = 1 / 32;
 /** Feet sit at local y=-16 in PlayerObject space (see PlayerObject.ts); shift up so feet land at y=0 of the wrapper. */
 const FEET_OFFSET = 16 * CHARACTER_SCALE;
+/**
+ * Height of the hip joint above the group origin — the legs are 12 MC units
+ * long, so with them swung forward for a seat this is exactly how far the
+ * group has to drop for the hips to land on the seat surface. Exported so
+ * DioramaBuilder can place the slot against a real crate height instead of a
+ * hand-tuned magic number.
+ */
+export const SEATED_HIP_HEIGHT = 12 * CHARACTER_SCALE;
+/** Thighs swung forward to just past horizontal — the seated read for a knee-less box rig. */
+const SEATED_LEG_PITCH = -1.48;
+/**
+ * Outward splay at the hips. Enough that both knees clear the torso from
+ * directly behind — which is the only angle the fixed camera ever sees the
+ * angler from, and without it the swung-forward legs hide entirely and the
+ * pose reads as a torso balanced on a box.
+ */
+const SEATED_LEG_SPLAY = 0.24;
 
 export type CharacterPose = 'idle' | 'walking' | 'fishing' | 'wave';
 
@@ -38,6 +55,7 @@ export class PlayerCharacter {
 
   private pose: CharacterPose = 'idle';
   private waveTimer = 0;
+  private seated = false;
 
   constructor() {
     this.player = new PlayerObject();
@@ -129,6 +147,15 @@ export class PlayerCharacter {
     this.fishAnim.pose = sub;
   }
 
+  /**
+   * Sits the character down (on the crate at the water's edge). Applied on top
+   * of whichever animation is running rather than as another pose, so idle
+   * sway, the fishing arm swing and the catch wave all still play while seated.
+   */
+  setSeated(seated: boolean): void {
+    this.seated = seated;
+  }
+
   /** World-space position of the rod-tip anchor (see constructor) — the fishing line's start point. */
   getRodTipWorldPosition(target: THREE.Vector3): THREE.Vector3 {
     return this.rodTipAnchor.getWorldPosition(target);
@@ -154,6 +181,20 @@ export class PlayerCharacter {
     }
     this.player.resetJoints();
     this.activeAnimation().update(this.player, delta);
+    if (this.seated) this.applySeatedLegs();
+  }
+
+  /**
+   * Overrides whatever the active animation did to the legs. Runs last on
+   * purpose: the arm-driven animations above are free to keep animating, and
+   * the legs simply stay folded onto the crate underneath them.
+   */
+  private applySeatedLegs(): void {
+    const { leftLeg, rightLeg } = this.player.skin;
+    leftLeg.rotation.x = SEATED_LEG_PITCH;
+    rightLeg.rotation.x = SEATED_LEG_PITCH;
+    leftLeg.rotation.z = -SEATED_LEG_SPLAY;
+    rightLeg.rotation.z = SEATED_LEG_SPLAY;
   }
 
   dispose(): void {

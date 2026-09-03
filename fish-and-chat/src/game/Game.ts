@@ -25,18 +25,35 @@ import { THEME_PALETTES } from '../assets/MaterialLibrary';
 import { Economy } from './Economy';
 import { CASTING_ANIM_SECONDS, FishingStateMachine, type FishingPhase } from './GameState';
 import { createDefaultSaveState, type GameSaveStateV1 } from './SaveState';
-import { WATER_DISC_RADIUS, type DioramaResult } from '../world/DioramaBuilder';
+import {
+  ANGLER_SEAT,
+  ANGLER_WATER_FOCUS,
+  WATER_DISC_RADIUS,
+  type DioramaResult,
+} from '../world/DioramaBuilder';
 import type { GameEventMap } from './events';
 import { UI } from '../ui/UI';
 
 const AUTOSAVE_INTERVAL_SECONDS = 5;
 const WATER_Y = -0.05;
+/** The pond surface as a maths plane — what clicks are resolved against when aiming a cast. */
+const WATER_PLANE = new THREE.Plane(new THREE.Vector3(0, 1, 0), -WATER_Y);
 const AMBIENT_FISH_COUNT = 3;
 const FISH_TINTS = ['#8fb7c9', '#e0a860', '#7fa876'];
 // How far off the player's own facing a cast can be aimed — clamped so a cast can never
-// throw backward over the dock/land, only vary left-right while still landing in the pond.
+// throw backward over the bank, only vary left-right while still landing in the pond.
+// Only the fallback (a click that missed the water entirely) uses this; a click on the
+// pond casts exactly where it landed.
 const CAST_CONE_RADIANS = THREE.MathUtils.degToRad(50);
 const CAST_DISTANCE = 1.8;
+/**
+ * Clicks are clamped inside this radius rather than the water disc's own, so a cast aimed
+ * at the very rim still lands on water the shader actually draws (the disc is a square
+ * plane that discards outside an inscribed circle — its corners raycast but are invisible).
+ */
+const CAST_MAX_RADIUS = WATER_DISC_RADIUS - 0.25;
+/** Keeps a click right at the angler's feet from dropping the bobber on top of them. */
+const CAST_MIN_DISTANCE = 0.7;
 
 interface AmbientFish {
   group: THREE.Object3D;
@@ -108,11 +125,6 @@ export class Game {
   private barnabyTargetPos: THREE.Vector3 | null = null;
 
   private readonly playerCharacter = new PlayerCharacter();
-  private playerIsWalking = false;
-  private playerWalkTimer = 2 + Math.random() * 2;
-  private playerTargetLocal = new THREE.Vector3();
-  private playerFishingActive = false;
-  private readonly defaultCameraFocus = new THREE.Vector3(0, 0.3, 0.5);
 
   // Closet live preview: a second small render (same renderer/scene, no
   // second WebGL context) into an offscreen target, read back into a plain
@@ -144,8 +156,15 @@ export class Game {
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.renderer = createRenderer(canvas);
-    this.cameraRig = new CameraRig(this.camera, new THREE.Vector3(0, 6.5, 9));
-    this.cameraRig.focusOn(this.defaultCameraFocus);
+    // Fixed over-the-shoulder shot: the rig derives the camera from the
+    // angler's seat and the water they face, with the shoulder offset sliding
+    // it far enough right that the angler sits in the left third of frame and
+    // the pond fills the rest.
+    this.cameraRig = new CameraRig(this.camera, ANGLER_SEAT, ANGLER_WATER_FOCUS, {
+      distance: 2.9,
+      height: 1.95,
+      shoulderOffset: 1.55,
+    });
     // Render targets default to a linear working color space (the sRGB
     // output transform normally only happens on the final canvas blit) — the
     // closet preview reads pixels straight back out, so it needs the target
@@ -182,10 +201,11 @@ export class Game {
     this.water.mesh.position.y = WATER_Y;
     this.scene.add(this.water.mesh);
 
-    this.diorama = { root: new THREE.Group(), barnabySlot: new THREE.Group(), fishbotSlot: new THREE.Group(), playerSlot: new THREE.Group(), lilypads: [], clouds: [], diagnostics: { meshCount: 0, propTypeCount: 0 } };
+    this.diorama = { root: new THREE.Group(), barnabySlot: new THREE.Group(), fishbotSlot: new THREE.Group(), playerSlot: new THREE.Group(), anglerCrate: new THREE.Group(), lilypads: [], clouds: [], diagnostics: { meshCount: 0, propTypeCount: 0 } };
     this.themeManager = new ThemeManager(this.scene, this.water, this.audio, initialTheme, (diorama) => this.onDioramaRebuilt(diorama));
 
     this.diorama.playerSlot.add(this.playerCharacter.group);
+    this.playerCharacter.setSeated(true);
     void this.refreshPlayerSkin();
     this.playerCharacter.setName(this.economy.displayName());
     this.events.on('clothingEquipped', () => void this.refreshPlayerSkin());
@@ -200,13 +220,12 @@ export class Game {
       // total facing/position is just the slot's own fixed anchor.
       this.playerCharacter.group.position.set(0, 0, 0);
       this.playerCharacter.group.rotation.y = 0;
-      this.playerIsWalking = false;
       this.playerCharacter.setPose('idle');
       this.cameraRig.focusOn(this.diorama.playerSlot.position);
     });
     this.events.on('closetClosed', () => {
       this.closetOpen = false;
-      this.cameraRig.focusOn(this.defaultCameraFocus);
+      this.cameraRig.focusOnWater();
     });
     this.events.on('phaseChanged', ({ phase }) => this.onFishingPhaseChanged(phase));
     this.events.on('catchResolved', ({ result }) => {
@@ -236,7 +255,7 @@ export class Game {
     this.vfx = new VfxSystem(this.scene, this.events, {
       getBobberPosition: () => this.bobber.group.position,
       getBarnabyPosition: () => this.diorama.barnabySlot.position,
-      getCraftingBenchPosition: () => new THREE.Vector3(-3.6, 0.7, -1.6),
+      getCraftingBenchPosition: () => new THREE.Vector3(-2.9, 0.7, -1.9),
     });
 
     this.events.on('themeChanged', ({ theme }) => void this.themeManager.setTheme(theme));
@@ -245,7 +264,9 @@ export class Game {
     });
 
     if (import.meta.env.DEV) {
-      (window as unknown as { __game_scene?: THREE.Scene }).__game_scene = this.scene;
+      const devWindow = window as unknown as { __game_scene?: THREE.Scene; __game_camera?: THREE.PerspectiveCamera };
+      devWindow.__game_scene = this.scene;
+      devWindow.__game_camera = this.camera;
     }
 
     this.wireAudioTriggers();
@@ -336,6 +357,9 @@ export class Game {
     if (this.barnabyGroup) diorama.barnabySlot.add(this.barnabyGroup);
     if (this.fishbotGroup) diorama.fishbotSlot.add(this.fishbotGroup);
     diorama.playerSlot.add(this.playerCharacter.group);
+    // A theme swap rebuilds every prop including the crate, so re-seat rather
+    // than assume the character kept its posture across the rebuild.
+    this.playerCharacter.setSeated(true);
     this.updateFishbotVisibility();
   }
 
@@ -350,65 +374,98 @@ export class Game {
       case 'casting':
       case 'waiting':
       case 'bite':
-        this.playerFishingActive = true;
         this.playerCharacter.setPose('fishing');
         this.playerCharacter.setFishingSubPose(phase);
         if (phase === 'casting') this.throwBobber();
         break;
       case 'celebrating':
-        this.playerFishingActive = false;
         this.playerCharacter.setPose('wave');
         break;
       default:
-        // idle / resolving / missed: hand control back to the wander loop.
-        this.playerFishingActive = false;
+        // idle / resolving / missed: back to the seated resting pose. Setting
+        // it here rather than every frame in updatePlayerCharacter is what
+        // lets the one-shot catch wave above actually play out its 1.5s before
+        // PlayerCharacter drops itself back to idle.
+        this.playerCharacter.setPose('idle');
         break;
     }
   }
 
   /**
-   * Throws the bobber toward wherever the player is currently facing, clamped to a cone
-   * around the dock's water-facing direction so a cast can never aim backward onto land —
-   * the wander loop leaves the character facing an arbitrary direction once fishing starts
-   * (Game.ts's updatePlayerCharacter freezes it), so an unclamped throw could otherwise aim
-   * at the dock or grass instead of the pond.
+   * Throws the bobber at whatever point on the pond the player clicked.
+   *
+   * The click is resolved against the water *plane* rather than the water mesh, then clamped
+   * into the pond disc — casting where you aimed is the whole point of the shot, so a click
+   * that lands slightly past the rim (or on a lilypad, or on the far bank behind the water)
+   * should still throw toward it instead of silently falling back to a random cast. Only a
+   * click with no forward ground intersection at all — the sky — takes the cone fallback,
+   * which is also the path keyboard casts and the fishbot use.
    */
   private throwBobber(): void {
     const playerWorldPos = new THREE.Vector3();
     this.playerCharacter.group.getWorldPosition(playerWorldPos);
     const startPos = this.playerCharacter.getRodTipWorldPosition(new THREE.Vector3());
 
-    let landingPos: THREE.Vector3 | null = null;
-    
-    if (this.input.lastClickEvent) {
-      const e = this.input.lastClickEvent;
-      const rect = this.renderer.domElement.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
-      const intersects = raycaster.intersectObjects([this.water.mesh, this.diorama.root], true);
-      if (intersects.length > 0 && intersects[0].object === this.water.mesh) {
-        landingPos = intersects[0].point;
-      }
-    }
-    
+    let landingPos = this.clickedWaterPoint();
+
     if (!landingPos) {
       const slotForward = new THREE.Vector3();
       this.diorama.playerSlot.getWorldDirection(slotForward);
-      
+
       const randomAngle = (Math.random() * 2 - 1) * CAST_CONE_RADIANS;
       const castDir = slotForward.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), randomAngle);
       castDir.y = 0;
       castDir.normalize();
-      
+
       const randomDist = CAST_DISTANCE * (0.6 + Math.random() * 0.6);
       landingPos = playerWorldPos.clone().addScaledVector(castDir, randomDist);
     }
-    
+
+    // Clamp into castable water regardless of which branch produced the point: the cone
+    // fallback is anchored on the angler, who sits just outside the pond rim.
     landingPos.y = WATER_Y;
+    this.clampToCastableWater(landingPos, playerWorldPos);
 
     this.bobber.throwTo(startPos, landingPos, CASTING_ANIM_SECONDS);
+  }
+
+  /** Where the most recent click ray meets the water plane, or null if it never does. */
+  private clickedWaterPoint(): THREE.Vector3 | null {
+    const event = this.input.lastClickEvent;
+    if (!event) return null;
+
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(ndc, this.camera);
+
+    const hit = raycaster.ray.intersectPlane(WATER_PLANE, new THREE.Vector3());
+    return hit;
+  }
+
+  /**
+   * Pulls a landing point onto water the player can actually see and reach: inside the
+   * drawn pond disc, and not right on top of the angler.
+   */
+  private clampToCastableWater(landing: THREE.Vector3, anglerPos: THREE.Vector3): void {
+    const fromCentre = Math.hypot(landing.x, landing.z);
+    if (fromCentre > CAST_MAX_RADIUS) {
+      const scale = CAST_MAX_RADIUS / fromCentre;
+      landing.x *= scale;
+      landing.z *= scale;
+    }
+
+    const dx = landing.x - anglerPos.x;
+    const dz = landing.z - anglerPos.z;
+    const fromAngler = Math.hypot(dx, dz);
+    if (fromAngler > 0 && fromAngler < CAST_MIN_DISTANCE) {
+      const push = CAST_MIN_DISTANCE / fromAngler;
+      landing.x = anglerPos.x + dx * push;
+      landing.z = anglerPos.z + dz * push;
+    }
   }
 
   private async loadHeroAssets(): Promise<void> {
@@ -609,61 +666,13 @@ export class Game {
   }
 
   /**
-   * Wanders the player character around their own patch of bank when no
-   * real fishing action is in progress; hands off to onFishingPhaseChanged's
-   * pose control (fishing/wave) otherwise. Pattern-matches Barnaby's
-   * hand-rolled walk-to-target loop, simplified since the player's slot
-   * already sits in a small pre-cleared exclusion zone (no bank-radius
-   * checks needed).
+   * Keeps the seated angler's animation ticking. There is no wander loop any
+   * more: the character is sat on the crate at the water's edge, which is what
+   * the fixed over-the-shoulder camera is framed around, so moving them would
+   * only slide them out of their own shot. Pose control lives entirely in
+   * onFishingPhaseChanged (fishing/wave), with idle as the resting state.
    */
   private updatePlayerCharacter(delta: number): void {
-    if (this.closetOpen) {
-      // Frozen for the live preview — still advance the idle animation clock
-      // (so it doesn't look like a paused screenshot) but skip wander/pose
-      // changes entirely.
-      this.playerCharacter.update(delta);
-      return;
-    }
-
-    if (!this.playerFishingActive) {
-      this.playerWalkTimer -= delta;
-      if (this.playerWalkTimer <= 0) {
-        this.playerIsWalking = !this.playerIsWalking;
-        this.playerWalkTimer = this.playerIsWalking ? 2.5 + Math.random() * 2 : 2 + Math.random() * 3;
-
-        if (this.playerIsWalking) {
-          // Player's slot sits on the dock itself (world 1.4, 1.65 — see
-          // DioramaBuilder's playerSlot), close to its water-end edge (the
-          // dock's local z bottoms out at -1.35 relative to its own anchor,
-          // and our slot is already at local z=-1.2 there). Wander is
-          // constrained to a small rectangle biased landward (away from the
-          // water-end edge) rather than a circle, so the character can't
-          // step off the narrow (0.9-wide) planks on any side.
-          const localX = (Math.random() - 0.5) * 0.4; // +/-0.2, well inside the 0.45 half-width
-          const localZ = Math.random() * 0.5 - 0.05; // -0.05..0.45, biased landward off the water-end edge
-          this.playerTargetLocal.set(localX, 0, localZ);
-        }
-      }
-
-      const group = this.playerCharacter.group;
-      if (this.playerIsWalking) {
-        const dist = group.position.distanceTo(this.playerTargetLocal);
-        if (dist > 0.05) {
-          const dir = new THREE.Vector3().subVectors(this.playerTargetLocal, group.position).normalize();
-          group.position.addScaledVector(dir, 0.25 * delta);
-          const targetAngle = Math.atan2(dir.x, dir.z);
-          const diff = ((targetAngle - group.rotation.y + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-          group.rotation.y += diff * 5 * delta;
-          this.playerCharacter.setPose('walking');
-        } else {
-          this.playerWalkTimer = 0;
-          this.playerCharacter.setPose('idle');
-        }
-      } else {
-        this.playerCharacter.setPose('idle');
-      }
-    }
-
     this.playerCharacter.update(delta);
   }
 
@@ -720,8 +729,9 @@ export class Game {
     }
 
     const phase = this.fishingState.getPhase();
+    const nibble = this.fishingState.snapshot().nibbleProgress;
     this.bobber.setVisible(phase === 'casting' || phase === 'waiting' || phase === 'bite' || phase === 'celebrating');
-    this.bobber.update(delta, phase);
+    this.bobber.update(delta, phase, nibble);
 
     const lineTaut = phase === 'casting' || phase === 'waiting' || phase === 'bite';
     this.fishingLine.setVisible(lineTaut);
@@ -732,9 +742,11 @@ export class Game {
     if (phase === 'waiting') {
       // Timer-based cadence: one ripple every 2s. (A floor(elapsed)%N check
       // is true for a whole 0.5s window each cycle — ~30 emits per window.)
+      // The pre-bite tell tightens that to ~0.35s, so the water starts
+      // churning around the float in step with its bobbing.
       this.rippleTimer -= delta;
       if (this.rippleTimer <= 0) {
-        this.rippleTimer = 2;
+        this.rippleTimer = THREE.MathUtils.lerp(2, 0.35, nibble);
         this.water.emitRipple(this.bobber.group.position.x, this.bobber.group.position.z);
       }
     } else {
@@ -766,15 +778,21 @@ export class Game {
             const rad = Math.random() * 4.5;
             targetLocal.set(Math.cos(angle) * rad, 0, Math.sin(angle) * rad);
             
-            // Barnaby's slot is at (-1.0, 3.1) in world space
-            const worldX = -1.0 + targetLocal.x;
-            const worldZ = 3.1 + targetLocal.z;
+            // Read his real slot rather than a copy of its coordinates — he
+            // moved to the far-right bank when the camera did, and a stale
+            // literal here would have him wander the wrong shore.
+            const slot = this.diorama.barnabySlot.position;
+            const worldX = slot.x + targetLocal.x;
+            const worldZ = slot.z + targetLocal.z;
             const distToCenter = Math.hypot(worldX, worldZ);
             
             // Grassy bank is approx between radius 3.2 and 4.8
             if (distToCenter > 3.2 && distToCenter < 4.8) {
-              // Avoid the market stall area (-3.2, 2.0)
-              if (Math.hypot(worldX - -3.2, worldZ - 2.0) > 1.5) {
+              // Stay out of the market stall's footprint, and off the angler's
+              // side of the pond so he never wanders into the foreground.
+              const clearOfStall = Math.hypot(worldX - 2.9, worldZ - -1.5) > 1.5;
+              const clearOfAngler = Math.hypot(worldX - ANGLER_SEAT.x, worldZ - ANGLER_SEAT.z) > 2.0;
+              if (clearOfStall && clearOfAngler) {
                 valid = true;
                 break;
               }
@@ -952,10 +970,19 @@ export class Game {
     if (!canvas || !ctx) return;
 
     const slotPos = this.diorama.playerSlot.position;
-    // Character faces -Z (DioramaBuilder's playerSlot rotation) — camera sits
-    // further along -Z, in front of them, looking back at chest/head height.
-    this.closetCamera.position.set(slotPos.x, slotPos.y + 0.65, slotPos.z - 1.9);
-    this.closetCamera.lookAt(slotPos.x, slotPos.y + 0.75, slotPos.z);
+    // Stand the preview camera in front of the character along whatever
+    // direction the slot actually faces — the seat is angled across the pond
+    // now, so assuming -Z would frame the back of their head.
+    const facing = this.diorama.playerSlot.getWorldDirection(new THREE.Vector3());
+    // Seated: the head sits about a hip-height lower than it would standing,
+    // so the preview looks at the torso rather than over the character.
+    const eyeY = slotPos.y + 0.75;
+    this.closetCamera.position.set(
+      slotPos.x + facing.x * 1.9,
+      slotPos.y + 0.65,
+      slotPos.z + facing.z * 1.9,
+    );
+    this.closetCamera.lookAt(slotPos.x, eyeY, slotPos.z);
 
     const { width, height } = this.closetPreviewSize;
     const prevClearColor = new THREE.Color();

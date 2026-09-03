@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 import type { MaterialLibrary } from '../assets/MaterialLibrary';
 import type { ThemeId } from '../game/data';
+import { SEATED_HIP_HEIGHT } from '../entities/character/PlayerCharacter';
 import {
   buildBush,
   buildCattails,
   buildCloud,
   buildCoral,
   buildCraftingBench,
+  buildCrate,
   buildCrystalCluster,
   buildDock,
   buildIslandTerrain,
@@ -16,11 +18,48 @@ import {
   buildMushroomCluster,
   buildPineTree,
   buildRock,
+  CRATE_SIZE,
 } from './VoxelKit';
 
 /** Radius of the carved-out pond hole in the island terrain; WaterSystem's disc should be slightly smaller so the terrain rim overlaps its edge. */
 export const POND_RADIUS = 3.0;
 export const WATER_DISC_RADIUS = 2.85;
+
+/**
+ * Top surface of the island. buildIslandTerrain lays its grass layer as unit
+ * cubes centred on y=0, so the walkable ground is half a cube up — which is
+ * why every structure below is placed at ~0.5 rather than 0. Anything given
+ * y=0 is buried to its waist.
+ */
+export const GROUND_Y = 0.5;
+
+/**
+ * Where the angler's crate sits, on the near-left bank. Its distance from the
+ * centre (~3.6) has to clear POND_RADIUS by more than the crate's own bounding
+ * half-diagonal, or the crate's waterward corner hangs over the carved rim and
+ * the terrain's exposed stone layer cuts across the angler from this low
+ * camera.
+ *
+ * The whole scene is composed around this point: the camera sits back over its
+ * shoulder, so every interactable prop has to live to its right or across the
+ * water, never behind it.
+ */
+export const ANGLER_SEAT = new THREE.Vector3(-2.37, GROUND_Y, 2.71);
+
+/**
+ * The point out on the water the angler (and therefore the camera) faces.
+ * Past the pond centre, and aimed a little above the surface: sighting exactly
+ * on the water pitches the camera down far enough that the near bank eats the
+ * bottom of the frame. Only the x/z of this are used to place the camera (the
+ * rig flattens the axis) — the y is purely how far up the shot is tilted.
+ */
+export const ANGLER_WATER_FOCUS = new THREE.Vector3(0.1, 0.2, -0.9);
+
+/** Facing angle that turns the seat (and the character on it) toward the water. */
+export const ANGLER_FACING_Y = Math.atan2(
+  ANGLER_WATER_FOCUS.x - ANGLER_SEAT.x,
+  ANGLER_WATER_FOCUS.z - ANGLER_SEAT.z,
+);
 
 export interface DioramaResult {
   root: THREE.Group;
@@ -28,8 +67,10 @@ export interface DioramaResult {
   barnabySlot: THREE.Group;
   /** Empty anchor group where the fishbot's GLB is attached, positioned on the dock. */
   fishbotSlot: THREE.Group;
-  /** Empty anchor group where the player's voxel character is attached, on its own patch of bank. */
+  /** Empty anchor group where the player's voxel character is attached, seated on the crate. */
   playerSlot: THREE.Group;
+  /** The tipped-over crate the player sits on, at ANGLER_SEAT. */
+  anglerCrate: THREE.Object3D;
   /** Lilypad instances, animated with a gentle bob in the update loop. */
   lilypads: THREE.Object3D[];
   clouds: THREE.Object3D[];
@@ -48,20 +89,22 @@ interface ExclusionZone {
  * stall roof.
  */
 const STRUCTURE_EXCLUSIONS: ExclusionZone[] = [
-  { x: -3.2, z: 2.0, radius: 1.5 }, // market stall (moved & scaled)
-  { x: -1.0, z: 3.1, radius: 1.1 }, // Barnaby (in the open, front of stall) — matches barnabySlot below
+  { x: 2.9, z: -1.5, radius: 1.6 }, // market stall (far-right bank, in frame)
+  { x: 2.15, z: -2.0, radius: 1.1 }, // Barnaby (in the open beside the stall) — matches barnabySlot below
   { x: 1.4, z: 2.5, radius: 1.6 }, // dock walkway (extended landward)
-  { x: -3.6, z: -1.6, radius: 1.1 }, // crafting bench
-  { x: -3.4, z: 3.2, radius: 0.5 }, // lantern
+  { x: -2.9, z: -1.9, radius: 1.1 }, // crafting bench (far-left bank)
+  { x: -2.2, z: -3.4, radius: 0.5 }, // lantern
   { x: 3.4, z: -2.6, radius: 0.5 }, // lantern
   { x: 2.1, z: 2.5, radius: 0.5 }, // shore boot
-  // player character now stands on the dock itself — already covered by the
-  // "dock walkway" exclusion zone above, no separate entry needed.
+  { x: ANGLER_SEAT.x, z: ANGLER_SEAT.z, radius: 1.2 }, // angler's crate and the space around it
 ];
 
 function isExcluded(x: number, z: number, margin = 0): boolean {
-  // Exclude foreground middle-bottom area (blocking camera view of pond)
-  if (z > 2.2 && x > -2.0 && x < 2.0) {
+  // Nothing tall between the camera and the pond. The over-the-shoulder rig
+  // sits back past the near-left bank looking across the water, so the whole
+  // near-field wedge behind and beside the angler has to stay open — a single
+  // scattered pine at (-3, 4) otherwise fills half the shot.
+  if (z > 3.0 && x < 1.0) {
     return true;
   }
   return STRUCTURE_EXCLUSIONS.some((zone) => {
@@ -121,27 +164,34 @@ export function buildDiorama(theme: ThemeId, materials: MaterialLibrary): Dioram
   root.add(dock);
   track(dock, 'dock');
 
+  // Far-right bank. The camera now looks across the pond from the angler's
+  // left-hand seat, so everything the player clicks has to sit on the water's
+  // far or right shore — the old landward positions are behind the lens.
   const stall = buildMarketStall(materials.wood, materials.woodDark);
-  stall.position.set(-3.2, 0.5, 2.0); // raised to 0.5
-  stall.rotation.y = Math.PI * 0.15;
+  stall.position.set(2.9, 0.5, -1.5);
+  stall.rotation.y = -Math.PI * 0.62; // counter turned back toward the pond/camera
   stall.scale.setScalar(0.72);
   root.add(stall);
   track(stall, 'marketStall');
 
-  // Clearly in the open in front of the stall: the rotated roof occludes
-  // anything within its footprint from the fixed 3/4 camera, so he stands
-  // beside the counter greeting the pond instead of "inside" the shop.
+  // Clearly in the open beside the stall rather than under its roof, which
+  // would occlude him from the fixed camera. Faces back across the pond so
+  // he is greeting the angler, and stays clickable for selling.
+  const barnabyPos = { x: 2.15, z: -2.0 };
   const barnabySlot = new THREE.Group();
   barnabySlot.name = 'barnabySlot';
-  barnabySlot.position.set(-1.0, 0.5, 3.1); // raised to 0.5
-  // Rotated 100° counterclockwise from the previous angle per direct visual
-  // feedback (he was not actually facing the camera at Math.PI - 0.15).
-  barnabySlot.rotation.y = Math.PI - 0.15 + (100 * Math.PI) / 180;
+  barnabySlot.position.set(barnabyPos.x, 0.5, barnabyPos.z);
+  // The FBX faces -X natively (see Game.ts's Barnaby walk heading), so this
+  // turns him toward the angler's seat across the water.
+  barnabySlot.rotation.y =
+    Math.atan2(ANGLER_SEAT.x - barnabyPos.x, ANGLER_SEAT.z - barnabyPos.z) - Math.PI / 2;
   root.add(barnabySlot);
 
+  // Far-left bank, across the water from the angler — reads as background
+  // detail on the left of frame without crowding the seat in the foreground.
   const bench = buildCraftingBench(materials.wood, materials.stone);
-  bench.position.set(-3.6, 0.5, -1.6); // raised to 0.5
-  bench.rotation.y = -0.4;
+  bench.position.set(-2.9, 0.5, -1.9);
+  bench.rotation.y = 0.9;
   root.add(bench);
   track(bench, 'craftingBench');
 
@@ -151,19 +201,38 @@ export function buildDiorama(theme: ThemeId, materials: MaterialLibrary): Dioram
   fishbotSlot.position.set(1.4, 0.56, 2.05); // nudged landward to make room for lantern
   root.add(fishbotSlot);
 
-  // On the dock itself (x=1.4, its plank line), near the water end — the
-  // dock's local z spans world z=3.75 (landward) to z=1.5 (matches the
-  // bobber's cast position exactly), so z=1.65 puts the player right at the
-  // water's edge, clear of the fishbot slot at z=2.05. y=0.51 is the plank
-  // top surface (dock.position.y=0.45 + half the 0.12-tall plank).
+  // The crate the angler sits on: a shipping crate knocked onto its side at
+  // the water's edge. The mouth (local +Z) is turned a quarter-turn along the
+  // shore rather than toward the water or the bank: pointed at the bank it
+  // faces the camera dead-on and reads as a black hole, pointed at the water
+  // it's hidden altogether and the crate is just a box. In profile you get the
+  // slatted side and enough of the opening to see it's been tipped over.
+  const anglerCrate = buildCrate(materials.wood, materials.woodDark);
+  anglerCrate.position.set(ANGLER_SEAT.x, GROUND_Y, ANGLER_SEAT.z);
+  anglerCrate.rotation.y = ANGLER_FACING_Y + Math.PI / 2;
+  root.add(anglerCrate);
+  track(anglerCrate, 'crate');
+
+  // Seated, not standing: the character's hips have to land on the crate's
+  // top face, and the rig's group origin is at its FEET (see
+  // PlayerCharacter's FEET_OFFSET). With the legs swung forward by the seated
+  // posture the hips sit one leg-length above that origin, so the slot goes
+  // at crate-top minus a leg — i.e. back down near ground level — rather than
+  // at the seat height itself.
   const playerSlot = new THREE.Group();
   playerSlot.name = 'playerSlot';
-  playerSlot.position.set(1.4, 0.51, 1.65);
-  playerSlot.rotation.y = Math.PI; // facing -Z, out toward the pond
+  playerSlot.position.set(
+    ANGLER_SEAT.x,
+    GROUND_Y + CRATE_SIZE.height - SEATED_HIP_HEIGHT,
+    ANGLER_SEAT.z,
+  );
+  playerSlot.rotation.y = ANGLER_FACING_Y;
   root.add(playerSlot);
 
   const lanternPositions: [number, number, number][] = [
-    [-3.4, 3.2, 1.4],
+    // Far-left bank. On the near-left bank (its old spot) this one stands
+    // between the camera and the angler and skewers the left of the frame.
+    [-2.2, -3.4, 1.4],
     [3.4, -2.6, 1.4],
     [1.05, 1.6, 1.0], // Dock lantern
   ];
@@ -287,6 +356,7 @@ export function buildDiorama(theme: ThemeId, materials: MaterialLibrary): Dioram
     barnabySlot,
     fishbotSlot,
     playerSlot,
+    anglerCrate,
     lilypads,
     clouds,
     diagnostics: { meshCount, propTypeCount: propTypes.size },
