@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { AudioEngine } from '../core/AudioEngine';
 import { CameraRig } from '../core/CameraRig';
 import { EventBus } from '../core/EventBus';
@@ -10,7 +9,7 @@ import { SaveManager } from '../core/SaveManager';
 import { Bobber } from '../entities/Bobber';
 import { FishingLine } from '../entities/FishingLine';
 import { PlayerCharacter } from '../entities/character/PlayerCharacter';
-import { loadImportedAsset, normalizedClone, type ImportedAsset } from '../assets/ImportedAssetRegistry';
+import { loadImportedAsset, normalizedClone } from '../assets/ImportedAssetRegistry';
 import { MODEL_SOURCE_MANIFEST_PUBLIC, SFX_MANIFEST } from '../assets/manifest';
 import { CraftingSystem } from '../systems/CraftingSystem';
 import { FishbotSystem } from '../systems/FishbotSystem';
@@ -25,47 +24,16 @@ import { THEME_PALETTES } from '../assets/MaterialLibrary';
 import { Economy } from './Economy';
 import { CASTING_ANIM_SECONDS, FishingStateMachine, type FishingPhase } from './GameState';
 import { createDefaultSaveState, type GameSaveStateV1 } from './SaveState';
-import { WATER_DISC_RADIUS, type DioramaResult } from '../world/DioramaBuilder';
+import { type DioramaResult } from '../world/DioramaBuilder';
 import type { GameEventMap } from './events';
 import { UI } from '../ui/UI';
 
 const AUTOSAVE_INTERVAL_SECONDS = 5;
 const WATER_Y = -0.05;
-const AMBIENT_FISH_COUNT = 3;
-const FISH_TINTS = ['#8fb7c9', '#e0a860', '#7fa876'];
-// How far off the player's own facing a cast can be aimed — clamped so a cast can never
-// throw backward over the dock/land, only vary left-right while still landing in the pond.
-const CAST_CONE_RADIANS = THREE.MathUtils.degToRad(50);
-const CAST_DISTANCE = 1.8;
-
-interface AmbientFish {
-  group: THREE.Object3D;
-  angle: number;
-  radius: number;
-  speed: number;
-  bobPhase: number;
-  state: 'swim' | 'jump';
-  jumpTimer: number;
-  jumpDuration: number;
-  jumpStartX: number;
-  jumpStartZ: number;
-  jumpTargetX: number;
-  jumpTargetZ: number;
-}
-
-interface LeapingFish {
-  group: THREE.Group;
-  elapsed: number;
-  duration: number;
-  startX: number;
-  startZ: number;
-}
 
 /**
- * Phase 4 wiring: the placeholder box/plane scene from Phase 1/2 is replaced
- * with the authored voxel diorama (VoxelKit + ThemeManager), a shader-based
- * water surface, a lighting/post-processing pipeline, event-driven VFX, and
- * the Phase 3 Tripo GLBs (Barnaby, fishbot, ambient fish, a discarded boot).
+ * Minimal diorama version: only dock, character with fishing pole, and water.
+ * Circular bobber close-up view during casting/fishing.
  */
 export class Game {
   private readonly renderer: THREE.WebGLRenderer;
@@ -93,26 +61,10 @@ export class Game {
   private readonly vfx: VfxSystem;
 
   private diorama: DioramaResult;
-  private barnabyGroup: THREE.Group | null = null;
-  private fishbotGroup: THREE.Group | null = null;
-  private genericFishAsset: ImportedAsset | null = null;
-  private prismKoiAsset: ImportedAsset | null = null;
-  private readonly ambientFish: AmbientFish[] = [];
-  private readonly leapingFish: LeapingFish[] = [];
-
-  private barnabyMixer: THREE.AnimationMixer | null = null;
-  private barnabyIdleAction: THREE.AnimationAction | null = null;
-  private barnabyWalkAction: THREE.AnimationAction | null = null;
-  private barnabyIsWalking = false;
-  private barnabyWalkTimer = 2;
-  private barnabyTargetPos: THREE.Vector3 | null = null;
-
   private readonly playerCharacter = new PlayerCharacter();
-  private playerIsWalking = false;
-  private playerWalkTimer = 2 + Math.random() * 2;
-  private playerTargetLocal = new THREE.Vector3();
-  private playerFishingActive = false;
-  private readonly defaultCameraFocus = new THREE.Vector3(0, 0.3, 0.5);
+  private viewMode: 'dock' | 'bobber' = 'dock';
+  private readonly dockCameraPos = new THREE.Vector3(0, 1.85, 2.7);
+  private readonly dockCameraFocus = new THREE.Vector3(0, 0.35, 0.1);
 
   // Closet live preview: a second small render (same renderer/scene, no
   // second WebGL context) into an offscreen target, read back into a plain
@@ -144,19 +96,15 @@ export class Game {
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.renderer = createRenderer(canvas);
-    this.cameraRig = new CameraRig(this.camera, new THREE.Vector3(0, 6.5, 9));
-    this.cameraRig.focusOn(this.defaultCameraFocus);
+    this.cameraRig = new CameraRig(this.camera, this.dockCameraPos, this.dockCameraFocus);
     // Render targets default to a linear working color space (the sRGB
     // output transform normally only happens on the final canvas blit) — the
     // closet preview reads pixels straight back out, so it needs the target
     // itself to hold sRGB-encoded values or it comes out looking too dark.
     this.closetRenderTarget.texture.colorSpace = THREE.SRGBColorSpace;
 
-    // The whole canvas is the action surface (tap anywhere to cast/reel) — `#ui-root` sits on
-    // top with `pointer-events: none` except on its own buttons, so real HUD/modal clicks never
-    // reach here and won't double-fire a cast.
-    const actionSurface = this.getElement('#game-canvas');
-    this.input = new InputController(actionSurface);
+    // Pass canvas as actionSurface and #app as containerSurface so taps register on canvas or anywhere on screen
+    this.input = new InputController(this.canvas, this.getElement('#app'));
 
     this.economy = new Economy(this.saveManager);
     Object.assign(this.audio.mix, this.economy.snapshot.audio);
@@ -178,8 +126,7 @@ export class Game {
 
     const initialTheme = this.economy.currentTheme();
     const initialPalette = THEME_PALETTES[initialTheme];
-    this.water = new WaterSystem(WATER_DISC_RADIUS, initialPalette.waterShallow, initialPalette.waterDeep);
-    this.water.mesh.position.y = WATER_Y;
+    this.water = new WaterSystem(initialPalette.waterShallow, initialPalette.waterDeep);
     this.scene.add(this.water.mesh);
 
     this.diorama = { root: new THREE.Group(), barnabySlot: new THREE.Group(), fishbotSlot: new THREE.Group(), playerSlot: new THREE.Group(), lilypads: [], clouds: [], diagnostics: { meshCount: 0, propTypeCount: 0 } };
@@ -195,18 +142,14 @@ export class Game {
     // slot while customizing, rather than standing up a second WebGL context.
     this.events.on('closetOpened', () => {
       this.closetOpen = true;
-      // Freeze a clean, camera-facing pose for the preview: reset the
-      // wander offset/rotation the idle loop may have left it in, so the
-      // total facing/position is just the slot's own fixed anchor.
       this.playerCharacter.group.position.set(0, 0, 0);
       this.playerCharacter.group.rotation.y = 0;
-      this.playerIsWalking = false;
       this.playerCharacter.setPose('idle');
-      this.cameraRig.focusOn(this.diorama.playerSlot.position);
+      this.cameraRig.setTarget(new THREE.Vector3(0, 0.9, 1.2), this.diorama.playerSlot.position);
     });
     this.events.on('closetClosed', () => {
       this.closetOpen = false;
-      this.cameraRig.focusOn(this.defaultCameraFocus);
+      this.cameraRig.setTarget(this.dockCameraPos, this.dockCameraFocus);
     });
     this.events.on('phaseChanged', ({ phase }) => this.onFishingPhaseChanged(phase));
     this.events.on('catchResolved', ({ result }) => {
@@ -240,9 +183,6 @@ export class Game {
     });
 
     this.events.on('themeChanged', ({ theme }) => void this.themeManager.setTheme(theme));
-    this.events.on('catchResolved', ({ result }) => {
-      if (!result.isTrash) this.spawnFishLeap(result.rarity === 'legendary');
-    });
 
     if (import.meta.env.DEV) {
       (window as unknown as { __game_scene?: THREE.Scene }).__game_scene = this.scene;
@@ -333,10 +273,7 @@ export class Game {
 
   private onDioramaRebuilt(diorama: DioramaResult): void {
     this.diorama = diorama;
-    if (this.barnabyGroup) diorama.barnabySlot.add(this.barnabyGroup);
-    if (this.fishbotGroup) diorama.fishbotSlot.add(this.fishbotGroup);
     diorama.playerSlot.add(this.playerCharacter.group);
-    this.updateFishbotVisibility();
   }
 
   private async refreshPlayerSkin(): Promise<void> {
@@ -347,325 +284,68 @@ export class Game {
   private onFishingPhaseChanged(phase: FishingPhase): void {
     switch (phase) {
       case 'aiming':
-      case 'casting':
-      case 'waiting':
-      case 'bite':
-        this.playerFishingActive = true;
         this.playerCharacter.setPose('fishing');
         this.playerCharacter.setFishingSubPose(phase);
-        if (phase === 'casting') this.throwBobber();
+        this.setViewMode('dock');
+        break;
+      case 'casting':
+        this.playerCharacter.setPose('fishing');
+        this.playerCharacter.setFishingSubPose(phase);
+        this.throwBobber();
+        this.setViewMode('bobber');
+        break;
+      case 'waiting':
+      case 'bite':
+      case 'resolving':
+        this.playerCharacter.setPose('fishing');
+        this.playerCharacter.setFishingSubPose(phase);
+        this.setViewMode('bobber');
         break;
       case 'celebrating':
-        this.playerFishingActive = false;
         this.playerCharacter.setPose('wave');
+        this.setViewMode('dock');
         break;
       default:
-        // idle / resolving / missed: hand control back to the wander loop.
-        this.playerFishingActive = false;
+        this.playerCharacter.setPose('idle');
+        this.setViewMode('dock');
         break;
     }
   }
 
-  /**
-   * Throws the bobber toward wherever the player is currently facing, clamped to a cone
-   * around the dock's water-facing direction so a cast can never aim backward onto land —
-   * the wander loop leaves the character facing an arbitrary direction once fishing starts
-   * (Game.ts's updatePlayerCharacter freezes it), so an unclamped throw could otherwise aim
-   * at the dock or grass instead of the pond.
-   */
+  private setViewMode(mode: 'dock' | 'bobber'): void {
+    this.viewMode = mode;
+    this.canvas.classList.toggle('bobber-view', mode === 'bobber');
+    const ring = document.getElementById('bobber-circle-ring');
+    ring?.classList.toggle('active', mode === 'bobber');
+
+    if (mode === 'dock') {
+      this.diorama.root.visible = true;
+      this.cameraRig.setTarget(this.dockCameraPos, this.dockCameraFocus);
+    } else {
+      this.diorama.root.visible = false;
+      const bPos = this.bobber.group.position;
+      const targetPos = new THREE.Vector3(bPos.x, WATER_Y + 1.25, bPos.z + 1.35);
+      const targetFocus = new THREE.Vector3(bPos.x, WATER_Y, bPos.z);
+      this.cameraRig.setTarget(targetPos, targetFocus);
+    }
+  }
+
   private throwBobber(): void {
-    const playerWorldPos = new THREE.Vector3();
-    this.playerCharacter.group.getWorldPosition(playerWorldPos);
     const startPos = this.playerCharacter.getRodTipWorldPosition(new THREE.Vector3());
-
-    let landingPos: THREE.Vector3 | null = null;
-    
-    if (this.input.lastClickEvent) {
-      const e = this.input.lastClickEvent;
-      const rect = this.renderer.domElement.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
-      const intersects = raycaster.intersectObjects([this.water.mesh, this.diorama.root], true);
-      if (intersects.length > 0 && intersects[0].object === this.water.mesh) {
-        landingPos = intersects[0].point;
-      }
-    }
-    
-    if (!landingPos) {
-      const slotForward = new THREE.Vector3();
-      this.diorama.playerSlot.getWorldDirection(slotForward);
-      
-      const randomAngle = (Math.random() * 2 - 1) * CAST_CONE_RADIANS;
-      const castDir = slotForward.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), randomAngle);
-      castDir.y = 0;
-      castDir.normalize();
-      
-      const randomDist = CAST_DISTANCE * (0.6 + Math.random() * 0.6);
-      landingPos = playerWorldPos.clone().addScaledVector(castDir, randomDist);
-    }
-    
-    landingPos.y = WATER_Y;
-
+    const landingPos = new THREE.Vector3(0, WATER_Y, -1.35);
     this.bobber.throwTo(startPos, landingPos, CASTING_ANIM_SECONDS);
   }
 
   private async loadHeroAssets(): Promise<void> {
-    const [barnaby, fishbot, genericFish, prismKoi, oldBoot, bobberAsset] = await Promise.allSettled([
-      loadImportedAsset(MODEL_SOURCE_MANIFEST_PUBLIC.barnaby),
-      loadImportedAsset(MODEL_SOURCE_MANIFEST_PUBLIC.fishbot),
-      loadImportedAsset(MODEL_SOURCE_MANIFEST_PUBLIC.genericFish),
-      loadImportedAsset(MODEL_SOURCE_MANIFEST_PUBLIC.prismKoi),
-      loadImportedAsset(MODEL_SOURCE_MANIFEST_PUBLIC.oldBoot),
+    const [bobberAsset] = await Promise.allSettled([
       loadImportedAsset(MODEL_SOURCE_MANIFEST_PUBLIC.bobber),
     ]);
 
-    if (barnaby.status === 'fulfilled') {
-      const fbxLoader = new FBXLoader();
-      try {
-        const [idleFbx, walkFbx] = await Promise.all([
-          fbxLoader.loadAsync('./models/barnaby-anim/idle.fbx'),
-          fbxLoader.loadAsync('./models/barnaby-anim/walk.fbx')
-        ]);
-
-        idleFbx.traverse((child) => {
-          const mesh = child as THREE.Mesh;
-          if (mesh.isMesh) {
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            if (mesh.material) {
-              const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-              mats.forEach(mat => {
-                const phongMat = mat as THREE.MeshPhongMaterial;
-                if (phongMat.isMeshPhongMaterial) {
-                  phongMat.shininess = 0;
-                  phongMat.specular.setHex(0x000000);
-                }
-              });
-            }
-          }
-        });
-
-        const bounds = new THREE.Box3().setFromObject(idleFbx);
-        const size = new THREE.Vector3();
-        bounds.getSize(size);
-        const scale = size.y > 0 ? 1.1 / size.y : 1;
-
-        const center = new THREE.Vector3();
-        bounds.getCenter(center);
-        
-        idleFbx.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
-        idleFbx.scale.setScalar(scale);
-
-        const wrapper = new THREE.Group();
-        wrapper.add(idleFbx);
-
-        this.barnabyGroup = wrapper;
-        this.diorama.barnabySlot.add(this.barnabyGroup);
-
-        this.barnabyMixer = new THREE.AnimationMixer(idleFbx);
-        
-        const stripHorizontalMovement = (clip: THREE.AnimationClip) => {
-          clip.tracks.forEach((track) => {
-            if (track.name.endsWith('.position')) {
-              const values = track.values;
-              for (let i = 0; i < values.length; i += 3) {
-                values[i] = 0;     // X
-                values[i + 2] = 0; // Z
-              }
-            }
-          });
-          return clip;
-        };
-
-        const idleClip = stripHorizontalMovement(idleFbx.animations[0]);
-        const walkClip = stripHorizontalMovement(walkFbx.animations[0]);
-
-        this.barnabyIdleAction = this.barnabyMixer.clipAction(idleClip);
-        this.barnabyWalkAction = this.barnabyMixer.clipAction(walkClip);
-        this.barnabyIdleAction.play();
-        this.barnabyIsWalking = false;
-      } catch (e) {
-        console.warn("Failed to load FBX, falling back to static", e);
-        this.barnabyGroup = normalizedClone(barnaby.value, 1.1);
-        this.diorama.barnabySlot.add(this.barnabyGroup);
-      }
-    }
-    if (fishbot.status === 'fulfilled') {
-      this.fishbotGroup = normalizedClone(fishbot.value, 0.6);
-      this.diorama.fishbotSlot.add(this.fishbotGroup);
-      this.updateFishbotVisibility();
-    }
-    if (genericFish.status === 'fulfilled') {
-      this.genericFishAsset = genericFish.value;
-      this.spawnAmbientFish();
-    }
-    if (prismKoi.status === 'fulfilled') {
-      this.prismKoiAsset = prismKoi.value;
-    }
-    if (oldBoot.status === 'fulfilled') {
-      const boot = normalizedClone(oldBoot.value, 0.22);
-      boot.position.set(2.1, 0.02, 2.5);
-      boot.rotation.y = 0.6;
-      this.scene.add(boot);
-    }
     if (bobberAsset.status === 'fulfilled') {
       this.bobber.setModel(normalizedClone(bobberAsset.value, 0.22));
     }
   }
 
-  private spawnAmbientFish(): void {
-    if (!this.genericFishAsset) return;
-    for (let i = 0; i < AMBIENT_FISH_COUNT; i++) {
-      const group = normalizedClone(this.genericFishAsset, 0.22 + Math.random() * 0.08);
-      this.tintModel(group, FISH_TINTS[i % FISH_TINTS.length]);
-      // Underwater ambience: shadow participation just turns them into black
-      // blobs beneath the terrain-shadowed pond surface.
-      group.traverse((child) => {
-        const mesh = child as THREE.Mesh;
-        if (mesh.isMesh) {
-          mesh.castShadow = false;
-          mesh.receiveShadow = false;
-        }
-      });
-      this.scene.add(group);
-      this.ambientFish.push({
-        group,
-        angle: (i / AMBIENT_FISH_COUNT) * Math.PI * 2,
-        radius: 0.8 + Math.random() * 1.2,
-        speed: 0.25 + Math.random() * 0.15,
-        bobPhase: Math.random() * Math.PI * 2,
-        state: 'swim',
-        jumpTimer: -Math.random() * 20,
-        jumpDuration: 0,
-        jumpStartX: 0,
-        jumpStartZ: 0,
-        jumpTargetX: 0,
-        jumpTargetZ: 0,
-      });
-    }
-  }
-
-  private tintModel(root: THREE.Object3D, hex: string): void {
-    const color = new THREE.Color(hex);
-    root.traverse((child) => {
-      const mesh = child as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      mesh.material = mats.map((mat) => {
-        const cloned = (mat as THREE.MeshStandardMaterial).clone();
-        cloned.color = color.clone();
-        // Marks this clone as owned by its model instance (not shared with
-        // the cached asset), so short-lived spawns can safely dispose it.
-        cloned.userData.ownedClone = true;
-        return cloned;
-      })[0];
-    });
-  }
-
-  /** Disposes only the tint-clone materials created by tintModel; shared asset materials are left alone. */
-  private disposeOwnedMaterials(root: THREE.Object3D): void {
-    root.traverse((child) => {
-      const mesh = child as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      for (const mat of mats) {
-        if (mat.userData.ownedClone) mat.dispose();
-      }
-    });
-  }
-
-  private spawnFishLeap(legendary: boolean): void {
-    const asset = legendary && this.prismKoiAsset ? this.prismKoiAsset : this.genericFishAsset;
-    if (!asset) return;
-    const group = normalizedClone(asset, legendary ? 0.4 : 0.24);
-    if (!legendary) this.tintModel(group, FISH_TINTS[Math.floor(Math.random() * FISH_TINTS.length)]);
-    const startX = (Math.random() - 0.5) * 1.6;
-    const startZ = (Math.random() - 0.5) * 1.6;
-    group.position.set(startX, WATER_Y, startZ);
-    this.scene.add(group);
-    this.leapingFish.push({ group, elapsed: 0, duration: 0.9, startX, startZ });
-    this.water.emitRipple(startX, startZ);
-  }
-
-  private updateFishbotGlow(): void {
-    if (!this.fishbotGroup) return;
-    const isAuto = this.fishingState.autoFishingEnabled;
-    const targetEmissive = isAuto ? 0x66ff66 : 0x000000;
-    this.fishbotGroup.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        if (!child.userData.originalMaterial) child.userData.originalMaterial = child.material;
-        child.material = child.userData.originalMaterial.clone();
-        child.material.emissive.setHex(targetEmissive);
-        child.material.emissiveIntensity = isAuto ? 0.8 : 0;
-      }
-    });
-  }
-
-  private updateFishbotVisibility(): void {
-    if (!this.fishbotGroup) return;
-    this.fishbotGroup.visible = this.economy.ownedFishbots().length > 0;
-  }
-
-  /**
-   * Wanders the player character around their own patch of bank when no
-   * real fishing action is in progress; hands off to onFishingPhaseChanged's
-   * pose control (fishing/wave) otherwise. Pattern-matches Barnaby's
-   * hand-rolled walk-to-target loop, simplified since the player's slot
-   * already sits in a small pre-cleared exclusion zone (no bank-radius
-   * checks needed).
-   */
-  private updatePlayerCharacter(delta: number): void {
-    if (this.closetOpen) {
-      // Frozen for the live preview — still advance the idle animation clock
-      // (so it doesn't look like a paused screenshot) but skip wander/pose
-      // changes entirely.
-      this.playerCharacter.update(delta);
-      return;
-    }
-
-    if (!this.playerFishingActive) {
-      this.playerWalkTimer -= delta;
-      if (this.playerWalkTimer <= 0) {
-        this.playerIsWalking = !this.playerIsWalking;
-        this.playerWalkTimer = this.playerIsWalking ? 2.5 + Math.random() * 2 : 2 + Math.random() * 3;
-
-        if (this.playerIsWalking) {
-          // Player's slot sits on the dock itself (world 1.4, 1.65 — see
-          // DioramaBuilder's playerSlot), close to its water-end edge (the
-          // dock's local z bottoms out at -1.35 relative to its own anchor,
-          // and our slot is already at local z=-1.2 there). Wander is
-          // constrained to a small rectangle biased landward (away from the
-          // water-end edge) rather than a circle, so the character can't
-          // step off the narrow (0.9-wide) planks on any side.
-          const localX = (Math.random() - 0.5) * 0.4; // +/-0.2, well inside the 0.45 half-width
-          const localZ = Math.random() * 0.5 - 0.05; // -0.05..0.45, biased landward off the water-end edge
-          this.playerTargetLocal.set(localX, 0, localZ);
-        }
-      }
-
-      const group = this.playerCharacter.group;
-      if (this.playerIsWalking) {
-        const dist = group.position.distanceTo(this.playerTargetLocal);
-        if (dist > 0.05) {
-          const dir = new THREE.Vector3().subVectors(this.playerTargetLocal, group.position).normalize();
-          group.position.addScaledVector(dir, 0.25 * delta);
-          const targetAngle = Math.atan2(dir.x, dir.z);
-          const diff = ((targetAngle - group.rotation.y + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-          group.rotation.y += diff * 5 * delta;
-          this.playerCharacter.setPose('walking');
-        } else {
-          this.playerWalkTimer = 0;
-          this.playerCharacter.setPose('idle');
-        }
-      } else {
-        this.playerCharacter.setPose('idle');
-      }
-    }
-
-    this.playerCharacter.update(delta);
-  }
 
   private update(delta: number, elapsed: number): void {
     this.frame += 1;
@@ -677,43 +357,13 @@ export class Game {
       this.renderPipeline.resize(this.canvas.clientWidth, this.canvas.clientHeight);
     }
 
-    if (this.input.justPressed() && this.input.lastClickEvent && this.fishbotGroup && this.fishbotGroup.visible) {
-      if (this.fishingState.autoFishingEnabled) {
-        this.fishingState.autoFishingEnabled = false;
-        this.input.consumePress();
-        this.updateFishbotGlow();
-        this.events.emit('fishbotToggled', { enabled: false, name: '' });
-      } else {
-        const e = this.input.lastClickEvent;
-        const rect = this.renderer.domElement.getBoundingClientRect();
-        const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-        const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-        const raycaster = new THREE.Raycaster();
-        raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
-        const intersects = raycaster.intersectObject(this.fishbotGroup, true);
-        if (intersects.length > 0) {
-          this.fishingState.autoFishingEnabled = true;
-          this.input.consumePress();
-          this.updateFishbotGlow();
-          
-          const activeBots = this.economy.ownedFishbots();
-          const botName = activeBots.length > 0 ? activeBots[0].name : 'Fishbot';
-          this.events.emit('fishbotToggled', { enabled: true, name: botName });
-        }
-      }
-    }
-
     if (this.input.justPressed()) this.events.emit('actionPressed', {});
     this.fishingState.update(delta, this.input);
     if (this.input.justReleased()) this.events.emit('actionReleased', { heldSeconds: this.input.lastHoldSeconds() });
     this.input.update();
 
     this.fishbotSystem.update(Date.now(), this.economy.currentTheme());
-    this.updateFishbotVisibility();
 
-    // ThemeManager's constructor-time playAmbience() is a silent no-op (the
-    // AudioContext only exists after the first user gesture), so kick the
-    // current theme's ambience once the engine actually unlocks.
     if (!this.ambienceStarted && this.audio.isUnlocked()) {
       this.ambienceStarted = true;
       this.themeManager.playCurrentAmbience();
@@ -729,9 +379,8 @@ export class Game {
       const rodTip = this.playerCharacter.getRodTipWorldPosition(new THREE.Vector3());
       this.fishingLine.update(rodTip, this.bobber.group.position);
     }
+
     if (phase === 'waiting') {
-      // Timer-based cadence: one ripple every 2s. (A floor(elapsed)%N check
-      // is true for a whole 0.5s window each cycle — ~30 emits per window.)
       this.rippleTimer -= delta;
       if (this.rippleTimer <= 0) {
         this.rippleTimer = 2;
@@ -742,80 +391,15 @@ export class Game {
     }
 
     this.water.update(delta);
-    this.updateAmbientFish(delta);
-    this.updateLeapingFish(delta);
-    this.updateLilypads(delta);
-    this.updateClouds(delta);
 
-    if (this.barnabyMixer && this.barnabyGroup) {
-      this.barnabyMixer.update(delta);
-      this.barnabyWalkTimer -= delta;
-
-      if (this.barnabyWalkTimer <= 0) {
-        this.barnabyIsWalking = !this.barnabyIsWalking;
-        this.barnabyWalkTimer = this.barnabyIsWalking ? 3 + Math.random() * 2 : 2 + Math.random() * 3;
-        
-        if (this.barnabyIsWalking) {
-          this.barnabyIdleAction?.crossFadeTo(this.barnabyWalkAction!, 0.3, false);
-          this.barnabyWalkAction?.reset().play();
-          
-          let valid = false;
-          let targetLocal = new THREE.Vector3();
-          for (let i = 0; i < 10; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const rad = Math.random() * 4.5;
-            targetLocal.set(Math.cos(angle) * rad, 0, Math.sin(angle) * rad);
-            
-            // Barnaby's slot is at (-1.0, 3.1) in world space
-            const worldX = -1.0 + targetLocal.x;
-            const worldZ = 3.1 + targetLocal.z;
-            const distToCenter = Math.hypot(worldX, worldZ);
-            
-            // Grassy bank is approx between radius 3.2 and 4.8
-            if (distToCenter > 3.2 && distToCenter < 4.8) {
-              // Avoid the market stall area (-3.2, 2.0)
-              if (Math.hypot(worldX - -3.2, worldZ - 2.0) > 1.5) {
-                valid = true;
-                break;
-              }
-            }
-          }
-          if (valid) {
-            this.barnabyTargetPos = targetLocal;
-          } else {
-            // No valid bank point found in 10 tries — stay put rather than fall
-            // back to an unchecked small offset, which could still land inside
-            // the pond (his slot is only ~3.26 from center, barely past the
-            // 3.0 pond radius).
-            this.barnabyTargetPos = this.barnabyGroup?.position.clone() ?? new THREE.Vector3();
-          }
-        } else {
-          this.barnabyWalkAction?.crossFadeTo(this.barnabyIdleAction!, 0.3, false);
-          this.barnabyIdleAction?.reset().play();
-        }
-      }
-
-      if (this.barnabyIsWalking && this.barnabyTargetPos) {
-        const speed = 0.3;
-        const currentPos = this.barnabyGroup.position;
-        const dist = currentPos.distanceTo(this.barnabyTargetPos);
-        if (dist > 0.05) {
-          const dir = new THREE.Vector3().subVectors(this.barnabyTargetPos, this.barnabyGroup.position).normalize();
-          this.barnabyGroup.position.addScaledVector(dir, speed * delta);
-          
-          // Model faces -X natively, so we offset the atan2 by -PI/2 to face forward
-          const targetAngle = Math.atan2(dir.x, dir.z) - Math.PI / 2;
-          let currentAngle = this.barnabyGroup.rotation.y;
-          const diff = ((targetAngle - currentAngle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-          this.barnabyGroup.rotation.y += diff * 5 * delta;
-        } else {
-          this.barnabyWalkTimer = 0; // stop walking
-        }
-      }
+    if (this.viewMode === 'bobber') {
+      const bPos = this.bobber.group.position;
+      const targetPos = new THREE.Vector3(bPos.x, WATER_Y + 1.25, bPos.z + 1.35);
+      const targetFocus = new THREE.Vector3(bPos.x, WATER_Y, bPos.z);
+      this.cameraRig.setTarget(targetPos, targetFocus);
     }
 
-    this.updatePlayerCharacter(delta);
-
+    this.playerCharacter.update(delta);
     this.vfx.update(delta);
     this.ui.update();
     this.cameraRig.update(delta);
@@ -827,111 +411,6 @@ export class Game {
     }
 
     this.publishDiagnostics();
-  }
-
-  private updateAmbientFish(delta: number): void {
-    for (const fish of this.ambientFish) {
-      if (fish.state === 'jump') {
-        fish.jumpTimer += delta;
-        fish.angle += fish.speed * delta;
-        
-        const t = Math.min(1, fish.jumpTimer / fish.jumpDuration);
-        const arc = Math.sin(t * Math.PI);
-        const y = WATER_Y - 0.05 + arc * 1.0; 
-        
-        const x = THREE.MathUtils.lerp(fish.jumpStartX, fish.jumpTargetX, t);
-        const z = THREE.MathUtils.lerp(fish.jumpStartZ, fish.jumpTargetZ, t);
-        
-        fish.group.position.set(x, y, z);
-        
-        const dx = fish.jumpTargetX - fish.jumpStartX;
-        const dz = fish.jumpTargetZ - fish.jumpStartZ;
-        const rotY = Math.atan2(dx, dz) - Math.PI / 2;
-        fish.group.rotation.set(-arc * 0.8, rotY, 0); 
-        
-        if (t >= 1) {
-          fish.state = 'swim';
-          fish.jumpTimer = -Math.random() * 20 - 5; 
-          this.water.emitRipple(fish.jumpTargetX, fish.jumpTargetZ);
-          fish.group.rotation.set(0, rotY, 0);
-        }
-        continue;
-      }
-      
-      fish.angle += fish.speed * delta;
-      
-      const currentRadius = fish.radius + Math.sin(fish.angle * 1.5 + fish.bobPhase) * 0.4;
-      const x = Math.cos(fish.angle) * currentRadius;
-      const z = Math.sin(fish.angle) * currentRadius * 0.7;
-      
-      const dx = x - fish.group.position.x;
-      const dz = z - fish.group.position.z;
-      
-      fish.group.position.set(x, WATER_Y - 0.05 + Math.sin(this.elapsed * 2 + fish.bobPhase) * 0.02, z);
-      
-      if (dx !== 0 || dz !== 0) {
-        let baseRot = Math.atan2(dx, dz) + Math.PI;
-        const wiggle = Math.sin(this.elapsed * 12 + fish.bobPhase) * 0.15;
-        
-        let currentRot = fish.group.rotation.y;
-        const prevWiggle = Math.sin((this.elapsed - delta) * 12 + fish.bobPhase) * 0.15;
-        currentRot -= prevWiggle;
-
-        const diff = ((baseRot - currentRot + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-        currentRot += diff * 10 * delta; 
-        
-        fish.group.rotation.y = currentRot + wiggle;
-      }
-      
-      fish.jumpTimer += delta;
-      if (fish.jumpTimer > 10 && Math.random() < 0.002) {
-        fish.state = 'jump';
-        fish.jumpTimer = 0;
-        fish.jumpDuration = 1.0 + Math.random() * 0.5;
-        fish.jumpStartX = x;
-        fish.jumpStartZ = z;
-        
-        const futureAngle = fish.angle + fish.speed * fish.jumpDuration;
-        const futureRadius = fish.radius + Math.sin(futureAngle * 1.5 + fish.bobPhase) * 0.4;
-        fish.jumpTargetX = Math.cos(futureAngle) * futureRadius;
-        fish.jumpTargetZ = Math.sin(futureAngle) * futureRadius * 0.7;
-        
-        this.water.emitRipple(x, z);
-      }
-    }
-  }
-
-  private updateLeapingFish(delta: number): void {
-    for (let i = this.leapingFish.length - 1; i >= 0; i--) {
-      const leap = this.leapingFish[i];
-      leap.elapsed += delta;
-      const t = Math.min(1, leap.elapsed / leap.duration);
-      const arc = Math.sin(t * Math.PI);
-      leap.group.position.y = WATER_Y + arc * 0.7;
-      leap.group.position.x = leap.startX + t * 0.3;
-      leap.group.rotation.x = -arc * 0.6;
-      if (t >= 1) {
-        this.scene.remove(leap.group);
-        // Non-legendary leaps carry per-leap tinted material clones; without
-        // this, every catch leaks a material.
-        this.disposeOwnedMaterials(leap.group);
-        this.leapingFish.splice(i, 1);
-      }
-    }
-  }
-
-  private updateLilypads(delta: number): void {
-    for (const lilypad of this.diorama.lilypads) {
-      lilypad.position.y = WATER_Y + 0.02 + Math.sin(this.elapsed * 0.8 + lilypad.position.x * 2) * 0.01;
-    }
-    void delta;
-  }
-
-  private updateClouds(delta: number): void {
-    for (const cloud of this.diorama.clouds) {
-      cloud.position.x += delta * 0.08;
-      if (cloud.position.x > 10) cloud.position.x = -10;
-    }
   }
 
   private render(): void {

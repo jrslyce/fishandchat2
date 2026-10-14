@@ -7,18 +7,28 @@ import * as THREE from 'three';
  * card, market stall) by later systems.
  */
 export class CameraRig {
-  private readonly basePosition: THREE.Vector3;
-  private readonly focusTarget = new THREE.Vector3(0, 0.6, 0);
-  private readonly desiredFocus = new THREE.Vector3(0, 0.6, 0);
+  private readonly currentPosition: THREE.Vector3;
+  private readonly targetPosition: THREE.Vector3;
+  private readonly currentFocus = new THREE.Vector3(0, 0.35, 0.1);
+  private readonly desiredFocus = new THREE.Vector3(0, 0.35, 0.1);
   private driftTime = 0;
 
   constructor(
     private readonly camera: THREE.PerspectiveCamera,
-    offset = new THREE.Vector3(0, 7.5, 10.5),
+    offset = new THREE.Vector3(0, 1.9, 2.8),
+    focus = new THREE.Vector3(0, 0.35, 0.1),
   ) {
-    this.basePosition = offset.clone();
-    this.camera.position.copy(this.basePosition);
-    this.camera.lookAt(this.focusTarget);
+    this.currentPosition = offset.clone();
+    this.targetPosition = offset.clone();
+    this.currentFocus.copy(focus);
+    this.desiredFocus.copy(focus);
+    this.camera.position.copy(this.currentPosition);
+    this.camera.lookAt(this.currentFocus);
+  }
+
+  setTarget(position: THREE.Vector3, focus: THREE.Vector3): void {
+    this.targetPosition.copy(position);
+    this.desiredFocus.copy(focus);
   }
 
   focusOn(target: THREE.Vector3): void {
@@ -27,17 +37,11 @@ export class CameraRig {
 
   update(delta: number): void {
     this.driftTime += delta;
-    const driftX = Math.sin(this.driftTime * 0.08) * 0.35;
-    const driftY = Math.sin(this.driftTime * 0.05) * 0.18;
+    const rate = 1 - Math.exp(-delta / 0.22);
+    this.currentPosition.lerp(this.targetPosition, rate);
+    this.currentFocus.lerp(this.desiredFocus, rate);
 
-    this.camera.position.set(
-      this.basePosition.x + driftX,
-      this.basePosition.y + driftY,
-      this.basePosition.z,
-    );
-
-    const focusLerp = 1 - Math.exp(-delta / 0.6);
-    this.focusTarget.lerp(this.desiredFocus, focusLerp);
-    this.camera.lookAt(this.focusTarget);
+    this.camera.position.copy(this.currentPosition);
+    this.camera.lookAt(this.currentFocus);
   }
 }

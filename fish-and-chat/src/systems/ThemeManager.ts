@@ -7,19 +7,6 @@ import type { ThemeId } from '../game/data';
 import type { AudioEngine } from '../core/AudioEngine';
 import type { WaterSystem } from './WaterSystem';
 
-const textureLoader = new THREE.TextureLoader();
-const skyTextureCache = new Map<string, Promise<THREE.Texture>>();
-
-function loadSkyTexture(url: string): Promise<THREE.Texture> {
-  const cached = skyTextureCache.get(url);
-  if (cached) return cached;
-  const promise = textureLoader.loadAsync(url).then((texture) => {
-    texture.colorSpace = THREE.SRGBColorSpace;
-    return texture;
-  });
-  skyTextureCache.set(url, promise);
-  return promise;
-}
 
 /**
  * Owns which theme is active: rebuilds the diorama prop set, swaps the sky
@@ -86,16 +73,9 @@ export class ThemeManager {
     const palette = THEME_PALETTES[theme];
     const config = THEME_CONFIGS[theme];
 
-    this.scene.fog = new THREE.Fog(palette.fog, config.fogNear, config.fogFar);
+    this.scene.fog = null;
+    this.scene.background = null;
     this.water.setPalette(palette.waterShallow, palette.waterDeep);
-
-    void loadSkyTexture(config.skyImage).then((texture) => {
-      // Guard against a stale async load landing after another theme switch.
-      if (this.currentTheme === theme) {
-        this.scene.background = texture;
-        this.scene.backgroundIntensity = 0.65;
-      }
-    });
 
     void this.audio.playAmbience(AMBIENCE_MANIFEST[config.ambienceKey]);
   }

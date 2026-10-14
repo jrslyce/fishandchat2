@@ -193,39 +193,31 @@ export function buildCrystalCluster(material: THREE.Material, baseHeight = 1.2):
 export function buildDock(
   woodMaterial: THREE.Material,
   darkWoodMaterial: THREE.Material,
-  length = 3,
+  length = 4,
 ): THREE.Group {
   const group = new THREE.Group();
   group.name = 'dock';
 
-  const plankWidth = 0.9;
-  const plankGeometry = new THREE.BoxGeometry(plankWidth, 0.12, 0.42);
-  // Extend dock landward
-  for (let i = -2; i < length; i++) {
+  const plankWidth = 1.05;
+  const plankGeometry = new THREE.BoxGeometry(plankWidth, 0.10, 0.38);
+  for (let i = -3; i < length; i++) {
     const plank = new THREE.Mesh(plankGeometry, woodMaterial);
-    plank.position.set(0, 0, -i * 0.45);
+    plank.position.set(0, 0, -i * 0.42);
     plank.castShadow = true;
     plank.receiveShadow = true;
     group.add(plank);
   }
 
-  const postGeometry = new THREE.CylinderGeometry(0.07, 0.09, 0.6, 6);
-  const postOffsets = [-0.35, 0.35];
-  for (let i = -1; i < length; i += 2) {
+  const postGeometry = new THREE.CylinderGeometry(0.07, 0.09, 0.9, 8);
+  const postOffsets = [-0.42, 0.42];
+  for (let i = -2; i < length; i += 2) {
     for (const offsetX of postOffsets) {
       const post = new THREE.Mesh(postGeometry, darkWoodMaterial);
-      post.position.set(offsetX, -0.3, -i * 0.45);
+      post.position.set(offsetX, -0.42, -i * 0.42);
       post.castShadow = true;
       group.add(post);
     }
   }
-
-  // Step up on the left side (left from camera = -x)
-  const step = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.15, 0.35), woodMaterial);
-  step.position.set(-0.6, -0.15, 0.9); // Landward position near the first planks
-  step.castShadow = true;
-  step.receiveShadow = true;
-  group.add(step);
 
   return group;
 }
