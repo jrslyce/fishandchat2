@@ -224,9 +224,15 @@ test('basket full triggers Barnaby tutorial bubble, glowing basket animation, ma
   await expect(speechBubble).toContainText('Sell All');
 
   // The Sell All button must be glow-highlighted
-  const sellAllBtn = page.locator('#modal-host button[data-action="sell-all"][data-method="sell"]');
+  const sellAllBtn = page.locator('#modal-host button[data-action="sell-all"]');
   await expect(sellAllBtn).toBeVisible();
   await expect(sellAllBtn).toHaveClass(/tutorial-glow/);
+
+  // Verify Haggle All, Haggle, and Desperate buttons are completely removed
+  await expect(page.locator('#modal-host button:has-text("Haggle All")')).toHaveCount(0);
+  await expect(page.locator('#modal-host button:has-text("Haggle")')).toHaveCount(0);
+  await expect(page.locator('#modal-host button:has-text("Desperate")')).toHaveCount(0);
+  await expect(page.locator('#modal-host .bones-row')).toHaveCount(0);
 
   // Capture market screenshot showing Barnaby tutorial dialogue and glowing Sell All button
   const marketShotPath = '/Users/jared/.gemini/antigravity-ide/brain/73752e80-981d-4185-a047-8df1be4a7fd5/basket_full_market_tutorial.png';

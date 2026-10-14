@@ -272,9 +272,6 @@ export class FishingStateMachine {
     const levelResult = this.economy.addXp(result.xpAwarded);
     this.lastCatch = result;
 
-    if ((L === 6 || L === 7) && Math.random() < 0.25) {
-      this.events.emit('patienceBonusAwarded', {});
-    }
 
     this.events.emit('catchResolved', { result });
     this.events.emit('xpGained', { amount: result.xpAwarded, ...levelResult });

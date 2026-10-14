@@ -236,8 +236,7 @@ export class Game {
       const isBig = result.rarity === 'rare' || result.rarity === 'epic' || result.rarity === 'legendary';
       void this.audio.playSfx(isBig ? SFX_MANIFEST.rareCatchFanfare : SFX_MANIFEST.catchJingle);
     });
-    this.events.on('marketSold', ({ method }) => {
-      if (method !== 'sell') void this.audio.playSfx(SFX_MANIFEST.haggleBones, 0.7);
+    this.events.on('marketSold', () => {
       void this.audio.playSfx(SFX_MANIFEST.coinClink);
     });
     this.events.on('upgradePurchased', ({ ok }) => {

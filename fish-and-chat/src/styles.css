@@ -893,7 +893,7 @@ body {
 
 .market-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   margin-bottom: 12px;
 }
@@ -910,7 +910,7 @@ body {
   position: relative;
   background: var(--paper-dark);
   border-radius: var(--radius-sm);
-  padding: 7px 10px;
+  padding: 8px 12px;
   font-size: 0.76rem;
   line-height: 1.35;
   color: var(--ink);
@@ -951,6 +951,9 @@ body {
 
 .market-bulk-row .btn-small {
   flex: 1;
+  min-height: 36px;
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .market-row-actions {
@@ -961,8 +964,9 @@ body {
 
 .market-row-actions .btn-small {
   min-height: 28px;
-  padding: 4px 8px;
-  font-size: 0.72rem;
+  padding: 4px 12px;
+  font-size: 0.74rem;
+  font-weight: 700;
 }
 
 @keyframes tutorial-btn-glow {

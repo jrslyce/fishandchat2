@@ -39,8 +39,7 @@ export interface GameEventMap {
   materialBundlePurchased: { id: string; ok: boolean };
   boxOfNotFishOpened: { ok: boolean; itemsGranted: number };
 
-  marketSold: { catchId: string; value: number; method: 'sell' | 'haggle' | 'desperate'; success: boolean };
-  marketBonesDepleted: Record<string, never>;
+  marketSold: { catchId: string; value: number; method?: string; success?: boolean };
 
   upgradePurchased: { id: UpgradeId; ok: boolean };
   skillPointSpent: { id: ArchetypeId; ok: boolean };

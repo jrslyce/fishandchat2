@@ -360,19 +360,8 @@ export class UI {
     this.events.on('clothingPurchased', () => this.refreshOpenModal());
     this.events.on('clothingEquipped', () => this.refreshOpenModal());
     this.events.on('baseToneChanged', () => this.refreshOpenModal());
-    this.events.on('marketSold', (event) => {
+    this.events.on('marketSold', () => {
       this.refreshOpenModal();
-      if (event.method === 'haggle') {
-        const msg = event.success 
-          ? `Haggle successful! Sold for ${event.value} coins.` 
-          : `Barnaby groaned and dropped the price to ${event.value} coins.`;
-        this.showToast(msg);
-      } else if (event.method === 'desperate') {
-        const msg = event.success 
-          ? `Desperate plea worked! Sold for ${event.value} coins.` 
-          : `Barnaby sneered and bought it for a meager ${event.value} coins.`;
-        this.showToast(msg);
-      }
     });
     this.events.on('castLocked', ({ precision, rolls }) => {
       if (precision > 0.95) {
@@ -878,12 +867,6 @@ export class UI {
 
   private renderMarket(): void {
     const state = this.economy.snapshot;
-    const bonesTotal = 3;
-    const bones = this.marketSystem.patienceBones;
-    const bonesMarkup = Array.from({ length: bonesTotal }, (_, i) =>
-      `<span class="bone-icon ${i < bones ? '' : 'bone-spent'}">${icon(ICON.bone, 'patience bone', 'bone-img')}</span>`,
-    ).join('');
-
     const sellableCount = state.basket.filter((item) => !item.isTrash).length;
     const isBasketTutorial = (this.inBasketTutorial || this.economy.basketFull()) && sellableCount > 0;
 
@@ -901,8 +884,6 @@ export class UI {
           </div>
           <div class="row-actions market-row-actions">
             <button class="btn-small ${highlightRowSell ? 'tutorial-glow' : ''}" data-action="sell" data-method="sell" data-index="${index}">Sell</button>
-            <button class="btn-small" data-action="sell" data-method="haggle" data-index="${index}">Haggle</button>
-            <button class="btn-small" data-action="sell" data-method="desperate" data-index="${index}">Desperate</button>
           </div>
         </li>`;
     }).join('');
@@ -916,20 +897,18 @@ export class UI {
         <div class="market-header">
           <img class="barnaby-portrait" src="./images/barnaby-portrait.png" alt="Monger Barnaby" />
           <div class="market-header-details">
-            <div class="bones-row" title="Patience bones">${bonesMarkup}</div>
             <div class="market-speech-bubble ${isBasketTutorial ? 'market-tutorial-active' : ''}">
               ${isBasketTutorial
                 ? `<span class="tutorial-tag">TUTORIAL</span><span>Sell your fish to earn coins and empty your basket! Tap <strong>Sell All</strong> below.</span>`
                 : sellableCount === 0
                 ? `<span>Basket is empty! Go catch some more fish, partner.</span>`
-                : `<span>Fresh fish! Sell &apos;em or try to haggle for more coins.</span>`
+                : `<span>Fresh fish! Sell &apos;em for shiny coins.</span>`
               }
             </div>
           </div>
         </div>
         <div class="market-bulk-row">
           <button class="${bulkBtnClass} ${isBasketTutorial ? 'tutorial-glow' : ''}" data-action="sell-all" data-method="sell" ${bulkBtnDisabled}>Sell All</button>
-          <button class="${bulkBtnClass}" data-action="sell-all" data-method="haggle" ${bulkBtnDisabled}>Haggle All</button>
         </div>
         <ul class="modal-list">${rows || '<li class="row modal-empty">Basket is empty. Go catch something!</li>'}</ul>
       `,
@@ -1307,7 +1286,6 @@ export class UI {
         const action = button.dataset.action;
         const id = button.dataset.id ?? '';
         const index = button.dataset.index ? Number(button.dataset.index) : -1;
-        const method = button.dataset.method as 'sell' | 'haggle' | 'desperate' | undefined;
         const slot = button.dataset.slot as ClothingSlot | undefined;
 
         if (action === 'close') this.closeModal();
@@ -1317,8 +1295,8 @@ export class UI {
         }
         else if (action === 'buy-fishbot') this.craftingSystem.purchaseFishbot(id);
         else if (action === 'claim-hopper') this.fishbotSystem.claimHopper();
-        else if (action === 'sell' && method) this.marketSystem.sell(index, method);
-        else if (action === 'sell-all' && (method === 'sell' || method === 'haggle')) this.marketSystem.sellAll(method);
+        else if (action === 'sell') this.marketSystem.sell(index);
+        else if (action === 'sell-all') this.marketSystem.sellAll();
         else if (action === 'buy-upgrade') this.craftingSystem.purchaseUpgrade(id as UpgradeId);
         else if (action === 'spend-skill-point') this.craftingSystem.spendSkillPoint(id as ArchetypeId);
         else if (action === 'recycle-all') this.craftingSystem.recycleAllTrash();
