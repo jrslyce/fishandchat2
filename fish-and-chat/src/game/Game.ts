@@ -63,8 +63,8 @@ export class Game {
   private diorama: DioramaResult;
   private readonly playerCharacter = new PlayerCharacter();
   private viewMode: 'dock' | 'bobber' = 'dock';
-  private readonly dockCameraPos = new THREE.Vector3(0, 1.85, 2.7);
-  private readonly dockCameraFocus = new THREE.Vector3(0, 0.35, 0.1);
+  private readonly dockCameraPos = new THREE.Vector3(0, 2.1, 3.4);
+  private readonly dockCameraFocus = new THREE.Vector3(0, 0.55, -0.5);
 
   // Closet live preview: a second small render (same renderer/scene, no
   // second WebGL context) into an offscreen target, read back into a plain
@@ -145,7 +145,8 @@ export class Game {
       this.playerCharacter.group.position.set(0, 0, 0);
       this.playerCharacter.group.rotation.y = 0;
       this.playerCharacter.setPose('idle');
-      this.cameraRig.setTarget(new THREE.Vector3(0, 0.9, 1.2), this.diorama.playerSlot.position);
+      const slot = this.diorama.playerSlot.position;
+      this.cameraRig.setTarget(new THREE.Vector3(slot.x, slot.y + 0.68, slot.z + 1.2), slot);
     });
     this.events.on('closetClosed', () => {
       this.closetOpen = false;
