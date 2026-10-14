@@ -1,45 +1,12 @@
 import * as THREE from 'three';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-
-const VIGNETTE_SHADER = {
-  uniforms: {
-    tDiffuse: { value: null },
-    uStrength: { value: 0.35 },
-  },
-  vertexShader: /* glsl */ `
-    varying vec2 vUv;
-    void main() {
-      vUv = uv;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }
-  `,
-  fragmentShader: /* glsl */ `
-    uniform sampler2D tDiffuse;
-    uniform float uStrength;
-    varying vec2 vUv;
-    void main() {
-      vec4 color = texture2D(tDiffuse, vUv);
-      float dist = distance(vUv, vec2(0.5));
-      float vignette = smoothstep(0.9, 0.35, dist);
-      color.rgb *= mix(1.0 - uStrength, 1.0, vignette);
-      gl_FragColor = color;
-    }
-  `,
-};
 
 /**
- * Owns lighting rig + post-processing composer in one place. Renderer
- * base setup (color space, tone mapping, shadow map) stays in core/Renderer.ts;
- * this adds the key/fill lights and the bloom+vignette finishing pass.
+ * Owns lighting rig and scene rendering. Directly renders scene to camera
+ * with alpha transparency preserved.
  */
 export class RenderPipeline {
   readonly hemisphere: THREE.HemisphereLight;
   readonly keyLight: THREE.DirectionalLight;
-  private composer: EffectComposer | null = null;
-  private bloomPass: UnrealBloomPass | null = null;
 
   constructor(
     private readonly renderer: THREE.WebGLRenderer,
@@ -81,34 +48,14 @@ export class RenderPipeline {
     this.keyLight.shadow.blurSamples = 8;
     this.scene.add(this.keyLight);
 
-    this.setupComposer();
   }
 
-  private setupComposer(): void {
-    const size = new THREE.Vector2();
-    this.renderer.getSize(size);
-    this.composer = new EffectComposer(this.renderer);
-    this.composer.addPass(new RenderPass(this.scene, this.camera));
-
-    this.bloomPass = new UnrealBloomPass(size, 0.35, 0.6, 0.9);
-    this.composer.addPass(this.bloomPass);
-
-    const vignettePass = new ShaderPass(VIGNETTE_SHADER);
-    this.composer.addPass(vignettePass);
-  }
-
-  resize(width: number, height: number): void {
-    this.composer?.setPixelRatio(this.renderer.getPixelRatio());
-    this.composer?.setSize(width, height);
+  resize(_width: number, _height: number): void {
+    // Sizing handled in resizeRenderer
   }
 
   render(): void {
-    // EffectComposer resets renderer.info between passes, which makes the
-    // published diagnostics report only the final full-screen quad (1 call /
-    // 1 triangle). Accumulate across the whole frame instead and reset here.
-    this.renderer.info.autoReset = false;
-    this.renderer.info.reset();
-    this.composer?.render();
+    this.renderer.render(this.scene, this.camera);
   }
 
   dispose(): void {

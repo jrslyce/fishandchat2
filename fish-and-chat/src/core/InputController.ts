@@ -41,13 +41,35 @@ export class InputController {
     if (this.held) this.release();
   };
 
-  constructor(private readonly actionSurface: HTMLElement) {
+  private readonly onContainerPointerDown = (event: PointerEvent) => {
+    if (event.defaultPrevented) return;
+    const target = event.target as HTMLElement | null;
+    if (target && target.closest('button, input, select, textarea, .modal, #hud-coins, #action-btn')) {
+      return;
+    }
+    this.onPointerDown(event);
+  };
+
+  private readonly onContainerPointerUp = (event: PointerEvent) => {
+    if (event.defaultPrevented) return;
+    this.onPointerUp(event);
+  };
+
+  constructor(
+    private readonly actionSurface: HTMLElement,
+    private readonly containerSurface?: HTMLElement,
+  ) {
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
     this.actionSurface.addEventListener('pointerdown', this.onPointerDown);
     this.actionSurface.addEventListener('pointerup', this.onPointerUp);
     this.actionSurface.addEventListener('pointercancel', this.onPointerCancel);
     this.actionSurface.addEventListener('pointerleave', this.onPointerCancel);
+
+    if (this.containerSurface && this.containerSurface !== this.actionSurface) {
+      this.containerSurface.addEventListener('pointerdown', this.onContainerPointerDown);
+      this.containerSurface.addEventListener('pointerup', this.onContainerPointerUp);
+    }
   }
 
   /** Call once per frame after reading edges. */
@@ -85,6 +107,10 @@ export class InputController {
     this.actionSurface.removeEventListener('pointerup', this.onPointerUp);
     this.actionSurface.removeEventListener('pointercancel', this.onPointerCancel);
     this.actionSurface.removeEventListener('pointerleave', this.onPointerCancel);
+    if (this.containerSurface && this.containerSurface !== this.actionSurface) {
+      this.containerSurface.removeEventListener('pointerdown', this.onContainerPointerDown);
+      this.containerSurface.removeEventListener('pointerup', this.onContainerPointerUp);
+    }
   }
 
   private press(): void {

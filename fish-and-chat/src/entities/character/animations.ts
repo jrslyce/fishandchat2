@@ -32,7 +32,9 @@ export class IdleAnimation extends PlayerAnimation {
     const t = this.progress * 2;
     const basicArmRotationZ = Math.PI * 0.02;
     player.skin.leftArm.rotation.z = Math.cos(t) * 0.03 + basicArmRotationZ;
-    player.skin.rightArm.rotation.z = Math.cos(t + Math.PI) * 0.03 - basicArmRotationZ;
+    // Right arm holds the fishing pole comfortably forward at rest
+    player.skin.rightArm.rotation.x = -0.75 + Math.sin(t) * 0.03;
+    player.skin.rightArm.rotation.z = Math.cos(t + Math.PI) * 0.03 - basicArmRotationZ - 0.05;
   }
 }
 
@@ -79,7 +81,7 @@ export class WaveAnimation extends PlayerAnimation {
 }
 
 /** Sub-poses this animation blends between; the driver (Game.ts) sets this from real fishing state. */
-export type FishingPose = 'aiming' | 'casting' | 'waiting' | 'bite';
+export type FishingPose = 'aiming' | 'casting' | 'waiting' | 'bite' | 'resolving';
 
 /**
  * New animation (not part of upstream skinview3d): cast/hold/reel poses for
@@ -119,6 +121,11 @@ export class FishingAnimation extends PlayerAnimation {
         // Quick tug motion.
         rightArm.rotation.x = -1.15 + Math.sin(t * 6) * 0.18;
         rightArm.rotation.z = -0.1;
+        break;
+      case 'resolving':
+        // Reeling in — pumping motion
+        rightArm.rotation.x = -1.35 + Math.sin(t * 8) * 0.25;
+        rightArm.rotation.z = -0.15;
         break;
     }
   }

@@ -31,9 +31,6 @@ export class PlayerCharacter {
   // Left arm waves — the right arm is reserved for fishing poses.
   private readonly waveAnim = new WaveAnimation('left');
 
-  // No rod is modeled — FishingAnimation only swings the arm bone to imply holding one.
-  // Anchoring this to the arm (rather than computing a world offset by hand) means it
-  // automatically rides the same aiming/casting/waiting swing for free.
   private readonly rodTipAnchor = new THREE.Object3D();
 
   private pose: CharacterPose = 'idle';
@@ -62,9 +59,12 @@ export class PlayerCharacter {
     this.group.add(this.nameTag);
     this.setName('Angler');
 
-    // A bit past the hand (rightArm's own local space, Minecraft units) — approximates
-    // where a held rod's tip would sit.
-    this.rodTipAnchor.position.set(0, -13, 0);
+    // Model and attach a fishing pole in the character's right hand
+    const pole = buildFishingPole();
+    this.player.skin.rightArm.add(pole);
+
+    // Tip of the held rod (rightArm local space, MC units)
+    this.rodTipAnchor.position.set(0, -8.3, 29.2);
     this.player.skin.rightArm.add(this.rodTipAnchor);
   }
 
@@ -160,4 +160,60 @@ export class PlayerCharacter {
     this.player.skin.map?.dispose();
     this.nameTagTexture.dispose();
   }
+}
+
+function buildFishingPole(): THREE.Group {
+  const pole = new THREE.Group();
+  pole.name = 'fishingPole';
+
+  // Handle (cork grip) in player's right hand
+  const corkMat = new THREE.MeshStandardMaterial({
+    color: '#b07e4d',
+    roughness: 0.7,
+  });
+  const handleGeo = new THREE.CylinderGeometry(0.55, 0.55, 6, 8);
+  const handle = new THREE.Mesh(handleGeo, corkMat);
+  handle.rotation.x = Math.PI / 2;
+  handle.position.set(0, -10.5, 1.0);
+  handle.castShadow = true;
+  pole.add(handle);
+
+  // Reel attached to handle base
+  const metalMat = new THREE.MeshStandardMaterial({
+    color: '#3a4454',
+    metalness: 0.8,
+    roughness: 0.2,
+  });
+  const reelGeo = new THREE.CylinderGeometry(0.9, 0.9, 0.8, 10);
+  const reel = new THREE.Mesh(reelGeo, metalMat);
+  reel.rotation.z = Math.PI / 2;
+  reel.position.set(0.6, -11.5, 0.2);
+  reel.castShadow = true;
+  pole.add(reel);
+
+  // Rod blank (carbon shaft tapering toward tip)
+  const blankMat = new THREE.MeshStandardMaterial({
+    color: '#1a1f26',
+    roughness: 0.3,
+    metalness: 0.4,
+  });
+  const blankGeo = new THREE.CylinderGeometry(0.12, 0.38, 28, 8);
+  const blank = new THREE.Mesh(blankGeo, blankMat);
+  blank.rotation.x = Math.PI / 2 + 0.08;
+  blank.position.set(0, -9.5, 15.0);
+  blank.castShadow = true;
+  pole.add(blank);
+
+  // Tip guide / accent ring at rod tip
+  const tipMat = new THREE.MeshStandardMaterial({
+    color: '#f26849',
+    roughness: 0.3,
+  });
+  const tipRingGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.6, 8);
+  const tipRing = new THREE.Mesh(tipRingGeo, tipMat);
+  tipRing.rotation.x = Math.PI / 2;
+  tipRing.position.set(0, -8.3, 29.0);
+  pole.add(tipRing);
+
+  return pole;
 }

@@ -7,10 +7,12 @@ import {
   BOX_OF_NOT_FISH_COST_CANDY_BARS,
   CLOTHING_CATALOG,
   FISHBOT_CATALOG,
+  FISH_CATALOG,
   MATERIAL_BUNDLE_CATALOG,
   PREMIUM_CATALOG,
   TRASH_CATALOG,
   UPGRADE_CATALOG,
+  calculateFishValue,
   themeForLevel,
   xpToNextLevel,
   type ArchetypeId,
@@ -22,7 +24,7 @@ import {
   type UpgradeId,
 } from './data';
 import type { SaveManager } from '../core/SaveManager';
-import { migrateSaveState, type BasketItem, type FishbotState, type GameSaveStateV1 } from './SaveState';
+import { migrateSaveState, type BasketItem, type FishRecord, type FishbotState, type GameSaveStateV1 } from './SaveState';
 
 export interface LevelUpResult {
   leveledUp: boolean;
@@ -239,6 +241,36 @@ export class Economy {
     return this.archetypePoints('charmer') * 0.02;
   }
 
+  // --- Fish Value & Pricing ------------------------------------------------
+
+  getFishValue(catchId: string, weightKg: number): number {
+    const species = FISH_CATALOG.find((f) => f.id === catchId);
+    if (!species) return 0;
+    return calculateFishValue(species, weightKg, this.saleMultiplier());
+  }
+
+  // --- Catch Records & Scrap Book -----------------------------------------
+
+  recordCatch(catchId: string, weightKg: number, isTrash: boolean): void {
+    if (!this.state.discoveredCatchIds.includes(catchId)) {
+      this.state.discoveredCatchIds.push(catchId);
+    }
+    if (!isTrash) {
+      if (!this.state.fishRecords) {
+        this.state.fishRecords = {};
+      }
+      const existing = this.state.fishRecords[catchId] ?? { count: 0, maxWeightKg: 0 };
+      this.state.fishRecords[catchId] = {
+        count: existing.count + 1,
+        maxWeightKg: Math.max(existing.maxWeightKg, weightKg),
+      };
+    }
+  }
+
+  getFishRecord(catchId: string): FishRecord {
+    return this.state.fishRecords?.[catchId] ?? { count: 0, maxWeightKg: 0 };
+  }
+
   // --- Basket -------------------------------------------------------------
 
   basketFull(): boolean {
@@ -248,9 +280,7 @@ export class Economy {
   addToBasket(item: BasketItem): boolean {
     if (this.basketFull()) return false;
     this.state.basket.push(item);
-    if (!this.state.discoveredCatchIds.includes(item.catchId)) {
-      this.state.discoveredCatchIds.push(item.catchId);
-    }
+    this.recordCatch(item.catchId, item.weightKg, item.isTrash);
     return true;
   }
 
@@ -267,9 +297,7 @@ export class Economy {
   /** Unlike addToBasket, this never fails — trash doesn't compete with fish for basket room. */
   addToTrashBucket(item: BasketItem): boolean {
     this.state.trashBucket.push(item);
-    if (!this.state.discoveredCatchIds.includes(item.catchId)) {
-      this.state.discoveredCatchIds.push(item.catchId);
-    }
+    this.recordCatch(item.catchId, item.weightKg, true);
     return true;
   }
 
