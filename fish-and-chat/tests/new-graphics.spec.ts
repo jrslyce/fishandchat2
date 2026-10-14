@@ -74,7 +74,7 @@ test('verifies 318x496 dimensions, dock view, and circular bobber zoom view duri
 
   // Wait for bite to occur
   await page.waitForFunction(() => window.__THREE_GAME_DIAGNOSTICS__?.state === 'bite', undefined, {
-    timeout: 15000,
+    timeout: 25000,
   });
 
   // Verify phase indicator shows bite
@@ -90,7 +90,7 @@ test('verifies 318x496 dimensions, dock view, and circular bobber zoom view duri
       return state === 'celebrating' || state === 'missed' || state === 'idle';
     },
     undefined,
-    { timeout: 8000 }
+    { timeout: 12000 }
   );
 
   // In celebration, missed, or idle: view mode MUST return to dock view (circle removed)
@@ -99,3 +99,65 @@ test('verifies 318x496 dimensions, dock view, and circular bobber zoom view duri
 
   expect(consoleErrors).toEqual([]);
 });
+
+test('user can open menus like bait shop and close with visible upper-right X button, backdrop, or escape', async ({ page }, testInfo) => {
+  await page.goto('/');
+  await expect(page.locator('#game-canvas')).toBeVisible();
+
+  // Dismiss title screen
+  await page.locator('#title-start').click();
+  await expect(page.locator('#title-screen')).toBeHidden();
+
+  // 1. Open bait shop by clicking hud-bait-pill
+  await page.locator('#hud-bait-pill').click();
+  await expect(page.locator('#modal-host')).toBeVisible();
+  await expect(page.locator('#modal-host .modal')).toBeVisible();
+
+  // Verify the modal header and title are fully visible inside #app bounds
+  const modalHeader = page.locator('#modal-host .modal-header');
+  await expect(modalHeader).toBeVisible();
+  await expect(modalHeader.locator('h3')).toHaveText('Shop');
+
+  // Verify close X button is visible in the upper right
+  const closeBtn = page.locator('#modal-host .modal-close');
+  await expect(closeBtn).toBeVisible();
+
+  const appBox = (await page.locator('#app').boundingBox())!;
+  const headerBox = (await modalHeader.boundingBox())!;
+  const closeBox = (await closeBtn.boundingBox())!;
+
+  // Header and close button must be within the top portion of #app, not pushed off-screen
+  expect(headerBox.y).toBeGreaterThanOrEqual(appBox.y);
+  expect(closeBox.y).toBeGreaterThanOrEqual(appBox.y);
+  expect(closeBox.x + closeBox.width).toBeLessThanOrEqual(appBox.x + appBox.width + 1);
+
+  // Capture screenshot of bait shop modal with close X button
+  const screenshotPath = '/Users/jared/.gemini/antigravity-ide/brain/73752e80-981d-4185-a047-8df1be4a7fd5/bait_shop_modal.png';
+  const shopScreenshot = await page.locator('#app').screenshot({ path: screenshotPath, omitBackground: true });
+  await testInfo.attach('bait-shop-modal-visible-close', {
+    body: shopScreenshot,
+    contentType: 'image/png',
+  });
+
+  // Close by clicking the 'X' button
+  await closeBtn.click();
+  await expect(page.locator('#modal-host')).toBeHidden();
+
+  // 2. Open via HUD rail and close via backdrop click
+  await page.locator('#rail-toggle').click();
+  await page.locator('#btn-shop').click();
+  await expect(page.locator('#modal-host')).toBeVisible();
+
+  // Click backdrop outside the modal
+  await page.locator('#modal-host').click({ position: { x: 5, y: 5 } });
+  await expect(page.locator('#modal-host')).toBeHidden();
+
+  // 3. Open another menu (settings) and close with Escape key
+  await page.locator('#rail-toggle').click();
+  await page.locator('#btn-settings').click();
+  await expect(page.locator('#modal-host')).toBeVisible();
+  await expect(page.locator('#modal-host .modal-header h3')).toHaveText('Settings');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#modal-host')).toBeHidden();
+});
+

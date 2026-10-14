@@ -221,6 +221,28 @@ export class UI {
     this.el('#hud-candy-pill').addEventListener('click', () => this.toggleModal('candy'));
     this.el('#basket-badge').addEventListener('click', () => this.toggleModal('market'));
 
+    // Modal closing interactions: backdrop click or close button delegation
+    this.modalHost.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target === this.modalHost) {
+        this.closeModal();
+        return;
+      }
+      const closeBtn = target.closest<HTMLButtonElement>('.modal-close, button[data-action="close"]');
+      if (closeBtn) {
+        event.stopPropagation();
+        this.closeModal();
+      }
+    });
+
+    // Close modal on Escape key
+    window.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && this.openModal) {
+        this.closeModal();
+      }
+    });
+
     // Clicking the bubble itself dismisses it early — a real button, so this never bubbles
     // down to the canvas and accidentally fires a cast/reel tap underneath.
     this.tutorialBubbleText.addEventListener('click', () => {
@@ -625,9 +647,22 @@ export class UI {
     this.catchCardTimeout = window.setTimeout(() => this.catchCard.classList.add('hidden'), 2400);
   }
 
-  private toggleModal(id: ModalId): void {
+  public closeModal(): void {
+    if (!this.openModal) return;
     const previous = this.openModal;
-    this.openModal = this.openModal === id ? null : id;
+    this.openModal = null;
+    if (previous === 'closet') this.events.emit('closetClosed', {});
+    this.resetArmed = false;
+    this.renderModal();
+  }
+
+  private toggleModal(id: ModalId): void {
+    if (this.openModal === id) {
+      this.closeModal();
+      return;
+    }
+    const previous = this.openModal;
+    this.openModal = id;
     if (this.openModal === 'market') this.marketSystem.onMarketOpened();
     if (previous === 'closet' && this.openModal !== 'closet') this.events.emit('closetClosed', {});
     if (this.openModal === 'closet' && previous !== 'closet') this.events.emit('closetOpened', {});
@@ -1205,7 +1240,7 @@ export class UI {
             ${titleExtra}
             <h3>${title}</h3>
           </div>
-          <button class="modal-close" data-action="close" type="button" aria-label="Close">&times;</button>
+          <button class="modal-close" data-action="close" type="button" aria-label="Close" title="Close">&times;</button>
         </div>
         <div class="modal-body">${body}</div>
       </div>
@@ -1221,7 +1256,7 @@ export class UI {
         const method = button.dataset.method as 'sell' | 'haggle' | 'desperate' | undefined;
         const slot = button.dataset.slot as ClothingSlot | undefined;
 
-        if (action === 'close') this.toggleModal(this.openModal);
+        if (action === 'close') this.closeModal();
         else if (action === 'equip-bait') this.craftingSystem.equipBait(id);
         else if (action === 'buy-bait') {
           if (!this.craftingSystem.purchaseBait(id)) this.showToast('Not enough 🪙');
