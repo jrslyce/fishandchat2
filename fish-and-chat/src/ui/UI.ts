@@ -107,7 +107,9 @@ export class UI {
   private readonly railItems: HTMLElement;
   private readonly tutorialBubble: HTMLElement;
   private readonly tutorialBubbleText: HTMLButtonElement;
+  private readonly basketBadge: HTMLButtonElement;
 
+  private inBasketTutorial = false;
   private openModal: ModalId = null;
   private railExpanded = false;
   private toastTimeout: number | null = null;
@@ -219,7 +221,8 @@ export class UI {
     this.el('#btn-debug').addEventListener('click', () => this.toggleModal('debug'));
     this.el('#hud-bait-pill').addEventListener('click', () => this.toggleModal('shop'));
     this.el('#hud-candy-pill').addEventListener('click', () => this.toggleModal('candy'));
-    this.el('#basket-badge').addEventListener('click', () => this.toggleModal('market'));
+    this.basketBadge = this.el('#basket-badge') as HTMLButtonElement;
+    this.basketBadge.addEventListener('click', () => this.toggleModal('market'));
 
     // Modal closing interactions: backdrop click or close button delegation
     this.modalHost.addEventListener('click', (event) => {
@@ -243,9 +246,12 @@ export class UI {
       }
     });
 
-    // Clicking the bubble itself dismisses it early — a real button, so this never bubbles
-    // down to the canvas and accidentally fires a cast/reel tap underneath.
+    // Clicking the bubble itself dismisses it early (or opens market if basket is full)
     this.tutorialBubbleText.addEventListener('click', () => {
+      if (this.economy.basketFull() || this.inBasketTutorial) {
+        this.toggleModal('market');
+        return;
+      }
       if (!this.economy.hasSeenCastTutorial()) this.economy.markCastTutorialSeen();
       else if (!this.economy.hasSeenReelTutorial()) this.economy.markReelTutorialSeen();
       this.renderTutorialBubble(this.gameState.getPhase());
@@ -307,6 +313,10 @@ export class UI {
 
   private bindEvents(): void {
     this.events.on('toast', ({ message }) => this.showToast(message));
+    this.events.on('basketFull', () => {
+      this.inBasketTutorial = true;
+      this.triggerBasketAttention();
+    });
     // Tutorial bubbles auto-close the instant the described action actually happens, rather
     // than waiting for the player to notice and dismiss them by hand.
     this.events.on('castLocked', () => {
@@ -507,6 +517,17 @@ export class UI {
     this.hudBaitName.textContent = `${equippedBait.free ? '∞' : baitOwned} ${equippedBait.acronym}`;
     this.hudBasketCount.textContent = `${state.basket.length}/${this.economy.basketCapacity()}`;
 
+    const isBasketFull = this.economy.basketFull();
+    if (isBasketFull) {
+      this.inBasketTutorial = true;
+      this.basketBadge.classList.add('basket-glow');
+    } else {
+      this.basketBadge.classList.remove('basket-glow');
+      if (state.basket.length === 0) {
+        this.inBasketTutorial = false;
+      }
+    }
+
     const duckyActive = this.economy.isLuckyDuckyActive();
     const duckyPill = this.root.querySelector('#hud-lucky-ducky-pill');
     if (duckyPill) {
@@ -557,17 +578,22 @@ export class UI {
   }
 
   /**
-   * Barnaby's two one-time onboarding bubbles, driven purely by economy flags + current phase
-   * (no separate stage tracking to fall out of sync) — recomputed every frame:
-   * "click to cast" while idle/aiming, then "tap to reel" once cast until the first bite is
-   * reacted to. Both also auto-close via `bindEvents()`'s `castLocked`/`biteReacted` listeners.
+   * Barnaby's onboarding & guide bubbles:
+   * 1. Basket full tutorial directing player to the bottom-left basket badge.
+   * 2. "Click to cast" while idle/aiming.
+   * 3. "Tap to reel" once cast until the first bite is reacted to.
    */
   private renderTutorialBubble(phase: FishingPhase): void {
     let text: string | null = null;
+    let isBasketTutorial = false;
 
-    if (!this.economy.hasSeenCastTutorial() && (phase === 'idle' || phase === 'aiming')) {
+    if (!this.openModal && (this.economy.basketFull() || (this.inBasketTutorial && this.economy.snapshot.basket.length > 0))) {
+      text = 'Your basket is full! Tap the basket in the bottom left to visit the market.';
+      isBasketTutorial = true;
+    } else if (!this.openModal && !this.economy.hasSeenCastTutorial() && (phase === 'idle' || phase === 'aiming')) {
       text = 'Click on the screen to cast your reel.';
     } else if (
+      !this.openModal &&
       this.economy.hasSeenCastTutorial() &&
       !this.economy.hasSeenReelTutorial() &&
       (phase === 'casting' || phase === 'waiting' || phase === 'bite')
@@ -578,9 +604,24 @@ export class UI {
     if (text) {
       this.tutorialBubbleText.textContent = text;
       this.tutorialBubble.classList.remove('hidden');
+      if (isBasketTutorial) {
+        this.tutorialBubble.classList.add('basket-tutorial');
+      } else {
+        this.tutorialBubble.classList.remove('basket-tutorial');
+      }
     } else {
       this.tutorialBubble.classList.add('hidden');
+      this.tutorialBubble.classList.remove('basket-tutorial');
     }
+  }
+
+  private triggerBasketAttention(): void {
+    this.tutorialBubble.classList.remove('attention');
+    void this.tutorialBubble.offsetWidth;
+    this.tutorialBubble.classList.add('attention');
+    setTimeout(() => {
+      this.tutorialBubble.classList.remove('attention');
+    }, 1000);
   }
 
   private gaugeMarkup(value: number, sweetSpot: number, width: number): string {
@@ -843,10 +884,14 @@ export class UI {
       `<span class="bone-icon ${i < bones ? '' : 'bone-spent'}">${icon(ICON.bone, 'patience bone', 'bone-img')}</span>`,
     ).join('');
 
+    const sellableCount = state.basket.filter((item) => !item.isTrash).length;
+    const isBasketTutorial = (this.inBasketTutorial || this.economy.basketFull()) && sellableCount > 0;
+
     const rows = state.basket.map((item, index) => {
       if (item.isTrash) return '';
       const species = FISH_CATALOG.find((f) => f.id === item.catchId);
       const value = species ? Math.round(species.baseValue * this.economy.saleMultiplier()) : 0;
+      const highlightRowSell = isBasketTutorial && sellableCount === 1;
       return `
         <li class="row">
           ${rowIcon(item.catchId, catchName(item.catchId))}
@@ -854,15 +899,14 @@ export class UI {
             <strong>${catchName(item.catchId)}</strong>
             <span class="row-meta">${item.weightKg.toFixed(2)}kg &middot; ${value} ${icon(ICON.coin, 'coins', 'inline-icon')}</span>
           </div>
-          <div class="row-actions">
-            <button class="btn-small" data-action="sell" data-method="sell" data-index="${index}">Sell</button>
+          <div class="row-actions market-row-actions">
+            <button class="btn-small ${highlightRowSell ? 'tutorial-glow' : ''}" data-action="sell" data-method="sell" data-index="${index}">Sell</button>
             <button class="btn-small" data-action="sell" data-method="haggle" data-index="${index}">Haggle</button>
             <button class="btn-small" data-action="sell" data-method="desperate" data-index="${index}">Desperate</button>
           </div>
         </li>`;
     }).join('');
 
-    const sellableCount = state.basket.filter((item) => !item.isTrash).length;
     const bulkBtnClass = `btn-small${sellableCount === 0 ? ' btn-disabled' : ''}`;
     const bulkBtnDisabled = sellableCount === 0 ? 'disabled' : '';
 
@@ -871,10 +915,20 @@ export class UI {
       `
         <div class="market-header">
           <img class="barnaby-portrait" src="./images/barnaby-portrait.png" alt="Monger Barnaby" />
-          <div class="bones-row" title="Patience bones">${bonesMarkup}</div>
+          <div class="market-header-details">
+            <div class="bones-row" title="Patience bones">${bonesMarkup}</div>
+            <div class="market-speech-bubble ${isBasketTutorial ? 'market-tutorial-active' : ''}">
+              ${isBasketTutorial
+                ? `<span class="tutorial-tag">TUTORIAL</span><span>Sell your fish to earn coins and empty your basket! Tap <strong>Sell All</strong> below.</span>`
+                : sellableCount === 0
+                ? `<span>Basket is empty! Go catch some more fish, partner.</span>`
+                : `<span>Fresh fish! Sell &apos;em or try to haggle for more coins.</span>`
+              }
+            </div>
+          </div>
         </div>
         <div class="market-bulk-row">
-          <button class="${bulkBtnClass}" data-action="sell-all" data-method="sell" ${bulkBtnDisabled}>Sell All</button>
+          <button class="${bulkBtnClass} ${isBasketTutorial ? 'tutorial-glow' : ''}" data-action="sell-all" data-method="sell" ${bulkBtnDisabled}>Sell All</button>
           <button class="${bulkBtnClass}" data-action="sell-all" data-method="haggle" ${bulkBtnDisabled}>Haggle All</button>
         </div>
         <ul class="modal-list">${rows || '<li class="row modal-empty">Basket is empty. Go catch something!</li>'}</ul>

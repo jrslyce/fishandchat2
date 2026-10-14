@@ -154,7 +154,6 @@ export class FishingStateMachine {
   private tryStartCast(): void {
     if (this.economy.basketFull()) {
       this.events.emit('basketFull', {});
-      this.events.emit('toast', { message: 'Basket is full — visit the market to sell some catches!' });
       return;
     }
     this.gauge = randomSweetSpot();

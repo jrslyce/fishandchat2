@@ -45,7 +45,7 @@ export class Game {
   private readonly events = new EventBus<GameEventMap>();
 
   private readonly saveManager = new SaveManager<GameSaveStateV1>(createDefaultSaveState);
-  private readonly economy: Economy;
+  public readonly economy: Economy;
   private readonly marketSystem: MarketSystem;
   private readonly craftingSystem: CraftingSystem;
   private readonly fishbotSystem: FishbotSystem;
@@ -250,6 +250,7 @@ export class Game {
       if (ok) void this.audio.playSfx(SFX_MANIFEST.coinClink);
     });
     this.events.on('fishbotClaimed', () => void this.audio.playSfx(SFX_MANIFEST.catchJingle, 0.8));
+    (window as any).__FISH_GAME__ = this;
   }
 
   dispose(): void {
@@ -269,6 +270,7 @@ export class Game {
     this.events.clear();
     this.renderer.dispose();
     window.__THREE_GAME_DIAGNOSTICS__ = undefined;
+    (window as any).__FISH_GAME__ = undefined;
   }
 
   private onDioramaRebuilt(diorama: DioramaResult): void {

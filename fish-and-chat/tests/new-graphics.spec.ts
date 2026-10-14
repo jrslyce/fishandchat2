@@ -161,3 +161,100 @@ test('user can open menus like bait shop and close with visible upper-right X bu
   await expect(page.locator('#modal-host')).toBeHidden();
 });
 
+test('basket full triggers Barnaby tutorial bubble, glowing basket animation, market tutorial explanation, and glowing Sell All button', async ({ page }, testInfo) => {
+  await page.goto('/');
+  await expect(page.locator('#game-canvas')).toBeVisible();
+
+  // Wait for initial render and dismiss title screen
+  await page.waitForFunction(() => (window.__THREE_GAME_DIAGNOSTICS__?.frame ?? 0) > 10);
+  await page.locator('#title-start').click();
+  await expect(page.locator('#title-screen')).toBeHidden();
+
+  // Dismiss early cast tutorial if active
+  await page.evaluate(() => {
+    const game = (window as any).__FISH_GAME__;
+    game.economy.markCastTutorialSeen();
+    game.economy.markReelTutorialSeen();
+  });
+
+  // Verify initially basket is not full and badge is not glowing
+  await expect(page.locator('#basket-badge')).not.toHaveClass(/basket-glow/);
+
+  // Fill the basket to capacity (8 fish)
+  await page.evaluate(() => {
+    const game = (window as any).__FISH_GAME__;
+    const capacity = game.economy.basketCapacity();
+    for (let i = 0; i < capacity; i++) {
+      game.economy.addToBasket({
+        catchId: 'pebble-bass',
+        weightKg: 1.4,
+        isTrash: false,
+      });
+    }
+  });
+
+  // Basket badge should now display 8/8 and have the basket-glow class
+  await expect(page.locator('#hud-basket-count')).toHaveText('8/8');
+  await expect(page.locator('#basket-badge')).toHaveClass(/basket-glow/);
+
+  // Barnaby's tutorial bubble should appear with the basket tutorial message
+  await expect(page.locator('#tutorial-bubble')).toBeVisible();
+  await expect(page.locator('#tutorial-bubble')).toHaveClass(/basket-tutorial/);
+  await expect(page.locator('#tutorial-bubble-text')).toContainText('Your basket is full! Tap the basket in the bottom left to visit the market.');
+
+  // Capture dock screenshot showing glowing basket badge and Barnaby tutorial bubble
+  const dockBasketShotPath = '/Users/jared/.gemini/antigravity-ide/brain/73752e80-981d-4185-a047-8df1be4a7fd5/basket_full_dock_view.png';
+  const dockBasketShot = await page.locator('#app').screenshot({ path: dockBasketShotPath, omitBackground: true });
+  await testInfo.attach('basket-full-dock-view', {
+    body: dockBasketShot,
+    contentType: 'image/png',
+  });
+
+  // Click the glowing basket badge in the bottom left to open the market
+  await page.locator('#basket-badge').click({ force: true });
+  await expect(page.locator('#modal-host')).toBeVisible();
+  await expect(page.locator('#modal-host .modal')).toBeVisible();
+  await expect(page.locator('#modal-host .modal-header h3')).toHaveText("Monger Barnaby's Market");
+
+  // In the market: Barnaby's speech bubble explains what to do
+  const speechBubble = page.locator('#modal-host .market-speech-bubble');
+  await expect(speechBubble).toBeVisible();
+  await expect(speechBubble).toHaveClass(/market-tutorial-active/);
+  await expect(speechBubble).toContainText('Sell your fish to earn coins and empty your basket!');
+  await expect(speechBubble).toContainText('Sell All');
+
+  // The Sell All button must be glow-highlighted
+  const sellAllBtn = page.locator('#modal-host button[data-action="sell-all"][data-method="sell"]');
+  await expect(sellAllBtn).toBeVisible();
+  await expect(sellAllBtn).toHaveClass(/tutorial-glow/);
+
+  // Capture market screenshot showing Barnaby tutorial dialogue and glowing Sell All button
+  const marketShotPath = '/Users/jared/.gemini/antigravity-ide/brain/73752e80-981d-4185-a047-8df1be4a7fd5/basket_full_market_tutorial.png';
+  const marketShot = await page.locator('#app').screenshot({ path: marketShotPath, omitBackground: true });
+  await testInfo.attach('basket-full-market-tutorial', {
+    body: marketShot,
+    contentType: 'image/png',
+  });
+
+  // Click Sell All
+  await sellAllBtn.click({ force: true });
+
+  // Basket is now emptied (0/8)
+  await expect(page.locator('#hud-basket-count')).toHaveText('0/8');
+
+  // Sell All is now disabled and no longer glowing
+  await expect(sellAllBtn).toBeDisabled();
+  await expect(sellAllBtn).not.toHaveClass(/tutorial-glow/);
+
+  // Barnaby says the basket is empty
+  await expect(speechBubble).toContainText('Basket is empty');
+
+  // Close the market modal via upper-right close button
+  await page.locator('#modal-host .modal-close').click();
+  await expect(page.locator('#modal-host')).toBeHidden();
+
+  // On dock: basket-badge is no longer glowing
+  await expect(page.locator('#basket-badge')).not.toHaveClass(/basket-glow/);
+});
+
+
