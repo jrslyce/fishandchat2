@@ -24,13 +24,13 @@ export function buildDiorama(theme: ThemeId, materials: MaterialLibrary): Dioram
   const root = new THREE.Group();
   root.name = `diorama-${theme}`;
 
-  const dock = buildDock(materials.wood, materials.woodDark, 4);
-  dock.position.set(0, 0.12, 0.4);
+  const dock = buildDock(materials.wood, materials.woodDark, 1);
+  dock.position.set(0, 0.12, 0.9);
   root.add(dock);
 
   const playerSlot = new THREE.Group();
   playerSlot.name = 'playerSlot';
-  playerSlot.position.set(0, 0.22, 0.0);
+  playerSlot.position.set(0, 0.22, 0.9);
   playerSlot.rotation.y = Math.PI; // facing -Z, out toward water
   root.add(playerSlot);
 
