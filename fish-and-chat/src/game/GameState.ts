@@ -70,6 +70,8 @@ export class FishingStateMachine {
   
   public debugPerfectCastMode = false;
   public autoFishingEnabled = false;
+  public isCoinTossActive = false;
+  private baitSaverActive = false;
 
   constructor(
     private readonly economy: Economy,
@@ -143,6 +145,7 @@ export class FishingStateMachine {
         // in the same tick, so this case should never be observed mid-frame.
         break;
       case 'celebrating':
+        if (this.isCoinTossActive) break;
         if (this.phaseElapsed >= CELEBRATING_SECONDS || input.justPressed()) this.enterIdle();
         break;
       case 'missed':
@@ -155,6 +158,11 @@ export class FishingStateMachine {
     if (this.economy.basketFull()) {
       this.events.emit('basketFull', {});
       return;
+    }
+    const bait = this.economy.equippedBait();
+    if (!bait.free && (this.economy.snapshot.baitInventory[bait.id] ?? 0) <= 0) {
+      this.economy.equipBait('pleb-bait');
+      this.events.emit('baitEquipped', { id: 'pleb-bait' });
     }
     this.gauge = randomSweetSpot();
     this.aimClock = 0;
@@ -178,9 +186,10 @@ export class FishingStateMachine {
     this.events.emit('castLocked', { precision: this.lockedPrecision, rolls: this.lockedRolls });
     
     if (this.lockedRolls && (this.lockedRolls.L === 1 || this.lockedRolls.L === 7) && Math.random() < 0.25) {
+      this.baitSaverActive = true;
       this.events.emit('toast', { message: 'Bait Saver! Your bait was not consumed.' });
     } else {
-      this.economy.consumeBaitForCast();
+      this.baitSaverActive = false;
     }
     
     this.setPhase('casting');
@@ -196,17 +205,11 @@ export class FishingStateMachine {
   }
 
   /**
-   * The player gave up waiting and reeled in before anything bit. No cost beyond the bait
-   * already spent at cast time — unless a fish had quietly nibbled the bait off already,
-   * which is only revealed now, on pulling the line back in.
+   * The player gave up waiting and reeled in before anything bit.
+   * Reeling in early does not remove bait.
    */
   private reelInEarly(): void {
-    if (Math.random() < BAIT_STOLEN_CHANCE) {
-      this.economy.consumeBaitForCast();
-      this.enterMissed('bait-stolen');
-    } else {
-      this.enterMissed('reeled-early');
-    }
+    this.enterMissed('reeled-early');
   }
 
   private enterBite(): void {
@@ -243,6 +246,9 @@ export class FishingStateMachine {
     this.events.emit('biteReacted', { success });
 
     if (!success) {
+      if (!this.baitSaverActive) {
+        this.economy.consumeBaitForCast();
+      }
       this.enterMissed('escaped');
       return;
     }
@@ -251,7 +257,9 @@ export class FishingStateMachine {
     // last second, or the fish strips the bait clean off without ever getting caught.
     const twist = Math.random();
     if (twist < BAIT_STOLEN_CHANCE) {
-      this.economy.consumeBaitForCast();
+      if (!this.baitSaverActive) {
+        this.economy.consumeBaitForCast();
+      }
       this.enterMissed('bait-stolen');
       return;
     } else if (twist < BAIT_STOLEN_CHANCE + NO_CATCH_CHANCE) {
@@ -272,12 +280,23 @@ export class FishingStateMachine {
     const levelResult = this.economy.addXp(result.xpAwarded);
     this.lastCatch = result;
 
+    const equippedBait = this.economy.equippedBait();
+    if (!equippedBait.free) {
+      this.isCoinTossActive = true;
+    }
 
     this.events.emit('catchResolved', { result });
     this.events.emit('xpGained', { amount: result.xpAwarded, ...levelResult });
     if (levelResult.themeChanged) this.events.emit('themeChanged', { theme: levelResult.newTheme });
 
     this.setPhase('celebrating');
+  }
+
+  finishCoinToss(lost: boolean): void {
+    this.isCoinTossActive = false;
+    if (lost && !this.baitSaverActive) {
+      this.economy.consumeBaitForCast();
+    }
   }
 
   private enterMissed(reason: 'early' | 'late' | 'no-react' | 'escaped' | 'no-catch' | 'bait-stolen' | 'reeled-early'): void {

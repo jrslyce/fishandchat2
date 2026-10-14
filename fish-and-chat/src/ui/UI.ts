@@ -115,11 +115,15 @@ export class UI {
   private toastTimeout: number | null = null;
   private catchCardTimeout: number | null = null;
   private resetArmed = false;
+  private scrapbookOpened = false;
   private lastDuckySecond = 0;
   private barnabyMessage: string | null = null;
   private barnabyClickCount = 0;
   private biteLabel = 'BITE! Tap now!';
   private missedLabel = 'It got away&hellip;';
+  private requestedBaitFocus: string | null = null;
+  private readonly coinTossOverlay: HTMLElement;
+  private coinTossTimeout: number | null = null;
 
   constructor(
     private readonly economy: Economy,
@@ -158,10 +162,19 @@ export class UI {
           <button class="rail-btn" id="btn-craft" type="button" aria-label="Crafting Bench">${icon(ICON.hammer, 'Craft')}</button>
           <button class="rail-btn" id="btn-candy" type="button" aria-label="Candy Bar Shop">${CANDY_EMOJI}</button>
           <button class="rail-btn" id="btn-closet" type="button" aria-label="Closet">&#128100;</button>
-          <button class="rail-btn" id="btn-collection" type="button" aria-label="Collection">${icon(ICON.scale, 'Collection')}</button>
+          <button class="rail-btn" id="btn-collection" type="button" aria-label="Big Fish Tails Scrap Book" title="Big Fish Tails Scrap Book"><span class="gear-glyph">📖</span></button>
           <button class="rail-btn" id="btn-skills" type="button" aria-label="Skills"><span class="gear-glyph">&#11088;</span></button>
           <button class="rail-btn" id="btn-settings" type="button" aria-label="Settings"><span class="gear-glyph">&#9881;</span></button>
         </div>
+      </div>
+
+      <div id="hud-bait-bar" aria-label="Bait Selection">
+        ${BAIT_CATALOG.map((bait) => `
+          <button class="hud-bait-btn unselected" id="hud-bait-btn-${bait.id}" data-bait-id="${bait.id}" type="button" title="${bait.name}" aria-label="${bait.name}">
+            <img class="hud-bait-icon" src="${SPRITE_MANIFEST[bait.id] ?? icon(ICON.bait, bait.name)}" alt="${bait.name}" />
+            <span class="hud-bait-qty" id="hud-bait-qty-${bait.id}">${bait.free ? '&infin;' : '0'}</span>
+          </button>
+        `).join('')}
       </div>
 
       <button id="basket-badge" type="button" aria-label="Basket">
@@ -178,6 +191,7 @@ export class UI {
       </div>
       <div id="toast-line" class="hidden"></div>
       <div id="catch-card" class="hidden"></div>
+      <div id="coin-toss-overlay" class="coin-toss-overlay hidden"></div>
       <div id="modal-host" class="hidden"></div>
       <div id="bite-flash"></div>
     `;
@@ -193,6 +207,7 @@ export class UI {
     this.biteFlash = document.querySelector<HTMLElement>('#bite-flash')!;
     this.toastLine = document.querySelector<HTMLElement>('#toast-line')!;
     this.catchCard = document.querySelector<HTMLElement>('#catch-card')!;
+    this.coinTossOverlay = document.querySelector<HTMLElement>('#coin-toss-overlay')!;
     this.modalHost = document.querySelector<HTMLElement>('#modal-host')!;
     this.titleScreen = document.querySelector<HTMLElement>('#title-screen')!;
     this.titleWelcome = document.querySelector<HTMLElement>('#title-welcome')!;
@@ -223,6 +238,15 @@ export class UI {
     this.el('#hud-candy-pill').addEventListener('click', () => this.toggleModal('candy'));
     this.basketBadge = this.el('#basket-badge') as HTMLButtonElement;
     this.basketBadge.addEventListener('click', () => this.toggleModal('market'));
+
+    const baitButtons = this.root.querySelectorAll<HTMLButtonElement>('.hud-bait-btn');
+    baitButtons.forEach((btn) => {
+      btn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const baitId = btn.getAttribute('data-bait-id');
+        if (baitId) this.handleBaitClick(baitId);
+      });
+    });
 
     // Modal closing interactions: backdrop click or close button delegation
     this.modalHost.addEventListener('click', (event) => {
@@ -345,12 +369,24 @@ export class UI {
         reason === 'reeled-early' ? 'Reeled in early.' :
         'It got away&hellip;';
     });
-    this.events.on('catchResolved', ({ result }) => this.showCatchCard(result));
+    this.events.on('catchResolved', ({ result }) => {
+      this.showCatchCard(result);
+      const bait = this.economy.equippedBait();
+      if (!bait.free) {
+        this.startBaitCoinToss(bait.id, bait.name);
+      }
+    });
     this.events.on('coinsChanged', () => this.refreshOpenModal());
     this.events.on('upgradePurchased', () => this.refreshOpenModal());
     this.events.on('skillPointSpent', () => this.refreshOpenModal());
-    this.events.on('baitPurchased', () => this.refreshOpenModal());
-    this.events.on('baitEquipped', () => this.refreshOpenModal());
+    this.events.on('baitPurchased', () => {
+      this.refreshOpenModal();
+      this.renderHud();
+    });
+    this.events.on('baitEquipped', () => {
+      this.refreshOpenModal();
+      this.renderHud();
+    });
     this.events.on('fishbotPurchased', () => this.refreshOpenModal());
     this.events.on('fishbotClaimed', () => this.refreshOpenModal());
     this.events.on('candyBarsChanged', () => this.refreshOpenModal());
@@ -505,6 +541,29 @@ export class UI {
     const baitOwned = state.baitInventory[equippedBait.id] ?? 0;
     this.hudBaitName.textContent = `${equippedBait.free ? '∞' : baitOwned} ${equippedBait.acronym}`;
     this.hudBasketCount.textContent = `${state.basket.length}/${this.economy.basketCapacity()}`;
+
+    // Update right-side bait selector buttons
+    for (const bait of BAIT_CATALOG) {
+      const btn = this.root.querySelector<HTMLButtonElement>(`#hud-bait-btn-${bait.id}`);
+      const qtyEl = this.root.querySelector<HTMLElement>(`#hud-bait-qty-${bait.id}`);
+      if (!btn || !qtyEl) continue;
+
+      const owned = state.baitInventory[bait.id] ?? 0;
+      const isSelected = state.equippedBaitId === bait.id;
+      const isAvailable = bait.free || owned > 0;
+
+      const qtyText = bait.free ? '∞' : String(owned);
+      if (qtyEl.textContent !== qtyText) {
+        qtyEl.textContent = qtyText;
+      }
+
+      btn.classList.toggle('selected', isSelected);
+      btn.classList.toggle('unselected', !isSelected);
+      btn.classList.toggle('empty', !isAvailable);
+
+      btn.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+      btn.title = `${bait.name} (${bait.free ? 'Free' : `${owned} left`}) - ${isSelected ? 'Selected' : isAvailable ? 'Click to equip' : 'Click to buy in shop'}`;
+    }
 
     const isBasketFull = this.economy.basketFull();
     if (isBasketFull) {
@@ -677,12 +736,117 @@ export class UI {
     this.catchCardTimeout = window.setTimeout(() => this.catchCard.classList.add('hidden'), 2400);
   }
 
+  private startBaitCoinToss(_baitId: string, baitName: string): void {
+    if (this.coinTossTimeout) {
+      window.clearTimeout(this.coinTossTimeout);
+      this.coinTossTimeout = null;
+    }
+
+    this.coinTossOverlay.innerHTML = `
+      <div class="coin-card" id="coin-card">
+        <h3 class="coin-title">Bait Saver Toss!</h3>
+        <p class="coin-subtitle">Flip to see if your <strong>${baitName}</strong> is lost!</p>
+        <div class="coin-rules-bar">
+          <span class="coin-rule-heads">🪙 Heads: <strong>Barnaby</strong> (Saved)</span>
+          <span class="coin-rule-sep">&bull;</span>
+          <span class="coin-rule-tails">💋 Tails: <strong>Catfish</strong> (Lost)</span>
+        </div>
+        <div class="coin-viewport" id="coin-viewport">
+          <div class="coin-3d" id="coin-3d">
+            <div class="coin-face coin-front">
+              <img class="coin-face-img" src="./images/barnaby-portrait.png" alt="Barnaby" />
+              <span class="coin-face-tag tag-barnaby">Barnaby (Heads)</span>
+            </div>
+            <div class="coin-face coin-back">
+              <img class="coin-face-img" src="./images/catfish-portrait.png" alt="Catfish with pretty lips" />
+              <span class="coin-face-tag tag-catfish">Catfish (Tails)</span>
+            </div>
+          </div>
+        </div>
+        <div class="coin-result-message hidden" id="coin-result-message"></div>
+        <div class="coin-actions">
+          <button class="btn-primary coin-flip-btn" id="btn-coin-flip" type="button">Flip Coin! 🪙</button>
+        </div>
+      </div>
+    `;
+    this.coinTossOverlay.classList.remove('hidden');
+
+    const flipBtn = this.coinTossOverlay.querySelector<HTMLButtonElement>('#btn-coin-flip');
+    const coin3d = this.coinTossOverlay.querySelector<HTMLElement>('#coin-3d');
+    const resultMsg = this.coinTossOverlay.querySelector<HTMLElement>('#coin-result-message');
+
+    let flipped = false;
+
+    const executeFlip = () => {
+      if (flipped) return;
+      flipped = true;
+      if (flipBtn) {
+        flipBtn.disabled = true;
+        flipBtn.textContent = 'Flipping...';
+      }
+
+      // Random 50/50: true = heads (Barnaby / Saved), false = tails (Catfish / Lost)
+      const isSaved = Math.random() < 0.5;
+
+      if (coin3d) {
+        coin3d.classList.add(isSaved ? 'flipping-to-barnaby' : 'flipping-to-catfish');
+      }
+
+      setTimeout(() => {
+        if (!resultMsg) return;
+        resultMsg.classList.remove('hidden');
+
+        if (isSaved) {
+          resultMsg.className = 'coin-result-message coin-result-saved';
+          resultMsg.innerHTML = `<strong>Barnaby wins!</strong> Your ${baitName} was saved! 🎉`;
+          this.gameState.finishCoinToss(false);
+          this.renderHud();
+        } else {
+          resultMsg.className = 'coin-result-message coin-result-lost';
+          resultMsg.innerHTML = `<strong>Pretty Catfish wins!</strong> 💋 Chomp! ${baitName} was lost.`;
+          this.gameState.finishCoinToss(true);
+          this.renderHud();
+        }
+
+        if (flipBtn) {
+          flipBtn.disabled = false;
+          flipBtn.textContent = 'Continue';
+          flipBtn.onclick = () => closeOverlay();
+        }
+
+        this.coinTossTimeout = window.setTimeout(() => {
+          closeOverlay();
+        }, 1800);
+      }, 1250);
+    };
+
+    const closeOverlay = () => {
+      if (this.coinTossTimeout) {
+        window.clearTimeout(this.coinTossTimeout);
+        this.coinTossTimeout = null;
+      }
+      this.coinTossOverlay.classList.add('hidden');
+      this.coinTossOverlay.innerHTML = '';
+      this.gameState.isCoinTossActive = false;
+    };
+
+    flipBtn?.addEventListener('click', executeFlip);
+    coin3d?.addEventListener('click', executeFlip);
+
+    if (this.gameState.autoFishingEnabled) {
+      setTimeout(() => {
+        if (!flipped) executeFlip();
+      }, 400);
+    }
+  }
+
   public closeModal(): void {
     if (!this.openModal) return;
     const previous = this.openModal;
     this.openModal = null;
     if (previous === 'closet') this.events.emit('closetClosed', {});
     this.resetArmed = false;
+    this.scrapbookOpened = false;
     this.renderModal();
   }
 
@@ -693,6 +857,7 @@ export class UI {
     }
     const previous = this.openModal;
     this.openModal = id;
+    if (this.openModal === 'collection') this.scrapbookOpened = false;
     if (this.openModal === 'market') this.marketSystem.onMarketOpened();
     if (previous === 'closet' && this.openModal !== 'closet') this.events.emit('closetClosed', {});
     if (this.openModal === 'closet' && previous !== 'closet') this.events.emit('closetOpened', {});
@@ -795,18 +960,14 @@ export class UI {
     const state = this.economy.snapshot;
     const baitRows = BAIT_CATALOG.map((bait) => {
       const owned = state.baitInventory[bait.id] ?? 0;
-      const equipped = state.equippedBaitId === bait.id;
-      const canEquip = bait.free || owned > 0;
-      const equipDisabled = equipped || !canEquip;
       return `
-        <li class="row">
+        <li class="row" id="shop-bait-${bait.id}">
           ${rowIcon(bait.id, bait.name, icon(ICON.bait, bait.name))}
           <div class="row-body">
             <strong>${bait.name}</strong>
             <span class="row-meta">${bait.free ? 'always available' : `${bait.costPerTen}🪙 / 10`} &middot; have ${bait.free ? '&infin;' : owned}</span>
           </div>
           <div class="row-actions">
-            <button class="btn-small ${equipDisabled ? 'btn-disabled' : ''}" data-action="equip-bait" data-id="${bait.id}" ${equipDisabled ? 'disabled' : ''}>${equipped ? 'Equipped' : 'Equip'}</button>
             ${bait.free ? '' : `<button class="btn-small" data-action="buy-bait" data-id="${bait.id}">Buy 10</button>`}
           </div>
         </li>`;
@@ -843,13 +1004,24 @@ export class UI {
         <button class="barnaby-portrait-btn" data-action="click-barnaby" type="button" aria-label="Barnaby">
           <img class="barnaby-portrait-small" src="./images/barnaby-portrait.png" alt="Barnaby" />
         </button>
-        ${this.barnabyMessage ? `<button class="barnaby-bubble" type="button" data-action="close-barnaby-message">${this.barnabyMessage} <em>*gulp*</em></button>` : ''}
+        ${this.barnabyMessage ? `<button class="barnaby-bubble" type="button" data-action="close-barnaby-message">${this.barnabyMessage.toLowerCase().includes('gulp') ? this.barnabyMessage : `${this.barnabyMessage} <em>*gulp*</em>`}</button>` : ''}
       </div>
     `;
 
     this.modalHost.innerHTML = this.modalShell(
       'Shop',
       `
+        <div class="shop-wallet-banner" id="shop-wallet-banner">
+          <span class="shop-wallet-label">Your Money:</span>
+          <span class="shop-wallet-amount"><strong id="shop-coins-amount">${state.coins}</strong> ${icon(ICON.coin, 'coins', 'inline-icon')}</span>
+        </div>
+        ${this.barnabyMessage ? `
+          <div class="shop-barnaby-banner" id="shop-barnaby-banner">
+            <img class="barnaby-portrait-small" src="./images/barnaby-portrait.png" alt="Barnaby" />
+            <div class="shop-barnaby-speech">${this.barnabyMessage}</div>
+            <button class="modal-close-small" data-action="close-barnaby-message" type="button" aria-label="Dismiss">&times;</button>
+          </div>
+        ` : ''}
         <div class="craft-actions-row">
           <span class="craft-trash-count">Trash bucket: ${trashCount} (unlimited)</span>
           <button class="btn-small" data-action="recycle-all" ${trashCount === 0 ? 'disabled' : ''}>Recycle All</button>
@@ -863,6 +1035,18 @@ export class UI {
       barnabyHeader,
     );
     this.bindModalActions();
+
+    if (this.requestedBaitFocus) {
+      const targetBaitId = this.requestedBaitFocus;
+      this.requestedBaitFocus = null;
+      setTimeout(() => {
+        const row = this.modalHost.querySelector<HTMLElement>(`#shop-bait-${targetBaitId}`);
+        if (row) {
+          row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          row.classList.add('highlight-pulse');
+        }
+      }, 50);
+    }
   }
 
   private renderMarket(): void {
@@ -873,7 +1057,7 @@ export class UI {
     const rows = state.basket.map((item, index) => {
       if (item.isTrash) return '';
       const species = FISH_CATALOG.find((f) => f.id === item.catchId);
-      const value = species ? Math.round(species.baseValue * this.economy.saleMultiplier()) : 0;
+      const value = species ? this.economy.getFishValue(item.catchId, item.weightKg) : 0;
       const highlightRowSell = isBasketTutorial && sellableCount === 1;
       return `
         <li class="row">
@@ -1170,34 +1354,119 @@ export class UI {
   }
 
   private renderCollection(): void {
+    const userName = this.economy.displayName();
+
+    if (!this.scrapbookOpened) {
+      this.modalHost.innerHTML = this.modalShell(
+        'Scrap Book',
+        `
+          <div class="scrapbook-cover-container" data-action="open-scrapbook">
+            <div class="scrapbook-cover-book">
+              <div class="scrapbook-cover-emboss">
+                <div class="scrapbook-gold-corner tl"></div>
+                <div class="scrapbook-gold-corner tr"></div>
+                <div class="scrapbook-gold-corner bl"></div>
+                <div class="scrapbook-gold-corner br"></div>
+                <div class="scrapbook-crest">
+                  <span class="scrapbook-tail-emoji">🐟</span>
+                </div>
+                <div class="scrapbook-author-text">${userName}&apos;s</div>
+                <h2 class="scrapbook-title-text">Big Fish Tails</h2>
+                <div class="scrapbook-ornament-line"></div>
+                <p class="scrapbook-tagline">Official Log of Record Catches &amp; Pond Lore</p>
+                <button class="btn-primary scrapbook-open-btn" data-action="open-scrapbook" type="button">
+                  Open Scrap Book 📖
+                </button>
+              </div>
+            </div>
+          </div>
+        `,
+      );
+      const coverElem = this.modalHost.querySelector<HTMLElement>('.scrapbook-cover-container');
+      coverElem?.addEventListener('click', () => {
+        this.scrapbookOpened = true;
+        this.renderCollection();
+      });
+      this.bindModalActions();
+      return;
+    }
+
     const discovered = new Set(this.economy.snapshot.discoveredCatchIds);
-    const groups = RARITY_ORDER.map((rarity) => {
-      const entries =
-        rarity === 'trash'
-          ? TRASH_CATALOG.map((t) => ({ id: t.id, name: t.name, flavor: t.flavor }))
-          : FISH_CATALOG.filter((f) => f.rarity === rarity).map((f) => ({ id: f.id, name: f.name, flavor: f.flavor }));
-      const rows = entries.map((entry) => {
-        const known = discovered.has(entry.id);
-        const sprite = spriteFor(entry.id);
+    let totalFishCaught = 0;
+    let fishDiscoveredCount = 0;
+
+    for (const fish of FISH_CATALOG) {
+      const rec = this.economy.getFishRecord(fish.id);
+      totalFishCaught += rec.count;
+      if (rec.count > 0 || discovered.has(fish.id)) {
+        fishDiscoveredCount += 1;
+      }
+    }
+
+    const groups = RARITY_ORDER.filter((r) => r !== 'trash').map((rarity) => {
+      const fishList = FISH_CATALOG.filter((f) => f.rarity === rarity);
+      if (fishList.length === 0) return '';
+      const rows = fishList.map((fish) => {
+        const record = this.economy.getFishRecord(fish.id);
+        const known = record.count > 0 || discovered.has(fish.id);
+        const sprite = spriteFor(fish.id);
         const spriteMarkup = sprite
-          ? `<div class="row-icon">${icon(sprite, known ? entry.name : 'undiscovered', known ? 'icon-img' : 'icon-img sprite-silhouette')}</div>`
+          ? `<div class="row-icon scrapbook-icon">${icon(sprite, known ? fish.name : 'undiscovered', known ? 'icon-img' : 'icon-img sprite-silhouette')}</div>`
           : '';
+        const isTrophy = record.maxWeightKg > 0 && record.maxWeightKg >= fish.weightRangeKg[1] * 0.88;
         return `
-          <li class="row collection-row ${known ? '' : 'collection-unknown'}">
+          <li class="row scrapbook-row ${known ? '' : 'scrapbook-unknown'}">
             ${spriteMarkup}
-            <div class="row-body">
-              <strong>${known ? entry.name : '???'}</strong>
-              <span class="row-meta">${known ? entry.flavor : 'Not yet discovered.'}</span>
+            <div class="row-body scrapbook-row-body">
+              <div class="scrapbook-row-head">
+                <strong class="scrapbook-fish-name">${known ? fish.name : '???'}</strong>
+                ${isTrophy ? '<span class="scrapbook-trophy-badge" title="Trophy Specimen!">⭐ Trophy</span>' : ''}
+              </div>
+              <div class="scrapbook-stats-bar">
+                <span class="scrapbook-stat">Largest: <strong class="${isTrophy ? 'trophy-gold' : ''}">${record.maxWeightKg > 0 ? `${record.maxWeightKg.toFixed(2)} kg` : '&mdash;'}</strong></span>
+                <span class="scrapbook-dot">&bull;</span>
+                <span class="scrapbook-stat">Caught: <strong>${record.count}</strong></span>
+              </div>
+              <div class="scrapbook-range">Typical: ${fish.weightRangeKg[0].toFixed(2)} &ndash; ${fish.weightRangeKg[1].toFixed(2)} kg</div>
+              <span class="row-meta scrapbook-flavor">${known ? fish.flavor : 'Not yet caught. Search the waters to land one!'}</span>
             </div>
           </li>`;
       }).join('');
       return `<h4 class="modal-subhead rarity-heading rarity-${rarity}">${rarity}</h4><ul class="modal-list">${rows}</ul>`;
     }).join('');
 
-    const total = FISH_CATALOG.length + TRASH_CATALOG.length;
+    const trashDiscovered = TRASH_CATALOG.filter((t) => discovered.has(t.id)).length;
+    const trashRows = TRASH_CATALOG.map((trash) => {
+      const known = discovered.has(trash.id);
+      const sprite = spriteFor(trash.id);
+      const spriteMarkup = sprite
+        ? `<div class="row-icon">${icon(sprite, known ? trash.name : 'undiscovered', known ? 'icon-img' : 'icon-img sprite-silhouette')}</div>`
+        : '';
+      return `
+        <li class="row scrapbook-row ${known ? '' : 'scrapbook-unknown'}">
+          ${spriteMarkup}
+          <div class="row-body">
+            <strong>${known ? trash.name : '???'}</strong>
+            <span class="row-meta">${known ? trash.flavor : 'Not yet discovered.'}</span>
+          </div>
+        </li>`;
+    }).join('');
+
     this.modalHost.innerHTML = this.modalShell(
-      'Collection',
-      `<p class="modal-note">${discovered.size}/${total} discovered</p>${groups}`,
+      'Scrap Book',
+      `
+        <div class="scrapbook-open-header">
+          <div class="scrapbook-open-title">
+            <span class="scrapbook-tail-badge">📖</span>
+            <strong>${userName}&apos;s Big Fish Tails</strong>
+          </div>
+          <button class="btn-small scrapbook-close-cover-btn" data-action="close-scrapbook" type="button">Close Book</button>
+        </div>
+        <p class="modal-note">${fishDiscoveredCount}/${FISH_CATALOG.length} Species Landed &middot; ${totalFishCaught} Total Fish Caught</p>
+        ${groups}
+        <h4 class="modal-subhead rarity-heading rarity-trash">Pond Salvage (${trashDiscovered}/${TRASH_CATALOG.length})</h4>
+        <ul class="modal-list">${trashRows}</ul>
+      `,
     );
     this.bindModalActions();
   }
@@ -1289,9 +1558,21 @@ export class UI {
         const slot = button.dataset.slot as ClothingSlot | undefined;
 
         if (action === 'close') this.closeModal();
+        else if (action === 'open-scrapbook') {
+          this.scrapbookOpened = true;
+          this.renderCollection();
+        }
+        else if (action === 'close-scrapbook') {
+          this.scrapbookOpened = false;
+          this.renderCollection();
+        }
         else if (action === 'equip-bait') this.craftingSystem.equipBait(id);
         else if (action === 'buy-bait') {
-          if (!this.craftingSystem.purchaseBait(id)) this.showToast('Not enough 🪙');
+          if (!this.craftingSystem.purchaseBait(id)) {
+            this.barnabyMessage = 'Gulp, not enough money partner.';
+            this.renderShop();
+            this.showToast('Not enough 🪙');
+          }
         }
         else if (action === 'buy-fishbot') this.craftingSystem.purchaseFishbot(id);
         else if (action === 'claim-hopper') this.fishbotSystem.claimHopper();
@@ -1338,6 +1619,33 @@ export class UI {
         if (action !== 'close') this.renderModal();
       });
     });
+  }
+
+  private handleBaitClick(baitId: string): void {
+    const baitDef = BAIT_CATALOG.find((b) => b.id === baitId);
+    if (!baitDef) return;
+
+    const state = this.economy.snapshot;
+    const owned = state.baitInventory[baitId] ?? 0;
+    const isAvailable = baitDef.free || owned > 0;
+
+    if (!isAvailable) {
+      this.openShopForBait(baitId);
+      return;
+    }
+
+    if (this.craftingSystem.equipBait(baitId)) {
+      this.renderHud();
+    }
+  }
+
+  private openShopForBait(baitId: string): void {
+    this.requestedBaitFocus = baitId;
+    if (this.openModal !== 'shop') {
+      this.toggleModal('shop');
+    } else {
+      this.refreshOpenModal();
+    }
   }
 
   private el(selector: string): HTMLElement {

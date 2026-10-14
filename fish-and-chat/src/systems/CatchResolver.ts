@@ -1,4 +1,4 @@
-import { RARITY_XP_MULTIPLIER, type Rarity, type ThemeId } from '../game/data';
+import { calculateFishValue, RARITY_XP_MULTIPLIER, type Rarity, type ThemeId } from '../game/data';
 import { pickSpeciesForRarity, pickTrashItem, rollWeightKg } from '../game/loot';
 import type { CatchResult } from '../game/events';
 import type { Economy } from '../game/Economy';
@@ -81,7 +81,7 @@ export function resolveCatch(
 
   const species = pickSpeciesForRarity(rarity, theme, effectiveSkill);
   const weightKg = rollWeightKg(species.weightRangeKg);
-  let value = species.baseValue;
+  let value = calculateFishValue(species, weightKg, 1.0);
   let name = species.name;
 
   if ((L === 5 || L === 7) && Math.random() < 0.25) {

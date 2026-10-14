@@ -13,6 +13,11 @@ export interface FishbotState {
   nextReadyAtMs: number;
 }
 
+export interface FishRecord {
+  count: number;
+  maxWeightKg: number;
+}
+
 export interface GameSaveStateV1 {
   coins: number;
   candyBars: number;
@@ -26,6 +31,7 @@ export interface GameSaveStateV1 {
   equippedBaitId: string;
   baitInventory: Record<string, number>;
   discoveredCatchIds: string[];
+  fishRecords: Record<string, FishRecord>;
   fishbots: Record<string, FishbotState>;
   fishbotHopper: BasketItem[];
   lastActiveAtMs: number;
@@ -62,6 +68,7 @@ export function createDefaultSaveState(): GameSaveStateV1 {
     equippedBaitId: 'pleb-bait',
     baitInventory: {},
     discoveredCatchIds: [],
+    fishRecords: {},
     fishbots,
     fishbotHopper: [],
     lastActiveAtMs: Date.now(),
@@ -133,6 +140,22 @@ export function migrateSaveState(state: GameSaveStateV1): GameSaveStateV1 {
       hasSeenCastTutorial: next.hasSeenCastTutorial ?? true,
       hasSeenReelTutorial: next.hasSeenReelTutorial ?? true,
     };
+  }
+
+  // Backfill fishRecords for scrap book tracking if missing
+  if (next.fishRecords === undefined) {
+    const records: Record<string, FishRecord> = {};
+    if (next.basket) {
+      for (const item of next.basket) {
+        if (item.isTrash) continue;
+        const cur = records[item.catchId] ?? { count: 0, maxWeightKg: 0 };
+        records[item.catchId] = {
+          count: cur.count + 1,
+          maxWeightKg: Math.max(cur.maxWeightKg, item.weightKg),
+        };
+      }
+    }
+    next = { ...next, fishRecords: records };
   }
 
   return next;

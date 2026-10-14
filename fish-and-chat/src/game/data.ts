@@ -296,6 +296,21 @@ export function rollRarity(weights: RarityWeights, roll = Math.random()): Rarity
   return 'trash';
 }
 
+/**
+ * Calculates dynamic market/reward value for a caught fish based on its weight.
+ * Scales from 70% of baseValue for minimum-weight runts up to 160% of baseValue for monster trophy catches.
+ */
+export function calculateFishValue(
+  species: CatchDefinition,
+  weightKg: number,
+  saleMultiplier: number = 1.0
+): number {
+  const [min, max] = species.weightRangeKg;
+  const norm = max > min ? Math.max(0, Math.min(1, (weightKg - min) / (max - min))) : 0.5;
+  const weightFactor = 0.7 + 0.9 * norm;
+  return Math.max(1, Math.round(species.baseValue * weightFactor * saleMultiplier));
+}
+
 // --- Candy Bars: premium currency ------------------------------------------
 
 /** A Twitch Bits → Candy Bar exchange tier, sold through the Muxy extension. */

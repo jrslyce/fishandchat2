@@ -423,6 +423,113 @@ body {
   color: var(--wood-dark);
 }
 
+/* Right-side Bait Selector bar */
+
+#hud-bait-bar {
+  position: absolute;
+  top: max(148px, calc(env(safe-area-inset-top) + 142px));
+  right: max(12px, env(safe-area-inset-right));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: auto;
+  z-index: 20;
+}
+
+.hud-bait-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 52px;
+  height: 34px;
+  padding: 4px 8px 4px 6px;
+  border-radius: 999px;
+  background: var(--paper);
+  border: 2px solid transparent;
+  box-shadow: var(--shadow-panel);
+  cursor: pointer;
+  outline: none;
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 0.74rem;
+  color: var(--ink);
+  transition: transform 0.15s ease, opacity 0.2s ease, filter 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.hud-bait-icon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  display: block;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
+}
+
+.hud-bait-qty {
+  font-variant-numeric: tabular-nums;
+  min-width: 1.6ch;
+  text-align: right;
+  line-height: 1;
+}
+
+/* Selected bait: visible, highlighted, active */
+.hud-bait-btn.selected {
+  opacity: 1;
+  filter: none;
+  border-color: var(--accent);
+  background: var(--paper);
+  box-shadow: 0 4px 14px rgba(44, 30, 10, 0.28), 0 0 0 1px var(--accent), 0 0 8px rgba(242, 166, 90, 0.4);
+  transform: translateX(-2px);
+}
+
+.hud-bait-btn.selected .hud-bait-qty {
+  color: var(--ink);
+  font-weight: 900;
+}
+
+/* Unselected bait: grayed out */
+.hud-bait-btn.unselected {
+  opacity: 0.45;
+  filter: grayscale(1);
+  background: rgba(251, 246, 234, 0.75);
+  border-color: transparent;
+}
+
+.hud-bait-btn.unselected:hover {
+  opacity: 0.8;
+  filter: grayscale(0.25);
+  transform: translateX(-1px);
+}
+
+.hud-bait-btn:active {
+  transform: scale(0.96);
+}
+
+/* Bait with 0 available */
+.hud-bait-btn.empty .hud-bait-qty {
+  color: var(--ink-soft);
+}
+
+/* Highlight pulse when shop is opened targeting a specific bait */
+@keyframes baitShopHighlight {
+  0%, 100% {
+    background: transparent;
+  }
+  50% {
+    background: rgba(242, 166, 90, 0.25);
+    border-radius: var(--radius-sm);
+  }
+}
+
+.highlight-pulse {
+  animation: baitShopHighlight 1.2s ease 2;
+}
+
+
 /* Basket badge, bottom-left */
 
 #basket-badge {
@@ -1094,6 +1201,224 @@ body {
   opacity: 0.35;
 }
 
+/* Scrap Book */
+.scrapbook-cover-container {
+  padding: 8px 2px;
+  display: flex;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.scrapbook-cover-book {
+  width: 100%;
+  max-width: 272px;
+  background: linear-gradient(145deg, #462512 0%, #2b1407 100%);
+  border-radius: 12px;
+  padding: 12px 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15), inset -3px 0 6px rgba(0,0,0,0.5);
+  position: relative;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+  border-left: 8px solid #200f05;
+}
+
+.scrapbook-cover-book:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.scrapbook-cover-emboss {
+  border: 2px solid #d4af37;
+  border-radius: 8px;
+  padding: 16px 8px;
+  text-align: center;
+  position: relative;
+  background: radial-gradient(circle at center, rgba(212, 175, 55, 0.08) 0%, transparent 70%);
+}
+
+.scrapbook-gold-corner {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #f7d063;
+}
+.scrapbook-gold-corner.tl { top: 4px; left: 4px; border-right: none; border-bottom: none; }
+.scrapbook-gold-corner.tr { top: 4px; right: 4px; border-left: none; border-bottom: none; }
+.scrapbook-gold-corner.bl { bottom: 4px; left: 4px; border-right: none; border-top: none; }
+.scrapbook-gold-corner.br { bottom: 4px; right: 4px; border-left: none; border-top: none; }
+
+.scrapbook-crest {
+  font-size: 2.2rem;
+  line-height: 1;
+  margin-bottom: 6px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+}
+
+.scrapbook-author-text {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #f7d063;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  margin-bottom: 2px;
+}
+
+.scrapbook-title-text {
+  font-size: 1.55rem;
+  font-weight: 900;
+  color: #ffe682;
+  margin: 0;
+  letter-spacing: 0.8px;
+  line-height: 1.15;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.9), 0 0 12px rgba(247, 208, 99, 0.35);
+}
+
+.scrapbook-ornament-line {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #d4af37 25%, #ffe682 50%, #d4af37 75%, transparent);
+  margin: 10px auto;
+  width: 75%;
+}
+
+.scrapbook-tagline {
+  font-size: 0.72rem;
+  color: #d1b58a;
+  margin: 0 0 14px 0;
+  letter-spacing: 0.4px;
+}
+
+.scrapbook-open-btn {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 0.88rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #e5a73b 0%, #b8791c 100%);
+  color: #2b1407;
+  border: 1px solid #ffe682;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+
+.scrapbook-open-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+/* Open Scrapbook Pages */
+.scrapbook-open-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  background: var(--paper-dark);
+  border-radius: var(--radius-sm);
+}
+
+.scrapbook-open-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.86rem;
+  color: var(--ink);
+  min-width: 0;
+}
+
+.scrapbook-open-title strong {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scrapbook-close-cover-btn {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  padding: 3px 7px;
+}
+
+.scrapbook-row {
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+}
+
+.scrapbook-icon {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.scrapbook-row-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.scrapbook-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.scrapbook-fish-name {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.scrapbook-trophy-badge {
+  font-size: 0.68rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #f7d063 0%, #d49a18 100%);
+  color: #2b1407;
+  padding: 1px 6px;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(212, 154, 24, 0.4);
+  white-space: nowrap;
+}
+
+.scrapbook-stats-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--ink);
+  margin-bottom: 2px;
+}
+
+.scrapbook-stats-bar strong {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.scrapbook-stats-bar strong.trophy-gold {
+  color: #b8791c;
+}
+
+.scrapbook-dot {
+  opacity: 0.4;
+}
+
+.scrapbook-range {
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  margin-bottom: 2px;
+}
+
+.scrapbook-flavor {
+  font-size: 0.73rem;
+  line-height: 1.25;
+}
+
+.scrapbook-unknown .scrapbook-fish-name {
+  color: var(--ink-soft);
+}
+
 /* Settings */
 
 .settings-row {
@@ -1548,4 +1873,247 @@ body {
   #phase-indicator {
     width: 88vw;
   }
+  #hud-bait-bar {
+    top: max(136px, calc(env(safe-area-inset-top) + 130px));
+    gap: 6px;
+  }
+  .hud-bait-btn {
+    height: 30px;
+    min-width: 46px;
+    padding: 3px 7px 3px 5px;
+    font-size: 0.7rem;
+  }
+  .hud-bait-icon {
+    width: 19px;
+    height: 19px;
+  }
+}
+
+/* ============================================================
+   Shop Wallet & Barnaby Insufficient Funds Banner
+   ============================================================ */
+.shop-wallet-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #fff8e7 0%, #ffecb3 100%);
+  border: 1.5px solid #ffd54f;
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--ink);
+  box-shadow: 0 2px 6px rgba(180, 130, 20, 0.15);
+}
+
+.shop-wallet-amount {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 1.05rem;
+  color: #8d5b00;
+}
+
+.shop-barnaby-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: #fffdf5;
+  border: 2px solid #e0a96d;
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+  animation: popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+}
+
+.shop-barnaby-speech {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #5c3818;
+  line-height: 1.25;
+  flex: 1 1 auto;
+}
+
+.modal-close-small {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  line-height: 1;
+  color: #9c6c42;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+/* ============================================================
+   Heads or Tails Coin Toss Minigame
+   ============================================================ */
+.coin-toss-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 12, 8, 0.75);
+  backdrop-filter: blur(4px);
+  z-index: 120;
+  padding: 16px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.coin-card {
+  background: var(--paper);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+  width: 100%;
+  max-width: 285px;
+  padding: 18px 16px;
+  text-align: center;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+  border: 2px solid #d4af37;
+}
+
+.coin-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #5c3818;
+}
+
+.coin-subtitle {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--ink-light);
+}
+
+.coin-rules-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #fdf6e2;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed #e6c565;
+}
+
+.coin-rule-heads {
+  color: #2b7538;
+}
+
+.coin-rule-tails {
+  color: #c2185b;
+}
+
+.coin-viewport {
+  width: 124px;
+  height: 124px;
+  perspective: 700px;
+  margin: 8px 0;
+  cursor: pointer;
+}
+
+.coin-3d {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 1.25s cubic-bezier(0.18, 0.89, 0.32, 1.15);
+}
+
+.coin-face {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  backface-visibility: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), inset 0 0 0 4px #d4af37, inset 0 0 0 7px #ffe082;
+  border: 3px solid #8d6e18;
+  background: radial-gradient(circle, #fff3cd 30%, #f4c430 100%);
+  overflow: hidden;
+}
+
+.coin-face.coin-front {
+  transform: rotateY(0deg);
+}
+
+.coin-face.coin-back {
+  transform: rotateY(180deg);
+}
+
+.coin-face-img {
+  width: 92px;
+  height: 92px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.coin-face-tag {
+  position: absolute;
+  bottom: 5px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.coin-face-tag.tag-barnaby {
+  border: 1px solid #81c784;
+}
+
+.coin-face-tag.tag-catfish {
+  border: 1px solid #f48fb1;
+}
+
+.coin-3d.flipping-to-barnaby {
+  transform: rotateY(1800deg);
+}
+
+.coin-3d.flipping-to-catfish {
+  transform: rotateY(1980deg);
+}
+
+.coin-result-message {
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.3;
+  width: 100%;
+  box-sizing: border-box;
+  animation: popIn 0.3s ease-out;
+}
+
+.coin-result-saved {
+  background: #e8f5e9;
+  border: 1.5px solid #81c784;
+  color: #1b5e20;
+}
+
+.coin-result-lost {
+  background: #fce4ec;
+  border: 1.5px solid #f48fb1;
+  color: #880e4f;
+}
+
+.coin-flip-btn {
+  min-width: 140px;
+  font-size: 0.95rem;
+  padding: 8px 16px;
 }

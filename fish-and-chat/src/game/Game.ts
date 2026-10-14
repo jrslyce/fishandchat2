@@ -377,6 +377,8 @@ export class Game {
     const lineTaut = phase === 'casting' || phase === 'waiting' || phase === 'bite';
     this.fishingLine.setVisible(lineTaut);
     if (lineTaut) {
+      const lineTier = this.economy.upgradeTier('braided-line');
+      this.fishingLine.setTier(lineTier);
       const rodTip = this.playerCharacter.getRodTipWorldPosition(new THREE.Vector3());
       this.fishingLine.update(rodTip, this.bobber.group.position);
     }

@@ -29,7 +29,7 @@ export class MarketSystem {
     const species = FISH_CATALOG.find((fish) => fish.id === item.catchId);
     if (!species) return false;
 
-    const value = Math.round(species.baseValue * this.economy.saleMultiplier());
+    const value = this.economy.getFishValue(item.catchId, item.weightKg);
     this.economy.removeFromBasket(basketIndex);
     this.economy.addCoins(value);
 
