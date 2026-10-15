@@ -77,7 +77,7 @@ export class WaterSystem {
     this.mesh.renderOrder = 1;
     this.mesh.add(this.rippleGroup);
 
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 6; i++) {
       const ring = new THREE.Mesh(
         new THREE.RingGeometry(0.22, 0.235, 64),
         new THREE.MeshBasicMaterial({ color: '#bce8f5', transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false }),
