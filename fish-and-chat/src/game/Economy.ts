@@ -54,7 +54,7 @@ export interface RecycleResult {
 export class Economy {
   private state: GameSaveStateV1;
   // Debug-only, in-memory (never persisted): forces the next successfully-resolved catch.
-  private debugForceNextCatch: 'treasure' | null = null;
+  private debugForceNextCatch: 'treasure' | 'lucky-coin-bottle' | null = null;
   // Barnaby's 5th-click secret, in-memory (never persisted): the next bait purchase grants 13
   // instead of 10.
   private bakersDozenNextBait = false;
@@ -67,15 +67,30 @@ export class Economy {
     return this.state;
   }
 
-  setDebugForceNextCatch(kind: 'treasure' | null): void {
+  setDebugForceNextCatch(kind: 'treasure' | 'lucky-coin-bottle' | null): void {
     this.debugForceNextCatch = kind;
   }
 
   /** Reads and clears the debug override in one step, so it only ever applies to one catch. */
-  consumeDebugForcedCatch(): 'treasure' | null {
+  consumeDebugForcedCatch(): 'treasure' | 'lucky-coin-bottle' | null {
     const kind = this.debugForceNextCatch;
     this.debugForceNextCatch = null;
     return kind;
+  }
+
+  hasLuckyCoinBottle(): boolean {
+    return Boolean(this.state.hasLuckyCoinBottle);
+  }
+
+  unlockLuckyCoinBottle(): void {
+    if (this.state.hasLuckyCoinBottle) return;
+    this.state.hasLuckyCoinBottle = true;
+    this.persist();
+  }
+
+  setLuckyCoinBottle(unlocked: boolean): void {
+    this.state.hasLuckyCoinBottle = unlocked;
+    this.persist();
   }
 
   setBakersDozenNextBait(active: boolean): void {

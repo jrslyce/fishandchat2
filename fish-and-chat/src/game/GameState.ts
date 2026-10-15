@@ -71,6 +71,7 @@ export class FishingStateMachine {
   public debugPerfectCastMode = false;
   public autoFishingEnabled = false;
   public isCoinTossActive = false;
+  public pendingCoinToss = false;
   private baitSaverActive = false;
   private isTutorialCast = false;
 
@@ -151,7 +152,16 @@ export class FishingStateMachine {
         break;
       case 'celebrating':
         if (this.isCoinTossActive) break;
-        if (this.phaseElapsed >= CELEBRATING_SECONDS || input.justPressed()) this.enterIdle();
+        if (this.phaseElapsed >= CELEBRATING_SECONDS || input.justPressed()) {
+          if (this.pendingCoinToss) {
+            this.pendingCoinToss = false;
+            this.isCoinTossActive = true;
+            const bait = this.economy.equippedBait();
+            this.events.emit('coinTossTriggered', { baitId: bait.id, baitName: bait.name });
+          } else {
+            this.enterIdle();
+          }
+        }
         break;
       case 'missed':
         if (this.phaseElapsed >= MISSED_TOAST_SECONDS) this.enterIdle();
@@ -291,6 +301,11 @@ export class FishingStateMachine {
       return;
     }
 
+    this.resolveCatchSuccess();
+  }
+
+  /** Resolves a successful catch and enters celebration phase — used on reel success and in tests */
+  resolveCatchSuccess(): void {
     this.setPhase('resolving');
 
     const precisionBonus = precisionSkillBonus(this.lockedPrecision);
@@ -306,7 +321,11 @@ export class FishingStateMachine {
 
     const equippedBait = this.economy.equippedBait();
     if (!equippedBait.free) {
-      this.isCoinTossActive = true;
+      if (this.economy.hasLuckyCoinBottle() && result.catchId !== 'lucky-coin-bottle') {
+        this.pendingCoinToss = true;
+      } else if (!this.baitSaverActive) {
+        this.economy.consumeBaitForCast();
+      }
     }
 
     this.events.emit('catchResolved', { result });
@@ -317,10 +336,14 @@ export class FishingStateMachine {
   }
 
   finishCoinToss(lost: boolean): void {
-    this.isCoinTossActive = false;
     if (lost && !this.baitSaverActive) {
       this.economy.consumeBaitForCast();
     }
+  }
+
+  finishCoinTossOverlay(): void {
+    this.isCoinTossActive = false;
+    this.enterIdle();
   }
 
   private enterMissed(reason: 'early' | 'late' | 'no-react' | 'escaped' | 'no-catch' | 'bait-stolen' | 'reeled-early'): void {

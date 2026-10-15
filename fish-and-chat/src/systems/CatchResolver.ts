@@ -29,6 +29,28 @@ function resolveTreasureHook(economy: Economy): CatchResult {
 }
 
 /**
+ * Special item in a bottle found using the neon lure.
+ * Unlocks the Heads-or-Tails Coin Flip game for paid baits!
+ */
+function resolveLuckyCoinBottleHook(economy: Economy): CatchResult {
+  const coins = 100;
+  economy.addCoins(coins);
+  economy.unlockLuckyCoinBottle();
+  economy.recordCatch('lucky-coin-bottle', 0.75, false);
+  return {
+    catchId: 'lucky-coin-bottle',
+    name: 'Lucky Coin in a Bottle',
+    rarity: 'epic',
+    isTrash: false,
+    weightKg: 0.75,
+    value: coins,
+    flavor: 'Inside the floating bottle is an ancient coin with Barnaby on one side and a pretty catfish on the other! Unlocks the Bait Saver Coin Flip!',
+    xpAwarded: 100,
+    addedToBasket: true,
+  };
+}
+
+/**
  * Picks a species for the already-decided `rarity` (respecting theme affinity), computes
  * weight/value/XP, and adds the catch to the basket. Rarity is rolled earlier, at bite-start
  * (`GameState.enterBite()`), so the reel window/fight value can reflect it before the player
@@ -44,8 +66,19 @@ export function resolveCatch(
   S: number,
   rarity: Rarity,
 ): CatchResult {
-  if (economy.consumeDebugForcedCatch() === 'treasure') {
+  const forced = economy.consumeDebugForcedCatch();
+  if (forced === 'treasure') {
     return resolveTreasureHook(economy);
+  }
+  if (forced === 'lucky-coin-bottle') {
+    return resolveLuckyCoinBottleHook(economy);
+  }
+
+  const equippedBait = economy.equippedBait();
+  if (equippedBait.id === 'neon-super-lure' && !economy.hasLuckyCoinBottle()) {
+    if (Math.random() < 0.5) {
+      return resolveLuckyCoinBottleHook(economy);
+    }
   }
 
   const effectiveSkill = economy.effectiveSkill(castPrecisionBonus + S * 5);

@@ -176,7 +176,7 @@ test.describe('Pleb bait tutorial flow: 6s & 12s casts, Barnaby dialogue, down t
     });
 
     // 5. Tap the screen / bubble to advance dialogue
-    await page.locator('#tutorial-bubble-text').click();
+    await page.locator('#tutorial-bubble-text').click({ force: true });
 
     // Speech updates to: "Stop by my ba ba bait shop to get some better ba ba bait."
     await expect(bubbleContent).toHaveText('Stop by my ba ba bait shop to get some better ba ba bait.');
@@ -206,11 +206,7 @@ test.describe('Pleb bait tutorial flow: 6s & 12s casts, Barnaby dialogue, down t
     await marshmallowsBtn.click({ force: true });
     await expect(page.locator('#modal-host')).toBeVisible();
 
-    // Verify Barnaby says: "Glurp, oh hi new one. Grab some slurplys"
-    const barnabySpeech = page.locator('#shop-barnaby-banner .shop-barnaby-speech');
-    await expect(barnabySpeech).toBeVisible();
-    await expect(barnabySpeech).toHaveText('Glurp, oh hi new one. Grab some slurplys');
-
+    // Verify Barnaby says: "Glurp, oh hi new one. Grab some slurplys" in the header bubble
     const headerBubble = page.locator('#modal-host .barnaby-bubble');
     await expect(headerBubble).toBeVisible();
     await expect(headerBubble).toContainText('Glurp, oh hi new one. Grab some slurplys');

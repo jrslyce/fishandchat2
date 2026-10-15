@@ -52,6 +52,8 @@ export interface GameSaveStateV1 {
   tutorialCastCount: number;
   /** Whether the full bait onboarding tutorial (dialogue + bait shop prompt) has finished */
   hasCompletedBaitTutorial: boolean;
+  /** Whether the player has fished up the Lucky Coin in a Bottle with the neon lure */
+  hasLuckyCoinBottle: boolean;
 }
 
 export function createDefaultSaveState(): GameSaveStateV1 {
@@ -90,6 +92,7 @@ export function createDefaultSaveState(): GameSaveStateV1 {
     hasSeenReelTutorial: false,
     tutorialCastCount: 0,
     hasCompletedBaitTutorial: false,
+    hasLuckyCoinBottle: false,
   };
 }
 
@@ -173,6 +176,10 @@ export function migrateSaveState(state: GameSaveStateV1): GameSaveStateV1 {
       }
     }
     next = { ...next, fishRecords: records };
+  }
+
+  if (next.hasLuckyCoinBottle === undefined) {
+    next = { ...next, hasLuckyCoinBottle: false };
   }
 
   return next;

@@ -20,6 +20,7 @@ export const SPRITE_MANIFEST: Record<string, string> = {
   'jade-koi': './images/sprites/jade-koi.png',
   'lantern-catfish': './images/sprites/lantern-catfish.png',
   'led-bobber': './images/sprites/led-bobber.png',
+  'lucky-coin-bottle': './images/sprites/lucky-coin-bottle.png',
   'lucky-ducky': './images/sprites/lucky-ducky.png',
   'marshmallows': './images/sprites/marshmallows.png',
   'metal': './images/sprites/metal.png',

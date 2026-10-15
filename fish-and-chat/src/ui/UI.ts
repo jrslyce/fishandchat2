@@ -277,7 +277,7 @@ export class UI {
     });
 
     // Clicking the bubble itself dismisses it early (or opens market if basket is full, or advances bait tutorial)
-    this.tutorialBubbleText.addEventListener('click', (e) => {
+    const onTutorialBubbleClick = (e: Event) => {
       e.stopPropagation();
       if (this.economy.basketFull() || this.inBasketTutorial) {
         this.toggleModal('market');
@@ -301,7 +301,10 @@ export class UI {
       if (!this.economy.hasSeenCastTutorial()) this.economy.markCastTutorialSeen();
       else if (!this.economy.hasSeenReelTutorial()) this.economy.markReelTutorialSeen();
       this.renderTutorialBubble(this.gameState.getPhase());
-    });
+    };
+
+    this.tutorialBubbleText.addEventListener('click', onTutorialBubbleClick);
+    this.tutorialBubble.addEventListener('click', onTutorialBubbleClick);
 
     this.titleStart.addEventListener('click', () => this.dismissTitleScreen());
 
@@ -401,10 +404,14 @@ export class UI {
     });
     this.events.on('catchResolved', ({ result }) => {
       this.showCatchCard(result);
-      const bait = this.economy.equippedBait();
-      if (!bait.free) {
-        this.startBaitCoinToss(bait.id, bait.name);
+    });
+    this.events.on('coinTossTriggered', ({ baitId, baitName }) => {
+      if (this.catchCardTimeout) {
+        window.clearTimeout(this.catchCardTimeout);
+        this.catchCardTimeout = null;
       }
+      this.catchCard.classList.add('hidden');
+      this.startBaitCoinToss(baitId, baitName);
     });
     this.events.on('coinsChanged', () => this.refreshOpenModal());
     this.events.on('upgradePurchased', () => this.refreshOpenModal());
@@ -887,7 +894,7 @@ export class UI {
       }
       this.coinTossOverlay.classList.add('hidden');
       this.coinTossOverlay.innerHTML = '';
-      this.gameState.isCoinTossActive = false;
+      this.gameState.finishCoinTossOverlay();
     };
 
     flipBtn?.addEventListener('click', executeFlip);
@@ -1011,6 +1018,14 @@ export class UI {
             <div class="row-actions"><button class="btn-small" data-action="debug-force-treasure">Set</button></div>
           </li>
           <li class="row">
+            <div class="row-body"><strong>Lucky Coin Bottle</strong><span class="row-meta">${this.economy.hasLuckyCoinBottle() ? 'Unlocked: Coin flip active for paid bait.' : 'Locked: Must be found using Neon Lure.'}</span></div>
+            <div class="row-actions"><button class="btn-small" data-action="debug-toggle-coin-bottle">${this.economy.hasLuckyCoinBottle() ? 'Unlocked' : 'Locked'}</button></div>
+          </li>
+          <li class="row">
+            <div class="row-body"><strong>Force Next Catch: Coin in Bottle</strong><span class="row-meta">Next successful reel is the Lucky Coin in a Bottle.</span></div>
+            <div class="row-actions"><button class="btn-small" data-action="debug-force-coin-bottle">Set</button></div>
+          </li>
+          <li class="row">
             <div class="row-body"><strong>Start Tutorial</strong><span class="row-meta">Resets tutorial progress to cast 1.</span></div>
             <div class="row-actions"><button class="btn-small" data-action="debug-start-tutorial">Start</button></div>
           </li>
@@ -1086,13 +1101,6 @@ export class UI {
           <span class="shop-wallet-label">Your Money:</span>
           <span class="shop-wallet-amount"><strong id="shop-coins-amount">${state.coins}</strong> ${icon(ICON.coin, 'coins', 'inline-icon')}</span>
         </div>
-        ${this.barnabyMessage ? `
-          <div class="shop-barnaby-banner" id="shop-barnaby-banner">
-            <img class="barnaby-portrait-small" src="./images/barnaby-portrait.png" alt="Barnaby" />
-            <div class="shop-barnaby-speech">${this.barnabyMessage}</div>
-            <button class="modal-close-small" data-action="close-barnaby-message" type="button" aria-label="Dismiss">&times;</button>
-          </div>
-        ` : ''}
         <div class="craft-actions-row">
           <span class="craft-trash-count">Trash bucket: ${trashCount} (unlimited)</span>
           <button class="btn-small" data-action="recycle-all" ${trashCount === 0 ? 'disabled' : ''}>Recycle All</button>
@@ -1671,6 +1679,12 @@ export class UI {
         else if (action === 'debug-force-treasure') {
           this.economy.setDebugForceNextCatch('treasure');
           this.showToast('Next successful catch will be a Sunken Coin Purse.');
+        } else if (action === 'debug-toggle-coin-bottle') {
+          this.economy.setLuckyCoinBottle(!this.economy.hasLuckyCoinBottle());
+          this.renderDebug();
+        } else if (action === 'debug-force-coin-bottle') {
+          this.economy.setDebugForceNextCatch('lucky-coin-bottle');
+          this.showToast('Next successful catch will be the Lucky Coin in a Bottle.');
         } else if (action === 'debug-start-tutorial') {
           this.economy.resetTutorial();
           this.baitTutorialStep = 0;

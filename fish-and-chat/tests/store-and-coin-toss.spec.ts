@@ -33,12 +33,11 @@ test.describe('Store money display, Barnaby insufficient funds, early reel bait 
     await expect(buyMarshmallowsBtn).toBeVisible();
     await buyMarshmallowsBtn.click();
 
-    // Verify Barnaby speech banner is shown at the top of the store
+    // Verify lower banner is removed, and header bubble shows Barnaby's dialogue
     const barnabyBanner = page.locator('#shop-barnaby-banner');
-    await expect(barnabyBanner).toBeVisible();
-    await expect(barnabyBanner.locator('.shop-barnaby-speech')).toContainText('Gulp, not enough money partner');
+    await expect(barnabyBanner).toBeHidden();
 
-    // Verify header bubble also shows the dialogue
+    // Verify header bubble shows the dialogue
     const headerBubble = page.locator('#modal-host .barnaby-bubble');
     await expect(headerBubble).toBeVisible();
     await expect(headerBubble).toContainText('Gulp, not enough money partner');
@@ -211,5 +210,162 @@ test.describe('Store money display, Barnaby insufficient funds, early reel bait 
       expect(tierResult.currentTier).toBe(t);
       expect(tierResult.hasTexture).toBe(true);
     }
+  });
+
+  test('paid bait without lucky coin bottle does not trigger coin toss and consumes bait normally', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForFunction(() => (window as any).__THREE_GAME_DIAGNOSTICS__?.frame > 10);
+    await page.locator('#title-start').click();
+    await expect(page.locator('#title-screen')).toBeHidden();
+
+    // Ensure lucky coin bottle is NOT unlocked
+    await page.evaluate(() => {
+      const game = (window as any).__FISH_GAME__;
+      game.economy.markBaitTutorialCompleted();
+      game.economy.setLuckyCoinBottle(false);
+      game.economy.snapshot.baitInventory['marshmallows'] = 5;
+      game.economy.equipBait('marshmallows');
+      game.ui.renderHud();
+    });
+
+    const hasBottle = await page.evaluate(() => {
+      const game = (window as any).__FISH_GAME__;
+      return game.economy.hasLuckyCoinBottle();
+    });
+    expect(hasBottle).toBe(false);
+
+    // Trigger bite reaction success
+    await page.evaluate(() => {
+      const game = (window as any).__FISH_GAME__;
+      game.fishingState.resolveCatchSuccess();
+    });
+
+    // Catch card should be visible
+    const catchCard = page.locator('#catch-card');
+    await expect(catchCard).toBeVisible();
+
+    // Coin toss overlay should NOT be visible!
+    const coinOverlay = page.locator('#coin-toss-overlay');
+    await expect(coinOverlay).toBeHidden();
+
+    // Verify bait was consumed (5 -> 4)
+    const baitCount = await page.evaluate(() => {
+      const game = (window as any).__FISH_GAME__;
+      return game.economy.snapshot.baitInventory['marshmallows'];
+    });
+    expect(baitCount).toBe(4);
+  });
+
+  test('neon lure catches lucky coin in a bottle, unlocking coin flip feature', async ({ page }, testInfo) => {
+    await page.goto('/');
+    await page.waitForFunction(() => (window as any).__THREE_GAME_DIAGNOSTICS__?.frame > 10);
+    await page.locator('#title-start').click();
+    await expect(page.locator('#title-screen')).toBeHidden();
+
+    // Ensure lucky coin bottle is locked and player uses neon super lure
+    await page.evaluate(() => {
+      const game = (window as any).__FISH_GAME__;
+      game.economy.markBaitTutorialCompleted();
+      game.economy.setLuckyCoinBottle(false);
+      game.economy.snapshot.baitInventory['neon-super-lure'] = 5;
+      game.economy.equipBait('neon-super-lure');
+      game.economy.setDebugForceNextCatch('lucky-coin-bottle');
+      game.ui.renderHud();
+    });
+
+    // Reel in catch
+    await page.evaluate(() => {
+      const game = (window as any).__FISH_GAME__;
+      game.fishingState.resolveCatchSuccess();
+    });
+
+    // Verify catch card shows "Lucky Coin in a Bottle"
+    const catchCard = page.locator('#catch-card');
+    await expect(catchCard).toBeVisible();
+    await expect(catchCard.locator('.catch-name')).toHaveText('Lucky Coin in a Bottle');
+    await expect(catchCard.locator('.catch-flavor')).toContainText('Unlocks the Bait Saver Coin Flip');
+
+    // Screenshot of Lucky Coin in a Bottle catch card
+    const bottleCatchShot = await page.locator('#app').screenshot({
+      path: '/Users/jared/.gemini/antigravity-ide/brain/a0b52fda-756c-4c09-b118-cac3e6161ede/lucky_coin_bottle_catch.png',
+    });
+    await testInfo.attach('lucky-coin-bottle-catch', {
+      body: bottleCatchShot,
+      contentType: 'image/png',
+    });
+
+    // Verify economy has unlocked the bottle!
+    const hasBottleNow = await page.evaluate(() => {
+      const game = (window as any).__FISH_GAME__;
+      return game.economy.hasLuckyCoinBottle();
+    });
+    expect(hasBottleNow).toBe(true);
+
+    // Verify coin toss overlay did NOT show on the bottle catch itself
+    const coinOverlay = page.locator('#coin-toss-overlay');
+    await expect(coinOverlay).toBeHidden();
+  });
+
+  test('after finding lucky coin bottle, catch card displays caught fish FIRST, then coin flip appears', async ({ page }, testInfo) => {
+    await page.goto('/');
+    await page.waitForFunction(() => (window as any).__THREE_GAME_DIAGNOSTICS__?.frame > 10);
+    await page.locator('#title-start').click();
+    await expect(page.locator('#title-screen')).toBeHidden();
+
+    // Unlock bottle and equip paid bait
+    await page.evaluate(() => {
+      const game = (window as any).__FISH_GAME__;
+      game.economy.markBaitTutorialCompleted();
+      game.economy.setLuckyCoinBottle(true);
+      game.economy.snapshot.baitInventory['marshmallows'] = 5;
+      game.economy.equipBait('marshmallows');
+      game.ui.renderHud();
+    });
+
+    // Reel in a normal fish
+    await page.evaluate(() => {
+      const game = (window as any).__FISH_GAME__;
+      game.fishingState.resolveCatchSuccess();
+    });
+
+    const catchCard = page.locator('#catch-card');
+    const coinOverlay = page.locator('#coin-toss-overlay');
+
+    // 1. Immediately after catch: catch card MUST be visible
+    await expect(catchCard).toBeVisible();
+    await expect(catchCard.locator('.catch-name')).toBeVisible();
+
+    // 2. Immediately after catch: coin toss overlay MUST BE HIDDEN (player sees caught fish first!)
+    await expect(coinOverlay).toBeHidden();
+
+    // Screenshot showing caught fish visible before coin flip
+    const fishFirstShot = await page.locator('#app').screenshot({
+      path: '/Users/jared/.gemini/antigravity-ide/brain/a0b52fda-756c-4c09-b118-cac3e6161ede/fish_seen_before_coin_flip.png',
+    });
+    await testInfo.attach('fish-seen-before-coin-flip', {
+      body: fishFirstShot,
+      contentType: 'image/png',
+    });
+
+    // 3. Now tap canvas to finish celebration (or wait for celebration timer)
+    await page.locator('#game-canvas').click();
+
+    // 4. Now coin flip overlay appears!
+    await expect(coinOverlay).toBeVisible();
+
+    // Screenshot of coin flip modal appearing after celebration
+    const coinFlipAfterFishShot = await page.locator('#app').screenshot({
+      path: '/Users/jared/.gemini/antigravity-ide/brain/a0b52fda-756c-4c09-b118-cac3e6161ede/coin_flip_after_fish_seen.png',
+    });
+    await testInfo.attach('coin-flip-after-fish-seen', {
+      body: coinFlipAfterFishShot,
+      contentType: 'image/png',
+    });
+
+    // Verify flip button and flip execution
+    const flipBtn = coinOverlay.locator('#btn-coin-flip');
+    await expect(flipBtn).toBeVisible();
+    await flipBtn.click();
+    await expect(coinOverlay.locator('#coin-result-message')).toBeVisible({ timeout: 5000 });
   });
 });
