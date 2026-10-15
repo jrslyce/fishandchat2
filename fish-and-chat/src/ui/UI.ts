@@ -107,9 +107,12 @@ export class UI {
   private readonly railItems: HTMLElement;
   private readonly tutorialBubble: HTMLElement;
   private readonly tutorialBubbleText: HTMLButtonElement;
+  private readonly tutorialBubbleContent: HTMLElement;
+  private readonly tutorialDownTriangle: HTMLElement;
   private readonly basketBadge: HTMLButtonElement;
 
   private inBasketTutorial = false;
+  private baitTutorialStep: 0 | 1 | 2 = 0;
   private openModal: ModalId = null;
   private railExpanded = false;
   private toastTimeout: number | null = null;
@@ -187,7 +190,10 @@ export class UI {
       </div>
       <div id="tutorial-bubble" class="hidden">
         <img class="barnaby-portrait-small" src="./images/barnaby-portrait.png" alt="Barnaby" />
-        <button type="button" id="tutorial-bubble-text" class="tutorial-bubble-text"></button>
+        <button type="button" id="tutorial-bubble-text" class="tutorial-bubble-text">
+          <span id="tutorial-bubble-content"></span>
+          <span id="tutorial-down-triangle" class="tutorial-down-triangle hidden" aria-hidden="true">&#9660;</span>
+        </button>
       </div>
       <div id="toast-line" class="hidden"></div>
       <div id="catch-card" class="hidden"></div>
@@ -216,6 +222,8 @@ export class UI {
     this.titleLoadingFill = document.querySelector<HTMLElement>('#title-loading-fill')!;
     this.tutorialBubble = this.el('#tutorial-bubble');
     this.tutorialBubbleText = this.el('#tutorial-bubble-text') as HTMLButtonElement;
+    this.tutorialBubbleContent = this.el('#tutorial-bubble-content');
+    this.tutorialDownTriangle = this.el('#tutorial-down-triangle');
 
     this.railToggle = this.el('#rail-toggle') as HTMLButtonElement;
     this.railItems = this.el('#hud-rail-items');
@@ -270,10 +278,21 @@ export class UI {
       }
     });
 
-    // Clicking the bubble itself dismisses it early (or opens market if basket is full)
-    this.tutorialBubbleText.addEventListener('click', () => {
+    // Clicking the bubble itself dismisses it early (or opens market if basket is full, or advances bait tutorial)
+    this.tutorialBubbleText.addEventListener('click', (e) => {
+      e.stopPropagation();
       if (this.economy.basketFull() || this.inBasketTutorial) {
         this.toggleModal('market');
+        return;
+      }
+      if (this.baitTutorialStep === 1) {
+        this.baitTutorialStep = 2;
+        this.renderTutorialBubble(this.gameState.getPhase());
+        this.renderHud();
+        return;
+      }
+      if (this.baitTutorialStep === 2) {
+        this.openShopForBait('marshmallows');
         return;
       }
       if (!this.economy.hasSeenCastTutorial()) this.economy.markCastTutorialSeen();
@@ -337,6 +356,13 @@ export class UI {
 
   private bindEvents(): void {
     this.events.on('toast', ({ message }) => this.showToast(message));
+    this.events.on('actionPressed', () => {
+      if (this.baitTutorialStep === 1) {
+        this.baitTutorialStep = 2;
+        this.renderTutorialBubble(this.gameState.getPhase());
+        this.renderHud();
+      }
+    });
     this.events.on('basketFull', () => {
       this.inBasketTutorial = true;
       this.triggerBasketAttention();
@@ -543,6 +569,7 @@ export class UI {
     this.hudBasketCount.textContent = `${state.basket.length}/${this.economy.basketCapacity()}`;
 
     // Update right-side bait selector buttons
+    const isBaitTutorialStep2 = this.baitTutorialStep === 2 && !this.economy.hasCompletedBaitTutorial();
     for (const bait of BAIT_CATALOG) {
       const btn = this.root.querySelector<HTMLButtonElement>(`#hud-bait-btn-${bait.id}`);
       const qtyEl = this.root.querySelector<HTMLElement>(`#hud-bait-qty-${bait.id}`);
@@ -560,6 +587,9 @@ export class UI {
       btn.classList.toggle('selected', isSelected);
       btn.classList.toggle('unselected', !isSelected);
       btn.classList.toggle('empty', !isAvailable);
+
+      const isFlashingBait = isBaitTutorialStep2 && bait.id !== 'pleb-bait';
+      btn.classList.toggle('tutorial-flash-stroke', isFlashingBait);
 
       btn.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
       btn.title = `${bait.name} (${bait.free ? 'Free' : `${owned} left`}) - ${isSelected ? 'Selected' : isAvailable ? 'Click to equip' : 'Click to buy in shop'}`;
@@ -634,10 +664,24 @@ export class UI {
   private renderTutorialBubble(phase: FishingPhase): void {
     let text: string | null = null;
     let isBasketTutorial = false;
+    let showDownTriangle = false;
+
+    const inBaitTutorial = !this.economy.hasCompletedBaitTutorial() && this.economy.getTutorialCastCount() >= 2;
 
     if (!this.openModal && (this.economy.basketFull() || (this.inBasketTutorial && this.economy.snapshot.basket.length > 0))) {
       text = 'Your basket is full! Tap the basket in the bottom left to visit the market.';
       isBasketTutorial = true;
+    } else if (!this.openModal && inBaitTutorial) {
+      if (this.baitTutorialStep === 0) {
+        this.baitTutorialStep = 1;
+      }
+      if (this.baitTutorialStep === 1) {
+        text = "Oh you are using Pleb bait! Won't catch much with those, glurp.";
+        showDownTriangle = true;
+      } else if (this.baitTutorialStep === 2) {
+        text = "Stop by my ba ba bait shop to get some better ba ba bait.";
+        showDownTriangle = false;
+      }
     } else if (!this.openModal && !this.economy.hasSeenCastTutorial() && (phase === 'idle' || phase === 'aiming')) {
       text = 'Click on the screen to cast your reel.';
     } else if (
@@ -650,14 +694,21 @@ export class UI {
     }
 
     if (text) {
-      this.tutorialBubbleText.textContent = text;
+      this.tutorialBubbleContent.textContent = text;
       this.tutorialBubble.classList.remove('hidden');
+      if (showDownTriangle) {
+        this.tutorialDownTriangle.classList.remove('hidden');
+      } else {
+        this.tutorialDownTriangle.classList.add('hidden');
+      }
       if (isBasketTutorial) {
         this.tutorialBubble.classList.add('basket-tutorial');
       } else {
         this.tutorialBubble.classList.remove('basket-tutorial');
       }
     } else {
+      this.tutorialBubbleContent.textContent = '';
+      this.tutorialDownTriangle.classList.add('hidden');
       this.tutorialBubble.classList.add('hidden');
       this.tutorialBubble.classList.remove('basket-tutorial');
     }
@@ -950,6 +1001,10 @@ export class UI {
             <div class="row-body"><strong>Force Next Catch: Coin Purse</strong><span class="row-meta">Next successful reel is a Sunken Coin Purse.</span></div>
             <div class="row-actions"><button class="btn-small" data-action="debug-force-treasure">Set</button></div>
           </li>
+          <li class="row">
+            <div class="row-body"><strong>Start Tutorial</strong><span class="row-meta">Resets tutorial progress to cast 1.</span></div>
+            <div class="row-actions"><button class="btn-small" data-action="debug-start-tutorial">Start</button></div>
+          </li>
         </ul>
       `,
     );
@@ -957,6 +1012,13 @@ export class UI {
   }
 
   private renderShop(): void {
+    if (!this.economy.hasCompletedBaitTutorial() && this.economy.getTutorialCastCount() >= 2) {
+      this.barnabyMessage = "Glurp, oh hi new one. Grab some slurplys";
+      this.economy.markBaitTutorialCompleted();
+      this.baitTutorialStep = 0;
+      this.renderHud();
+    }
+
     const state = this.economy.snapshot;
     const baitRows = BAIT_CATALOG.map((bait) => {
       const owned = state.baitInventory[bait.id] ?? 0;
@@ -1004,7 +1066,7 @@ export class UI {
         <button class="barnaby-portrait-btn" data-action="click-barnaby" type="button" aria-label="Barnaby">
           <img class="barnaby-portrait-small" src="./images/barnaby-portrait.png" alt="Barnaby" />
         </button>
-        ${this.barnabyMessage ? `<button class="barnaby-bubble" type="button" data-action="close-barnaby-message">${this.barnabyMessage.toLowerCase().includes('gulp') ? this.barnabyMessage : `${this.barnabyMessage} <em>*gulp*</em>`}</button>` : ''}
+        ${this.barnabyMessage ? `<button class="barnaby-bubble" type="button" data-action="close-barnaby-message">${this.barnabyMessage.toLowerCase().includes('gulp') || this.barnabyMessage.toLowerCase().includes('glurp') ? this.barnabyMessage : `${this.barnabyMessage} <em>*gulp*</em>`}</button>` : ''}
       </div>
     `;
 
@@ -1600,6 +1662,13 @@ export class UI {
         else if (action === 'debug-force-treasure') {
           this.economy.setDebugForceNextCatch('treasure');
           this.showToast('Next successful catch will be a Sunken Coin Purse.');
+        } else if (action === 'debug-start-tutorial') {
+          this.economy.resetTutorial();
+          this.baitTutorialStep = 0;
+          this.closeModal();
+          this.renderTutorialBubble(this.gameState.getPhase());
+          this.renderHud();
+          this.showToast('Tutorial restarted! Cast your reel.');
         } else if (action === 'click-barnaby') {
           this.barnabyClickCount += 1;
           if (this.barnabyClickCount >= 5) {

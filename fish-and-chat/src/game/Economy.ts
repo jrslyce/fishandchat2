@@ -102,6 +102,44 @@ export class Economy {
     this.persist();
   }
 
+  getTutorialCastCount(): number {
+    return this.state.tutorialCastCount ?? 0;
+  }
+
+  setTutorialCastCount(count: number): void {
+    this.state.tutorialCastCount = count;
+    this.persist();
+  }
+
+  incrementTutorialCastCount(): number {
+    this.state.tutorialCastCount = (this.state.tutorialCastCount ?? 0) + 1;
+    this.persist();
+    return this.state.tutorialCastCount;
+  }
+
+  hasCompletedBaitTutorial(): boolean {
+    return Boolean(this.state.hasCompletedBaitTutorial);
+  }
+
+  markBaitTutorialCompleted(): void {
+    if (this.state.hasCompletedBaitTutorial) return;
+    this.state.hasCompletedBaitTutorial = true;
+    this.persist();
+  }
+
+  setBaitTutorialCompleted(completed: boolean): void {
+    this.state.hasCompletedBaitTutorial = completed;
+    this.persist();
+  }
+
+  resetTutorial(): void {
+    this.state.tutorialCastCount = 0;
+    this.state.hasCompletedBaitTutorial = false;
+    this.state.hasSeenCastTutorial = false;
+    this.state.hasSeenReelTutorial = false;
+    this.persist();
+  }
+
   persist(): void {
     this.state.lastActiveAtMs = Date.now();
     this.saveManager.save(this.state);

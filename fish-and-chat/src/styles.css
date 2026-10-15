@@ -529,6 +529,28 @@ body {
   animation: baitShopHighlight 1.2s ease 2;
 }
 
+/* Flashing stroke on baits during bait tutorial step 2 */
+@keyframes tutorialBaitFlashStroke {
+  0%, 100% {
+    border-color: #f5a623;
+    box-shadow: 0 0 0 2.5px #f5a623, 0 0 14px rgba(245, 166, 35, 0.95);
+    opacity: 1;
+    filter: none;
+  }
+  50% {
+    border-color: rgba(245, 166, 35, 0.25);
+    box-shadow: 0 0 0 1px rgba(245, 166, 35, 0.3), 0 0 3px rgba(245, 166, 35, 0.1);
+    opacity: 0.7;
+    filter: none;
+  }
+}
+
+.hud-bait-btn.tutorial-flash-stroke {
+  animation: tutorialBaitFlashStroke 0.75s ease-in-out infinite !important;
+  opacity: 1 !important;
+  filter: none !important;
+  z-index: 5;
+}
 
 /* Basket badge, bottom-left */
 
@@ -1550,6 +1572,39 @@ body {
   box-shadow: var(--shadow-panel);
   cursor: pointer;
   user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+#tutorial-bubble-content {
+  flex: 1;
+}
+
+.tutorial-down-triangle {
+  display: inline-block;
+  font-size: 0.82rem;
+  color: var(--accent, #d97724);
+  animation: tutorial-triangle-flash 0.65s ease-in-out infinite alternate;
+  flex-shrink: 0;
+  margin-left: 6px;
+  line-height: 1;
+}
+
+.tutorial-down-triangle.hidden {
+  display: none;
+}
+
+@keyframes tutorial-triangle-flash {
+  0% {
+    opacity: 0.2;
+    transform: translateY(-2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(3px);
+  }
 }
 
 .tutorial-bubble-text::before {
