@@ -119,6 +119,7 @@ export class UI {
   private toastTimeout: number | null = null;
   private catchCardTimeout: number | null = null;
   private resetArmed = false;
+  private debugResetArmed = false;
   private scrapbookOpened = false;
   private lastDuckySecond = 0;
   private barnabyMessage: string | null = null;
@@ -913,6 +914,7 @@ export class UI {
     this.openModal = null;
     if (previous === 'closet') this.events.emit('closetClosed', {});
     this.resetArmed = false;
+    this.debugResetArmed = false;
     this.scrapbookOpened = false;
     this.renderModal();
   }
@@ -929,6 +931,7 @@ export class UI {
     if (previous === 'closet' && this.openModal !== 'closet') this.events.emit('closetClosed', {});
     if (this.openModal === 'closet' && previous !== 'closet') this.events.emit('closetOpened', {});
     this.resetArmed = false;
+    this.debugResetArmed = false;
     this.renderModal();
   }
 
@@ -992,11 +995,50 @@ export class UI {
   private renderDebug(): void {
     const perfectCastOn = this.gameState.debugPerfectCastMode;
     const autoFishOn = this.gameState.autoFishingEnabled;
+    const state = this.economy.snapshot;
 
     this.modalHost.innerHTML = this.modalShell(
       'Debug',
       `
         <ul class="modal-list">
+          <li class="row debug-wipe-row">
+            <div class="row-body">
+              <strong>Wipe User Data</strong>
+              <span class="row-meta">Reset all progress, inventory, coins, and unlocks to start fresh.</span>
+            </div>
+            <div class="row-actions">
+              <button class="btn-small ${this.debugResetArmed ? 'btn-danger' : 'btn-warn'}" data-action="debug-wipe-user-data">
+                ${this.debugResetArmed ? '⚠️ Confirm Wipe!' : 'Wipe Data'}
+              </button>
+            </div>
+          </li>
+          <li class="row debug-slider-row">
+            <div class="row-body">
+              <div class="debug-slider-header">
+                <strong>Player Level</strong>
+                <span class="debug-level-badge" id="debug-level-val">Lv ${state.level}</span>
+              </div>
+              <span class="row-meta">Choose player level (1-9: Pond, 10-19: Ocean, 20+: Cosmic)</span>
+              <div class="debug-slider-container">
+                <input
+                  type="range"
+                  id="debug-level-slider"
+                  class="debug-level-slider"
+                  min="1"
+                  max="30"
+                  step="1"
+                  value="${state.level}"
+                  aria-label="Player Level"
+                />
+              </div>
+              <div class="debug-slider-presets">
+                <button class="btn-micro" type="button" data-level-jump="1">Lv 1 (Pond)</button>
+                <button class="btn-micro" type="button" data-level-jump="10">Lv 10 (Ocean)</button>
+                <button class="btn-micro" type="button" data-level-jump="20">Lv 20 (Cosmic)</button>
+                <button class="btn-micro" type="button" data-level-jump="30">Lv 30</button>
+              </div>
+            </div>
+          </li>
           <li class="row">
             <div class="row-body"><strong>Perfect Cast</strong><span class="row-meta">Every cast locks at 100% precision.</span></div>
             <div class="row-actions"><button class="btn-small" data-action="debug-toggle-perfect-cast">${perfectCastOn ? 'On' : 'Off'}</button></div>
@@ -1032,6 +1074,36 @@ export class UI {
         </ul>
       `,
     );
+
+    const levelSlider = this.modalHost.querySelector<HTMLInputElement>('#debug-level-slider');
+    const levelVal = this.modalHost.querySelector<HTMLElement>('#debug-level-val');
+
+    const updateLevel = (targetLevel: number) => {
+      const clamped = Math.max(1, Math.min(30, Math.floor(targetLevel)));
+      const result = this.economy.setLevel(clamped);
+      if (levelVal) levelVal.textContent = `Lv ${result.newLevel}`;
+      if (levelSlider) levelSlider.value = String(result.newLevel);
+      if (result.themeChanged) {
+        this.events.emit('themeChanged', { theme: result.newTheme });
+      }
+      this.renderHud();
+    };
+
+    if (levelSlider) {
+      levelSlider.addEventListener('input', () => updateLevel(Number(levelSlider.value)));
+      levelSlider.addEventListener('change', () => updateLevel(Number(levelSlider.value)));
+    }
+
+    this.modalHost.querySelectorAll<HTMLButtonElement>('button[data-level-jump]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const jumpVal = Number(btn.getAttribute('data-level-jump'));
+        if (Number.isFinite(jumpVal)) {
+          updateLevel(jumpVal);
+        }
+      });
+    });
+
     this.bindModalActions();
   }
 
@@ -1636,7 +1708,22 @@ export class UI {
         const index = button.dataset.index ? Number(button.dataset.index) : -1;
         const slot = button.dataset.slot as ClothingSlot | undefined;
 
+        if (action !== 'debug-wipe-user-data') {
+          this.debugResetArmed = false;
+        }
+
         if (action === 'close') this.closeModal();
+        else if (action === 'debug-wipe-user-data') {
+          if (!this.debugResetArmed) {
+            this.debugResetArmed = true;
+            this.renderDebug();
+            return;
+          }
+          this.debugResetArmed = false;
+          this.economy.wipeUserData();
+          window.location.reload();
+          return;
+        }
         else if (action === 'open-scrapbook') {
           this.scrapbookOpened = true;
           this.renderCollection();

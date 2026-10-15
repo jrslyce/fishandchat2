@@ -24,7 +24,7 @@ import {
   type UpgradeId,
 } from './data';
 import type { SaveManager } from '../core/SaveManager';
-import { migrateSaveState, type BasketItem, type FishRecord, type FishbotState, type GameSaveStateV1 } from './SaveState';
+import { createDefaultSaveState, migrateSaveState, type BasketItem, type FishRecord, type FishbotState, type GameSaveStateV1 } from './SaveState';
 
 export interface LevelUpResult {
   leveledUp: boolean;
@@ -381,6 +381,31 @@ export class Economy {
     return themeForLevel(this.state.level);
   }
 
+  /** Sets the player level directly (debug override), updating skill points, resetting level XP, and returning theme changes. */
+  setLevel(targetLevel: number): LevelUpResult {
+    const oldLevel = this.state.level;
+    const clampedLevel = Math.max(1, Math.min(50, Math.floor(targetLevel)));
+    const themeBefore = themeForLevel(oldLevel);
+
+    if (clampedLevel > oldLevel) {
+      this.state.skillPoints += clampedLevel - oldLevel;
+    } else if (clampedLevel < oldLevel) {
+      this.state.skillPoints = Math.max(0, this.state.skillPoints - (oldLevel - clampedLevel));
+    }
+
+    this.state.level = clampedLevel;
+    this.state.xp = 0;
+    this.persist();
+
+    const newTheme = themeForLevel(this.state.level);
+    return {
+      leveledUp: clampedLevel > oldLevel,
+      newLevel: this.state.level,
+      themeChanged: newTheme !== themeBefore,
+      newTheme,
+    };
+  }
+
   // --- Coins & materials ---------------------------------------------------
 
   addCoins(amount: number): void {
@@ -592,9 +617,18 @@ export class Economy {
     Object.assign(this.state.audio, mix);
   }
 
+  /** Wipes user save data and returns in-memory state to clean defaults. */
+  wipeUserData(): void {
+    this.saveManager.clear();
+    this.state = createDefaultSaveState();
+    this.debugForceNextCatch = null;
+    this.bakersDozenNextBait = false;
+    this.persist();
+  }
+
   /** Wipes the save. Caller (UI) is responsible for reloading afterward. */
   resetSave(): void {
-    this.saveManager.clear();
+    this.wipeUserData();
   }
 
   // --- Player character: clothing & appearance ----------------------------
