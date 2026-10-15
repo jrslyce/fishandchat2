@@ -48,6 +48,10 @@ export interface GameSaveStateV1 {
   /** One-time Barnaby tutorial bubbles — dismissed permanently once the player has cast/reeled once. */
   hasSeenCastTutorial: boolean;
   hasSeenReelTutorial: boolean;
+  /** Progress through the 2-cast pleb bait onboarding tutorial (0 = cast 1, 1 = cast 2, 2 = casts done) */
+  tutorialCastCount: number;
+  /** Whether the full bait onboarding tutorial (dialogue + bait shop prompt) has finished */
+  hasCompletedBaitTutorial: boolean;
 }
 
 export function createDefaultSaveState(): GameSaveStateV1 {
@@ -84,6 +88,8 @@ export function createDefaultSaveState(): GameSaveStateV1 {
     archetypePoints: { brawler: 0, patience: 0, trapper: 0, charmer: 0, tactician: 0 },
     hasSeenCastTutorial: false,
     hasSeenReelTutorial: false,
+    tutorialCastCount: 0,
+    hasCompletedBaitTutorial: false,
   };
 }
 
@@ -139,6 +145,17 @@ export function migrateSaveState(state: GameSaveStateV1): GameSaveStateV1 {
       ...next,
       hasSeenCastTutorial: next.hasSeenCastTutorial ?? true,
       hasSeenReelTutorial: next.hasSeenReelTutorial ?? true,
+    };
+  }
+
+  // Saves from before the pleb bait tutorial predate these fields — default existing players
+  // who already completed the earlier tutorial or caught fish to completed.
+  if (next.tutorialCastCount === undefined || next.hasCompletedBaitTutorial === undefined) {
+    const isExisting = (next.hasSeenCastTutorial && next.hasSeenReelTutorial) || (next.basket && next.basket.length > 0) || next.level > 1;
+    next = {
+      ...next,
+      tutorialCastCount: next.tutorialCastCount ?? (isExisting ? 2 : 0),
+      hasCompletedBaitTutorial: next.hasCompletedBaitTutorial ?? isExisting,
     };
   }
 

@@ -72,6 +72,7 @@ export class FishingStateMachine {
   public autoFishingEnabled = false;
   public isCoinTossActive = false;
   private baitSaverActive = false;
+  private isTutorialCast = false;
 
   constructor(
     private readonly economy: Economy,
@@ -127,8 +128,12 @@ export class FishingStateMachine {
         } else if (hasAutoReel) {
           this.attemptReel(true);
         } else if (this.phaseElapsed >= HAZARD_BACKSTOP_SECONDS) {
+          if (this.isTutorialCast) {
+            this.isTutorialCast = false;
+            this.economy.incrementTutorialCastCount();
+          }
           this.enterMissed('escaped');
-        } else {
+        } else if (!this.isTutorialCast) {
           const hazardPerSecond = computeEscapeHazardPerSecond(
             this.skillValueForBite,
             this.fightValue,
@@ -157,6 +162,10 @@ export class FishingStateMachine {
   private tryStartCast(): void {
     if (this.economy.basketFull()) {
       this.events.emit('basketFull', {});
+      return;
+    }
+    // Block starting a cast while in the tutorial sequence prompting the player to visit the bait shop
+    if (!this.economy.hasCompletedBaitTutorial() && this.economy.getTutorialCastCount() >= 2) {
       return;
     }
     const bait = this.economy.equippedBait();
@@ -196,11 +205,17 @@ export class FishingStateMachine {
   }
 
   private enterWaiting(): void {
-    let waitMultiplier = this.economy.waitMultiplier();
-    if (this.lockedRolls && this.lockedRolls.T > 0) {
-      waitMultiplier *= (1 - this.lockedRolls.T * 0.1); 
+    if (!this.economy.hasCompletedBaitTutorial() && this.economy.getTutorialCastCount() < 2) {
+      this.isTutorialCast = true;
+      this.waitDurationSeconds = this.economy.getTutorialCastCount() === 0 ? 6 : 12;
+    } else {
+      this.isTutorialCast = false;
+      let waitMultiplier = this.economy.waitMultiplier();
+      if (this.lockedRolls && this.lockedRolls.T > 0) {
+        waitMultiplier *= (1 - this.lockedRolls.T * 0.1); 
+      }
+      this.waitDurationSeconds = rollWaitSeconds(waitMultiplier);
     }
-    this.waitDurationSeconds = rollWaitSeconds(waitMultiplier);
     this.setPhase('waiting');
   }
 
@@ -209,6 +224,7 @@ export class FishingStateMachine {
    * Reeling in early does not remove bait.
    */
   private reelInEarly(): void {
+    this.isTutorialCast = false;
     this.enterMissed('reeled-early');
   }
 
@@ -237,6 +253,14 @@ export class FishingStateMachine {
    * gets a small early-reaction bonus that tapers off through the window.
    */
   private attemptReel(auto: boolean): void {
+    if (this.isTutorialCast) {
+      this.isTutorialCast = false;
+      this.economy.incrementTutorialCastCount();
+      this.events.emit('biteReacted', { success: false });
+      this.enterMissed('escaped');
+      return;
+    }
+
     let successChance = computeSuccessChance(this.skillValueForBite, this.fightValue, this.economy.trapperSuccessBonus());
     if (!auto) {
       const elapsedRatio = (this.phaseElapsed * 1000) / this.currentReactionWindowMs;
