@@ -178,7 +178,7 @@ export class Game {
     this.bobber.setVisible(false);
 
     this.vfx = new VfxSystem(this.scene, this.events, {
-      getBobberPosition: () => this.bobber.group.position,
+      getBobberPosition: () => this.bobber.getWorldPosition(new THREE.Vector3()),
       getBarnabyPosition: () => this.diorama.barnabySlot.position,
       getCraftingBenchPosition: () => new THREE.Vector3(-3.6, 0.7, -1.6),
     });
@@ -381,14 +381,23 @@ export class Game {
       const lineTier = this.economy.upgradeTier('braided-line');
       this.fishingLine.setTier(lineTier);
       const rodTip = this.playerCharacter.getRodTipWorldPosition(new THREE.Vector3());
-      this.fishingLine.update(rodTip, this.bobber.group.position);
+      const bobberTip = this.bobber.getLineAttachmentWorldPosition(new THREE.Vector3());
+      this.fishingLine.update(rodTip, bobberTip, phase, this.elapsed);
     }
 
     if (phase === 'waiting') {
       this.rippleTimer -= delta;
       if (this.rippleTimer <= 0) {
         this.rippleTimer = 2;
-        this.water.emitRipple(this.bobber.group.position.x, this.bobber.group.position.z);
+        const bPos = this.bobber.getWorldPosition(new THREE.Vector3());
+        this.water.emitRipple(bPos.x, bPos.z);
+      }
+    } else if (phase === 'bite') {
+      this.rippleTimer -= delta;
+      if (this.rippleTimer <= 0) {
+        this.rippleTimer = 0.35;
+        const bPos = this.bobber.getWorldPosition(new THREE.Vector3());
+        this.water.emitRipple(bPos.x, bPos.z);
       }
     } else {
       this.rippleTimer = 0;

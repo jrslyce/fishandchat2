@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { disposeObject3D } from '../utils/dispose';
+import type { FishingPhase } from '../game/GameState';
 
 const LINE_RADIUS = 0.0048; // 60% less than original 0.012
 const UP = new THREE.Vector3(0, 1, 0);
@@ -42,10 +43,13 @@ export class FishingLine {
   readonly mesh: THREE.Mesh;
   private currentTier = -1;
   private readonly materials: THREE.MeshStandardMaterial[] = [];
+  private readonly basePositions: THREE.BufferAttribute;
 
   constructor() {
-    // Unit-height cylinder along +Y; stretched to the hand-bobber distance via scale.y each update.
-    const geometry = new THREE.CylinderGeometry(LINE_RADIUS, LINE_RADIUS, 1, 6);
+    // Unit-height cylinder along +Y with 16 height segments so it can bend smoothly.
+    // Stretched to the hand-bobber distance via scale.y each update.
+    const geometry = new THREE.CylinderGeometry(LINE_RADIUS, LINE_RADIUS, 1, 6, 16);
+    this.basePositions = (geometry.attributes.position as THREE.BufferAttribute).clone();
 
     // Tier 0: Base monofilament (translucent nylon)
     this.materials[0] = new THREE.MeshStandardMaterial({
@@ -105,12 +109,67 @@ export class FishingLine {
     this.mesh.visible = visible;
   }
 
-  /** Stretches and reorients the line's cylinder to run from `start` to `end` (world space). */
-  update(start: THREE.Vector3, end: THREE.Vector3): void {
+  /**
+   * Stretches, reorients, and dynamically curves/vibrates the line between `start` and `end`.
+   * In 'waiting', droops in a natural catenary sag responsive to wave breathing.
+   * In 'bite', pulls taut and shudders at high tension frequencies as the hooked fish struggles.
+   */
+  update(start: THREE.Vector3, end: THREE.Vector3, phase?: FishingPhase, elapsedSeconds = 0): void {
+    const distance = start.distanceTo(end);
+    if (distance < 0.0001) return;
+
     this.mesh.position.copy(start).add(end).multiplyScalar(0.5);
-    this.mesh.scale.set(1, start.distanceTo(end), 1);
+    this.mesh.scale.set(1, distance, 1);
     const direction = end.clone().sub(start).normalize();
     if (direction.lengthSq() > 0) this.mesh.quaternion.setFromUnitVectors(UP, direction);
+
+    // Compute local downward and lateral unit vectors in the line's local space
+    const invQuat = this.mesh.quaternion.clone().invert();
+    const localDown = new THREE.Vector3(0, -1, 0).applyQuaternion(invQuat).normalize();
+    const localSide = new THREE.Vector3(1, 0, 0).applyQuaternion(invQuat).normalize();
+
+    let sagAmount = 0.04;
+    let vibrationY = 0;
+    let vibrationX = 0;
+
+    if (phase === 'waiting') {
+      // Natural gentle catenary droop under gravity, subtly breathing with water swell
+      sagAmount = 0.045 + Math.sin(elapsedSeconds * 2.6) * 0.008;
+    } else if (phase === 'bite') {
+      // Taut, straightened line under heavy load, vibrating rapidly with tension shudder
+      sagAmount = 0.012;
+      const strugglePulse = 1 + Math.sin(elapsedSeconds * 12) * 0.35;
+      vibrationY = (Math.sin(elapsedSeconds * 46) * 0.015 + Math.sin(elapsedSeconds * 82) * 0.007) * strugglePulse;
+      vibrationX = (Math.cos(elapsedSeconds * 41) * 0.012 + Math.sin(elapsedSeconds * 67) * 0.006) * strugglePulse;
+    } else if (phase === 'casting') {
+      // Aerodynamic trailing arc
+      sagAmount = 0.025;
+    }
+
+    const posAttr = this.mesh.geometry.attributes.position as THREE.BufferAttribute;
+    const baseAttr = this.basePositions;
+    const count = posAttr.count;
+
+    for (let i = 0; i < count; i++) {
+      const bx = baseAttr.getX(i);
+      const by = baseAttr.getY(i);
+      const bz = baseAttr.getZ(i);
+
+      // Normalized parameter: 0 at rod tip (y = -0.5), 1 at bobber (y = +0.5)
+      const t = by + 0.5;
+      const curveFactor = Math.sin(t * Math.PI);
+
+      const totalDown = (sagAmount + vibrationY) * curveFactor;
+      const totalSide = vibrationX * curveFactor;
+
+      posAttr.setXYZ(
+        i,
+        bx + localDown.x * totalDown + localSide.x * totalSide,
+        by,
+        bz + localDown.z * totalDown + localSide.z * totalSide,
+      );
+    }
+    posAttr.needsUpdate = true;
   }
 
   dispose(): void {
