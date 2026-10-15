@@ -25,6 +25,7 @@ export interface GameEventMap {
   biteStarted: { rarity: Rarity; fightValue: number; skillValue: number };
   biteReacted: { success: boolean };
   catchResolved: { result: CatchResult };
+  coinTossTriggered: { baitId: string; baitName: string };
   patienceBonusAwarded: Record<string, never>;
   trashRecycled: { result: RecycleResult; catchId: string };
   recycleFinished: { successCount: number; failCount: number; salvaged: Record<string, number> };
