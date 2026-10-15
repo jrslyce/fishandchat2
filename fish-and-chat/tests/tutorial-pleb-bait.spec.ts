@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test.describe('Pleb bait tutorial flow: 6s & 12s casts, Barnaby dialogue, down triangle, flashing baits, and shop greeting', () => {
   test('full tutorial flow: cast 1 (6s escape), cast 2 (12s escape), Barnaby pleb bait dialogue with flashing triangle, tap to advance, 3 flashing baits, and Barnaby slurplys greeting in shop', async ({ page }, testInfo) => {
+    test.setTimeout(90000);
     await page.goto('/');
     await page.waitForFunction(() => (window as any).__THREE_GAME_DIAGNOSTICS__?.frame > 10);
     await page.locator('#title-start').click();
@@ -78,6 +79,25 @@ test.describe('Pleb bait tutorial flow: 6s & 12s casts, Barnaby dialogue, down t
     await page.waitForFunction(() => {
       const game = (window as any).__FISH_GAME__;
       return game.fishingState.getPhase() === 'idle';
+    });
+
+    // 2.5 Barnaby appears with dialogue: "Some getaway, glrup. Keep casting."
+    const tutorialBubbleAfterCast1 = page.locator('#tutorial-bubble');
+    await expect(tutorialBubbleAfterCast1).toBeVisible();
+    await expect(page.locator('#tutorial-bubble-content')).toHaveText('Some getaway, glrup. Keep casting.');
+    await expect(page.locator('#tutorial-down-triangle')).toHaveClass(/hidden/);
+
+    // Verify upper right corner has NO bait pill or name
+    expect(await page.locator('#hud-bait-pill').count()).toBe(0);
+    expect(await page.locator('#hud-bait-name').count()).toBe(0);
+
+    // Capture screenshot of Barnaby first escape dialogue
+    const escapeShot = await page.locator('#app').screenshot({
+      path: '/Users/jared/.gemini/antigravity-ide/brain/a0b52fda-756c-4c09-b118-cac3e6161ede/barnaby_first_escape_dialogue.png',
+    });
+    await testInfo.attach('barnaby-first-escape-dialogue', {
+      body: escapeShot,
+      contentType: 'image/png',
     });
 
     // 3. CAST 2: Cast the rod, verify wait duration is 12 seconds, bite escapes

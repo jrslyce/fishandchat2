@@ -108,8 +108,9 @@ test('user can open menus like bait shop and close with visible upper-right X bu
   await page.locator('#title-start').click();
   await expect(page.locator('#title-screen')).toBeHidden();
 
-  // 1. Open bait shop by clicking hud-bait-pill
-  await page.locator('#hud-bait-pill').click();
+  // 1. Open bait shop by opening the rail and clicking btn-shop
+  await page.locator('#rail-toggle').click();
+  await page.locator('#btn-shop').click();
   await expect(page.locator('#modal-host')).toBeVisible();
   await expect(page.locator('#modal-host .modal')).toBeVisible();
 

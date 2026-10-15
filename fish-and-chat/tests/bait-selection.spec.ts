@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('bait selection on right rail of fishing screen and shop behavior', async ({ page }, testInfo) => {
+  test.setTimeout(90000);
   await page.goto('/');
   await expect(page.locator('#game-canvas')).toBeVisible();
 
@@ -113,10 +114,52 @@ test('bait selection on right rail of fishing screen and shop behavior', async (
     contentType: 'image/png',
   });
 
+  // Verify upper right corner has NO bait pill or name
+  expect(await page.locator('#hud-bait-pill').count()).toBe(0);
+  expect(await page.locator('#hud-bait-name').count()).toBe(0);
+
   // 7. Clicking pleb bait switches back
   await plebBait.click();
   await expect(plebBait).toHaveClass(/\bselected\b/);
   await expect(plebBait).not.toHaveClass(/\bunselected\b/);
   await expect(marshmallows).toHaveClass(/\bunselected\b/);
   await expect(marshmallows).not.toHaveClass(/\bselected\b/);
+
+  // 8. Verify 3D bobber visuals change based on equipped bait
+  const plebBobberModel = await page.evaluate(() => {
+    const game = (window as any).__FISH_GAME__;
+    return game.bobber.getActiveModelName();
+  });
+  expect(plebBobberModel).toBe('defaultBobber');
+
+  // Switch to marshmallows -> bobber becomes marshmallowBobber
+  await marshmallows.click();
+  const marshmallowBobberModel = await page.evaluate(() => {
+    const game = (window as any).__FISH_GAME__;
+    return game.bobber.getActiveModelName();
+  });
+  expect(marshmallowBobberModel).toBe('marshmallowBobber');
+
+  // Give nightcrawlers & neon lure in state to test their bobber visuals
+  await page.evaluate(() => {
+    const game = (window as any).__FISH_GAME__;
+    game.economy.state.baitInventory['nightcrawlers'] = 10;
+    game.economy.state.baitInventory['neon-super-lure'] = 10;
+    game.craftingSystem.equipBait('nightcrawlers');
+  });
+  const nightcrawlerBobberModel = await page.evaluate(() => {
+    const game = (window as any).__FISH_GAME__;
+    return game.bobber.getActiveModelName();
+  });
+  expect(nightcrawlerBobberModel).toBe('nightcrawlerBobber');
+
+  await page.evaluate(() => {
+    const game = (window as any).__FISH_GAME__;
+    game.craftingSystem.equipBait('neon-super-lure');
+  });
+  const neonBobberModel = await page.evaluate(() => {
+    const game = (window as any).__FISH_GAME__;
+    return game.bobber.getActiveModelName();
+  });
+  expect(neonBobberModel).toBe('neonSuperLureBobber');
 });
