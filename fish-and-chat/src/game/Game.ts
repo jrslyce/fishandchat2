@@ -184,6 +184,8 @@ export class Game {
     });
 
     this.events.on('themeChanged', ({ theme }) => void this.themeManager.setTheme(theme));
+    this.events.on('baitEquipped', ({ id }) => this.bobber.setBaitType(id));
+    this.bobber.setBaitType(this.economy.equippedBait().id);
 
     if (import.meta.env.DEV) {
       (window as unknown as { __game_scene?: THREE.Scene }).__game_scene = this.scene;
@@ -372,6 +374,7 @@ export class Game {
     }
 
     const phase = this.fishingState.getPhase();
+    this.bobber.setBaitType(this.economy.equippedBait().id);
     this.bobber.setVisible(phase === 'casting' || phase === 'waiting' || phase === 'bite' || phase === 'celebrating');
     this.bobber.update(delta, phase);
 

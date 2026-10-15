@@ -90,8 +90,10 @@ export class UI {
   private readonly hudXpFill: HTMLElement;
   private readonly hudCoins: HTMLElement;
   private readonly hudCandyBars: HTMLElement;
-  private readonly hudBaitName: HTMLElement;
   private readonly hudBasketCount: HTMLElement;
+  private inBasketTutorial = false;
+  private baitTutorialStep: 0 | 1 | 2 = 0;
+  private dismissedFirstEscapeBubble = false;
   private readonly phaseIndicator: HTMLElement;
   private readonly fishbotStatus: HTMLElement;
   private readonly toastLine: HTMLElement;
@@ -111,8 +113,7 @@ export class UI {
   private readonly tutorialDownTriangle: HTMLElement;
   private readonly basketBadge: HTMLButtonElement;
 
-  private inBasketTutorial = false;
-  private baitTutorialStep: 0 | 1 | 2 = 0;
+
   private openModal: ModalId = null;
   private railExpanded = false;
   private toastTimeout: number | null = null;
@@ -153,7 +154,6 @@ export class UI {
           <div class="hud-pill hidden" id="hud-lucky-ducky-pill">🦆 <span id="hud-lucky-ducky-timer">0:00</span></div>
           <div class="hud-pill" id="hud-coins-pill">${icon(ICON.coin, 'Coins')}<span id="hud-coins">0</span></div>
           <button class="hud-pill hud-pill-button" id="hud-candy-pill" type="button">${CANDY_EMOJI}<span id="hud-candy-bars">0</span></button>
-          <button class="hud-pill hud-pill-button" id="hud-bait-pill" type="button"><span id="hud-bait-name">&infin; PB</span></button>
         </div>
       </div>
 
@@ -206,7 +206,6 @@ export class UI {
     this.hudXpFill = this.el('#hud-xp-fill');
     this.hudCoins = this.el('#hud-coins');
     this.hudCandyBars = this.el('#hud-candy-bars');
-    this.hudBaitName = this.el('#hud-bait-name');
     this.hudBasketCount = this.el('#hud-basket-count');
     this.phaseIndicator = this.el('#phase-indicator');
     this.fishbotStatus = this.el('#fishbot-status');
@@ -242,7 +241,6 @@ export class UI {
     this.el('#btn-skills').addEventListener('click', () => railSelect('skills'));
     this.el('#btn-settings').addEventListener('click', () => railSelect('settings'));
     this.el('#btn-debug').addEventListener('click', () => this.toggleModal('debug'));
-    this.el('#hud-bait-pill').addEventListener('click', () => this.toggleModal('shop'));
     this.el('#hud-candy-pill').addEventListener('click', () => this.toggleModal('candy'));
     this.basketBadge = this.el('#basket-badge') as HTMLButtonElement;
     this.basketBadge.addEventListener('click', () => this.toggleModal('market'));
@@ -283,6 +281,11 @@ export class UI {
       e.stopPropagation();
       if (this.economy.basketFull() || this.inBasketTutorial) {
         this.toggleModal('market');
+        return;
+      }
+      if (!this.economy.hasCompletedBaitTutorial() && this.economy.getTutorialCastCount() === 1) {
+        this.dismissedFirstEscapeBubble = true;
+        this.renderTutorialBubble(this.gameState.getPhase());
         return;
       }
       if (this.baitTutorialStep === 1) {
@@ -370,6 +373,7 @@ export class UI {
     // Tutorial bubbles auto-close the instant the described action actually happens, rather
     // than waiting for the player to notice and dismiss them by hand.
     this.events.on('castLocked', () => {
+      this.dismissedFirstEscapeBubble = false;
       if (!this.economy.hasSeenCastTutorial()) this.economy.markCastTutorialSeen();
     });
     this.events.on('biteReacted', () => {
@@ -563,9 +567,6 @@ export class UI {
     this.hudXpFill.style.width = `${Math.min(100, (state.xp / needed) * 100)}%`;
     this.hudCoins.textContent = String(state.coins);
     this.hudCandyBars.textContent = String(state.candyBars);
-    const equippedBait = this.economy.equippedBait();
-    const baitOwned = state.baitInventory[equippedBait.id] ?? 0;
-    this.hudBaitName.textContent = `${equippedBait.free ? '∞' : baitOwned} ${equippedBait.acronym}`;
     this.hudBasketCount.textContent = `${state.basket.length}/${this.economy.basketCapacity()}`;
 
     // Update right-side bait selector buttons
@@ -667,6 +668,11 @@ export class UI {
     let showDownTriangle = false;
 
     const inBaitTutorial = !this.economy.hasCompletedBaitTutorial() && this.economy.getTutorialCastCount() >= 2;
+    const isFirstEscapeTutorial =
+      !this.economy.hasCompletedBaitTutorial() &&
+      this.economy.getTutorialCastCount() === 1 &&
+      !this.dismissedFirstEscapeBubble &&
+      (phase === 'missed' || phase === 'idle' || phase === 'aiming');
 
     if (!this.openModal && (this.economy.basketFull() || (this.inBasketTutorial && this.economy.snapshot.basket.length > 0))) {
       text = 'Your basket is full! Tap the basket in the bottom left to visit the market.';
@@ -682,6 +688,9 @@ export class UI {
         text = "Stop by my ba ba bait shop to get some better ba ba bait.";
         showDownTriangle = false;
       }
+    } else if (!this.openModal && isFirstEscapeTutorial) {
+      text = "Some getaway, glrup. Keep casting.";
+      showDownTriangle = false;
     } else if (!this.openModal && !this.economy.hasSeenCastTutorial() && (phase === 'idle' || phase === 'aiming')) {
       text = 'Click on the screen to cast your reel.';
     } else if (
@@ -1665,6 +1674,7 @@ export class UI {
         } else if (action === 'debug-start-tutorial') {
           this.economy.resetTutorial();
           this.baitTutorialStep = 0;
+          this.dismissedFirstEscapeBubble = false;
           this.closeModal();
           this.renderTutorialBubble(this.gameState.getPhase());
           this.renderHud();
