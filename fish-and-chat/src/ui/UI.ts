@@ -92,7 +92,7 @@ export class UI {
   private readonly hudCandyBars: HTMLElement;
   private readonly hudBasketCount: HTMLElement;
   private inBasketTutorial = false;
-  private baitTutorialStep: 0 | 1 | 2 = 0;
+  private baitTutorialStep: 0 | 1 | 2 | 3 | 4 = 0;
   private dismissedFirstEscapeBubble = false;
   private readonly phaseIndicator: HTMLElement;
   private readonly fishbotStatus: HTMLElement;
@@ -299,6 +299,10 @@ export class UI {
         this.openShopForBait('marshmallows');
         return;
       }
+      if (this.baitTutorialStep === 4) {
+        this.craftingSystem.equipBait('marshmallows');
+        return;
+      }
       if (!this.economy.hasSeenCastTutorial()) this.economy.markCastTutorialSeen();
       else if (!this.economy.hasSeenReelTutorial()) this.economy.markReelTutorialSeen();
       this.renderTutorialBubble(this.gameState.getPhase());
@@ -363,6 +367,14 @@ export class UI {
 
   private bindEvents(): void {
     this.events.on('toast', ({ message }) => this.showToast(message));
+    this.events.on('baitEquipped', ({ id }) => {
+      if (this.baitTutorialStep === 4 && id === 'marshmallows') {
+        this.economy.markBaitTutorialCompleted();
+        this.baitTutorialStep = 0;
+        this.renderTutorialBubble(this.gameState.getPhase());
+        this.renderHud();
+      }
+    });
     this.events.on('actionPressed', () => {
       if (this.baitTutorialStep === 1) {
         this.baitTutorialStep = 2;
@@ -579,6 +591,7 @@ export class UI {
 
     // Update right-side bait selector buttons
     const isBaitTutorialStep2 = this.baitTutorialStep === 2 && !this.economy.hasCompletedBaitTutorial();
+    const isBaitTutorialStep4 = this.baitTutorialStep === 4 && !this.economy.hasCompletedBaitTutorial();
     for (const bait of BAIT_CATALOG) {
       const btn = this.root.querySelector<HTMLButtonElement>(`#hud-bait-btn-${bait.id}`);
       const qtyEl = this.root.querySelector<HTMLElement>(`#hud-bait-qty-${bait.id}`);
@@ -597,7 +610,9 @@ export class UI {
       btn.classList.toggle('unselected', !isSelected);
       btn.classList.toggle('empty', !isAvailable);
 
-      const isFlashingBait = isBaitTutorialStep2 && bait.id !== 'pleb-bait';
+      const isFlashingBait =
+        (isBaitTutorialStep2 && bait.id !== 'pleb-bait') ||
+        (isBaitTutorialStep4 && bait.id === 'marshmallows');
       btn.classList.toggle('tutorial-flash-stroke', isFlashingBait);
 
       btn.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
@@ -694,6 +709,9 @@ export class UI {
         showDownTriangle = true;
       } else if (this.baitTutorialStep === 2) {
         text = "Stop by my ba ba bait shop to get some better ba ba bait.";
+        showDownTriangle = false;
+      } else if (this.baitTutorialStep === 4) {
+        text = "Tap your new bait to equip it, glurp.";
         showDownTriangle = false;
       }
     } else if (!this.openModal && isFirstEscapeTutorial) {
@@ -913,6 +931,7 @@ export class UI {
     const previous = this.openModal;
     this.openModal = null;
     if (previous === 'closet') this.events.emit('closetClosed', {});
+    if (previous === 'shop') this.handleShopClosed();
     this.resetArmed = false;
     this.debugResetArmed = false;
     this.scrapbookOpened = false;
@@ -930,9 +949,28 @@ export class UI {
     if (this.openModal === 'market') this.marketSystem.onMarketOpened();
     if (previous === 'closet' && this.openModal !== 'closet') this.events.emit('closetClosed', {});
     if (this.openModal === 'closet' && previous !== 'closet') this.events.emit('closetOpened', {});
+    if (previous === 'shop' && this.openModal !== 'shop') this.handleShopClosed();
     this.resetArmed = false;
     this.debugResetArmed = false;
     this.renderModal();
+  }
+
+  private handleShopClosed(): void {
+    if (!this.economy.hasCompletedBaitTutorial() && this.economy.getTutorialCastCount() >= 2) {
+      const hasMarshmallows = (this.economy.snapshot.baitInventory['marshmallows'] ?? 0) > 0;
+      if (hasMarshmallows) {
+        if (this.economy.snapshot.equippedBaitId === 'marshmallows') {
+          this.economy.markBaitTutorialCompleted();
+          this.baitTutorialStep = 0;
+        } else {
+          this.baitTutorialStep = 4;
+        }
+      } else {
+        this.baitTutorialStep = 2;
+      }
+      this.renderTutorialBubble(this.gameState.getPhase());
+      this.renderHud();
+    }
   }
 
   private refreshOpenModal(): void {
@@ -1108,25 +1146,27 @@ export class UI {
   }
 
   private renderShop(): void {
-    if (!this.economy.hasCompletedBaitTutorial() && this.economy.getTutorialCastCount() >= 2) {
+    const isFirstBaitTutorialShopVisit =
+      !this.economy.hasCompletedBaitTutorial() && this.economy.getTutorialCastCount() >= 2;
+    if (isFirstBaitTutorialShopVisit) {
       this.barnabyMessage = "Glurp, oh hi new one. Grab some slurplys";
-      this.economy.markBaitTutorialCompleted();
-      this.baitTutorialStep = 0;
+      this.baitTutorialStep = 3;
       this.renderHud();
     }
 
     const state = this.economy.snapshot;
     const baitRows = BAIT_CATALOG.map((bait) => {
       const owned = state.baitInventory[bait.id] ?? 0;
+      const isMarshmallowsHighlight = isFirstBaitTutorialShopVisit && bait.id === 'marshmallows';
       return `
-        <li class="row" id="shop-bait-${bait.id}">
+        <li class="row ${isMarshmallowsHighlight ? 'tutorial-flash-stroke' : ''}" id="shop-bait-${bait.id}">
           ${rowIcon(bait.id, bait.name, icon(ICON.bait, bait.name))}
           <div class="row-body">
             <strong>${bait.name}</strong>
             <span class="row-meta">${bait.free ? 'always available' : `${bait.costPerTen}🪙 / 10`} &middot; have ${bait.free ? '&infin;' : owned}</span>
           </div>
           <div class="row-actions">
-            ${bait.free ? '' : `<button class="btn-small" data-action="buy-bait" data-id="${bait.id}">Buy 10</button>`}
+            ${bait.free ? '' : `<button class="btn-small ${isMarshmallowsHighlight ? 'tutorial-flash-stroke' : ''}" data-action="buy-bait" data-id="${bait.id}">Buy 10</button>`}
           </div>
         </li>`;
     }).join('');
@@ -1815,6 +1855,11 @@ export class UI {
     }
 
     if (this.craftingSystem.equipBait(baitId)) {
+      if (this.baitTutorialStep === 4 && baitId === 'marshmallows') {
+        this.economy.markBaitTutorialCompleted();
+        this.baitTutorialStep = 0;
+        this.renderTutorialBubble(this.gameState.getPhase());
+      }
       this.renderHud();
     }
   }

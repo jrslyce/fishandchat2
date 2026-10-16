@@ -377,6 +377,7 @@ body {
   align-items: flex-start;
   gap: 8px;
   pointer-events: auto;
+  z-index: 40;
 }
 
 /* Nested behind the hamburger toggle so the collapsed rail is a single button. Expands
@@ -550,6 +551,26 @@ body {
   opacity: 1 !important;
   filter: none !important;
   z-index: 5;
+}
+
+.row.tutorial-flash-stroke,
+#shop-bait-marshmallows.tutorial-flash-stroke {
+  border: 2px solid #f5a623 !important;
+  animation: tutorialBaitFlashStroke 0.75s ease-in-out infinite !important;
+  opacity: 1 !important;
+  filter: none !important;
+  border-radius: var(--radius-md) !important;
+  padding-left: 10px;
+  padding-right: 10px;
+  position: relative;
+  z-index: 5;
+}
+
+.btn-small.tutorial-flash-stroke {
+  border: 2px solid #f5a623 !important;
+  animation: tutorialBaitFlashStroke 0.75s ease-in-out infinite !important;
+  opacity: 1 !important;
+  filter: none !important;
 }
 
 /* Basket badge, bottom-left */
@@ -1542,13 +1563,21 @@ body {
   position: absolute;
   left: max(12px, env(safe-area-inset-left));
   right: max(12px, env(safe-area-inset-right));
-  bottom: max(68px, calc(env(safe-area-inset-bottom) + 64px));
+  top: max(104px, calc(env(safe-area-inset-top) + 98px));
+  max-width: 440px;
+  margin: 0 auto;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 8px;
   pointer-events: auto;
   z-index: 30;
   transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+#tutorial-bubble.basket-tutorial {
+  top: auto;
+  bottom: max(68px, calc(env(safe-area-inset-bottom) + 64px));
+  align-items: flex-end;
 }
 
 #tutorial-bubble.hidden {
@@ -1576,6 +1605,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  touch-action: manipulation;
 }
 
 #tutorial-bubble-content {
@@ -1611,10 +1641,17 @@ body {
   content: '';
   position: absolute;
   left: -8px;
-  bottom: 12px;
+  top: 50%;
+  transform: translateY(-50%);
   border-width: 6px 8px 6px 0;
   border-style: solid;
   border-color: transparent var(--paper) transparent transparent;
+}
+
+#tutorial-bubble.basket-tutorial .tutorial-bubble-text::before {
+  top: auto;
+  bottom: 12px;
+  transform: none;
 }
 
 .tutorial-bubble-text:active {
