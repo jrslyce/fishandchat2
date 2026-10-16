@@ -152,6 +152,7 @@ export class Economy {
     this.state.hasCompletedBaitTutorial = false;
     this.state.hasSeenCastTutorial = false;
     this.state.hasSeenReelTutorial = false;
+    this.state.equippedBaitId = 'pleb-bait';
     this.persist();
   }
 

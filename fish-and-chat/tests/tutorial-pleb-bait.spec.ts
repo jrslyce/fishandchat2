@@ -211,14 +211,68 @@ test.describe('Pleb bait tutorial flow: 6s & 12s casts, Barnaby dialogue, down t
     await expect(headerBubble).toBeVisible();
     await expect(headerBubble).toContainText('Glurp, oh hi new one. Grab some slurplys');
 
-    // Capture screenshot of Barnaby welcoming player in bait shop
-    const shopGreetingShot = await page.locator('#app').screenshot({
-      path: '/Users/jared/.gemini/antigravity-ide/brain/a0b52fda-756c-4c09-b118-cac3e6161ede/shop_barnaby_slurplys_greeting.png',
+    // Verify marshmallows row and its Buy button have the animated stroke in the store
+    const shopMarshmallowsRow = page.locator('#shop-bait-marshmallows');
+    await expect(shopMarshmallowsRow).toHaveClass(/tutorial-flash-stroke/);
+    const shopMarshmallowsBuyBtn = shopMarshmallowsRow.locator('button[data-action="buy-bait"]');
+    await expect(shopMarshmallowsBuyBtn).toHaveClass(/tutorial-flash-stroke/);
+
+    // Verify other bait rows do not have the flash stroke
+    await expect(page.locator('#shop-bait-nightcrawlers')).not.toHaveClass(/tutorial-flash-stroke/);
+
+    // Capture screenshot of marshmallows highlighted in shop
+    const shopHighlightShot = await page.locator('#app').screenshot({
+      path: '/Users/jared/.gemini/antigravity-ide/brain/a0b52fda-756c-4c09-b118-cac3e6161ede/shop_marshmallows_flash_stroke.png',
     });
-    await testInfo.attach('shop-barnaby-slurplys-greeting', {
-      body: shopGreetingShot,
+    await testInfo.attach('shop-marshmallows-flash-stroke', {
+      body: shopHighlightShot,
       contentType: 'image/png',
     });
+
+    // Buy marshmallows (player has 50 coins, costs 25)
+    await shopMarshmallowsBuyBtn.click();
+    expect(await page.locator('#shop-coins-amount').textContent()).toBe('25');
+
+    // 7. Leave the store (close shop modal)
+    await page.locator('#modal-host .modal-close').click();
+    await expect(page.locator('#modal-host')).toBeHidden();
+
+    // After user leaves store, Barnaby appears telling user to equip their new bait
+    await expect(tutorialBubble).toBeVisible();
+    await expect(bubbleContent).toHaveText('Tap your new bait to equip it, glurp.');
+
+    // Verify Barnaby chat is positioned up in the screen inside #app (relative y ~ 104px, well above the bottom)
+    const appBox = await page.locator('#app').boundingBox();
+    const bubbleBox = await tutorialBubble.boundingBox();
+    expect(bubbleBox).not.toBeNull();
+    expect(appBox).not.toBeNull();
+    const relativeY = bubbleBox!.y - appBox!.y;
+    expect(relativeY).toBeLessThan(120);
+    expect(relativeY).toBeGreaterThanOrEqual(90);
+
+    // Highlight that bait type (marshmallows on right rail)
+    await expect(marshmallowsBtn).toHaveClass(/tutorial-flash-stroke/);
+    await expect(nightcrawlersBtn).not.toHaveClass(/tutorial-flash-stroke/);
+    await expect(neonLureBtn).not.toHaveClass(/tutorial-flash-stroke/);
+
+    // Capture screenshot of Barnaby equip bait prompt and right rail highlight
+    const equipPromptShot = await page.locator('#app').screenshot({
+      path: '/Users/jared/.gemini/antigravity-ide/brain/a0b52fda-756c-4c09-b118-cac3e6161ede/barnaby_equip_new_bait_prompt.png',
+    });
+    await testInfo.attach('barnaby-equip-new-bait-prompt', {
+      body: equipPromptShot,
+      contentType: 'image/png',
+    });
+
+    // 8. User taps the highlighted marshmallows bait button on right rail
+    await marshmallowsBtn.click({ force: true });
+
+    // Verify marshmallows is now equipped
+    const equippedBaitId = await page.evaluate(() => {
+      const game = (window as any).__FISH_GAME__;
+      return game.economy.snapshot.equippedBaitId;
+    });
+    expect(equippedBaitId).toBe('marshmallows');
 
     // Verify tutorial is now marked completed
     const completedState = await page.evaluate(() => {
@@ -226,10 +280,6 @@ test.describe('Pleb bait tutorial flow: 6s & 12s casts, Barnaby dialogue, down t
       return game.economy.hasCompletedBaitTutorial();
     });
     expect(completedState).toBe(true);
-
-    // 7. Close shop and verify normal game proceeds
-    await page.locator('#modal-host .modal-close').click();
-    await expect(page.locator('#modal-host')).toBeHidden();
 
     // Flashing stroke is removed from all baits
     await expect(marshmallowsBtn).not.toHaveClass(/tutorial-flash-stroke/);
