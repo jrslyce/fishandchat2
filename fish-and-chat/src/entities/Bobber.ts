@@ -56,6 +56,8 @@ export class Bobber {
   private throwState: ThrowState | null = null;
 
   constructor(private readonly waterY: number) {
+    this.group.renderOrder = 3;
+
     // Water ripple ring
     this.ripple = new THREE.Mesh(
       new THREE.RingGeometry(0.15, 0.22, 24),

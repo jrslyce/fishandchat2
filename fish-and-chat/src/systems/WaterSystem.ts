@@ -68,6 +68,7 @@ export class WaterSystem {
       vertexShader: VERTEX_SHADER,
       fragmentShader: FRAGMENT_SHADER,
       transparent: true,
+      depthWrite: false,
     });
 
     this.mesh = new THREE.Mesh(geometry, this.material);

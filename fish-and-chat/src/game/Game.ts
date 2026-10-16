@@ -20,6 +20,7 @@ import { RenderPipeline } from '../systems/RenderPipeline';
 import { ThemeManager } from '../systems/ThemeManager';
 import { VfxSystem } from '../systems/VfxSystem';
 import { WaterSystem } from '../systems/WaterSystem';
+import { FishShadowSystem } from '../systems/FishShadowSystem';
 import { THEME_PALETTES } from '../assets/MaterialLibrary';
 import { Economy } from './Economy';
 import { CASTING_ANIM_SECONDS, FishingStateMachine, type FishingPhase } from './GameState';
@@ -59,6 +60,7 @@ export class Game {
   private readonly themeManager: ThemeManager;
   private readonly renderPipeline: RenderPipeline;
   private readonly vfx: VfxSystem;
+  private readonly fishShadows: FishShadowSystem;
 
   private diorama: DioramaResult;
   private readonly playerCharacter = new PlayerCharacter();
@@ -183,7 +185,22 @@ export class Game {
       getCraftingBenchPosition: () => new THREE.Vector3(-3.6, 0.7, -1.6),
     });
 
-    this.events.on('themeChanged', ({ theme }) => void this.themeManager.setTheme(theme));
+    this.fishShadows = new FishShadowSystem({
+      scene: this.scene,
+      events: this.events,
+      getBobberPosition: () => this.bobber.getWorldPosition(new THREE.Vector3()),
+      getPhase: () => this.fishingState.getPhase(),
+      getRemainingWaitSeconds: () => this.fishingState.getRemainingWaitSeconds(),
+      getWaitDurationSeconds: () => this.fishingState.getWaitDurationSeconds(),
+      emitRipple: (x, z) => this.water.emitRipple(x, z),
+    });
+    this.fishShadows.setThemeColor(initialPalette.waterDeep);
+
+    this.events.on('themeChanged', ({ theme }) => {
+      void this.themeManager.setTheme(theme);
+      const palette = THEME_PALETTES[theme];
+      if (palette) this.fishShadows.setThemeColor(palette.waterDeep);
+    });
     this.events.on('baitEquipped', ({ id }) => this.bobber.setBaitType(id));
     this.bobber.setBaitType(this.economy.equippedBait().id);
 
@@ -267,6 +284,7 @@ export class Game {
     this.water.dispose();
     this.themeManager.dispose();
     this.vfx.dispose();
+    this.fishShadows.dispose();
     this.renderPipeline.dispose();
     this.economy.persist();
     this.events.clear();
@@ -417,6 +435,7 @@ export class Game {
 
     this.playerCharacter.update(delta);
     this.vfx.update(delta);
+    this.fishShadows.update(delta);
     this.ui.update();
     this.cameraRig.update(delta);
 
