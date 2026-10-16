@@ -45,6 +45,7 @@ export interface FishingSnapshot {
   waitProgress: number;
   biteProgress: number;
   lastCatch: CatchResult | null;
+  remainingWait?: number;
 }
 
 /**
@@ -84,6 +85,19 @@ export class FishingStateMachine {
     return this.phase;
   }
 
+  getRemainingWaitSeconds(): number {
+    if (this.phase !== 'waiting') return 0;
+    return Math.max(0, this.waitDurationSeconds - this.phaseElapsed);
+  }
+
+  getWaitDurationSeconds(): number {
+    return this.waitDurationSeconds;
+  }
+
+  getPhaseElapsed(): number {
+    return this.phaseElapsed;
+  }
+
   /** Used by Game.ts's tap-anywhere-during-a-bite handler. No-ops outside the bite phase. */
   manualReelAttempt(): void {
     if (this.phase !== 'bite') return;
@@ -99,6 +113,7 @@ export class FishingStateMachine {
       waitProgress: this.phase === 'waiting' ? Math.min(1, this.phaseElapsed / this.waitDurationSeconds) : 0,
       biteProgress: this.phase === 'bite' ? Math.min(1, this.phaseElapsed / HAZARD_BACKSTOP_SECONDS) : 0,
       lastCatch: this.lastCatch,
+      remainingWait: this.phase === 'waiting' ? Math.max(0, this.waitDurationSeconds - this.phaseElapsed) : 0,
     };
   }
 
