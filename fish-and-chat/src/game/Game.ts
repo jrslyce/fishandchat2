@@ -7,6 +7,9 @@ import { Loop } from '../core/Loop';
 import { createRenderer, resizeRenderer } from '../core/Renderer';
 import { SaveManager } from '../core/SaveManager';
 import { Bobber } from '../entities/Bobber';
+import { BottomlessTackleBox } from '../entities/BottomlessTackleBox';
+import { CosmeticFishbot } from '../entities/CosmeticFishbot';
+import { CastSparkles } from '../entities/CastSparkles';
 import { FishingLine } from '../entities/FishingLine';
 import { PlayerCharacter } from '../entities/character/PlayerCharacter';
 import { loadImportedAsset, normalizedClone } from '../assets/ImportedAssetRegistry';
@@ -14,6 +17,7 @@ import { MODEL_SOURCE_MANIFEST_PUBLIC, SFX_MANIFEST } from '../assets/manifest';
 import { CraftingSystem } from '../systems/CraftingSystem';
 import { FishbotSystem } from '../systems/FishbotSystem';
 import { MuxySystem } from '../systems/MuxySystem';
+import type { ProgressSession } from '../systems/MuxyProgressStore';
 import { TwitchAuthSystem } from '../systems/TwitchAuthSystem';
 import { MarketSystem } from '../systems/MarketSystem';
 import { RenderPipeline } from '../systems/RenderPipeline';
@@ -21,11 +25,17 @@ import { ThemeManager } from '../systems/ThemeManager';
 import { VfxSystem } from '../systems/VfxSystem';
 import { WaterSystem } from '../systems/WaterSystem';
 import { FishShadowSystem } from '../systems/FishShadowSystem';
+import { LivingWorldSystem } from '../systems/LivingWorldSystem';
+import { QuestSystem } from '../systems/QuestSystem';
+import { CommunitySystem } from '../systems/CommunitySystem';
+import { NarrativeSystem } from '../systems/NarrativeSystem';
+import { PondPresenceSystem } from '../systems/PondPresenceSystem';
 import { THEME_PALETTES } from '../assets/MaterialLibrary';
 import { Economy } from './Economy';
 import { CASTING_ANIM_SECONDS, FishingStateMachine, type FishingPhase } from './GameState';
 import { createDefaultSaveState, type GameSaveStateV1 } from './SaveState';
 import { type DioramaResult } from '../world/DioramaBuilder';
+import { CLOTHING_CATALOG } from './data';
 import type { GameEventMap } from './events';
 import { UI } from '../ui/UI';
 
@@ -45,7 +55,7 @@ export class Game {
   private readonly audio = new AudioEngine();
   private readonly events = new EventBus<GameEventMap>();
 
-  private readonly saveManager = new SaveManager<GameSaveStateV1>(createDefaultSaveState);
+  private readonly saveManager: SaveManager<GameSaveStateV1>;
   public readonly economy: Economy;
   private readonly marketSystem: MarketSystem;
   private readonly craftingSystem: CraftingSystem;
@@ -61,18 +71,28 @@ export class Game {
   private readonly renderPipeline: RenderPipeline;
   private readonly vfx: VfxSystem;
   private readonly fishShadows: FishShadowSystem;
+  public readonly livingWorld: LivingWorldSystem;
+  public readonly questSystem: QuestSystem;
+  public readonly communitySystem: CommunitySystem;
+  public readonly narrativeSystem: NarrativeSystem;
+  private readonly pondPresence: PondPresenceSystem;
 
   private diorama: DioramaResult;
   private readonly playerCharacter = new PlayerCharacter();
+  private readonly bottomlessTackleBox = new BottomlessTackleBox();
+  private readonly cosmeticFishbot = new CosmeticFishbot();
+  private readonly castSparkles = new CastSparkles();
   private viewMode: 'dock' | 'bobber' = 'dock';
   private readonly dockCameraPos = new THREE.Vector3(0, 2.1, 3.4);
   private readonly dockCameraFocus = new THREE.Vector3(0, 0.55, -0.5);
 
-  // Closet live preview: a second small render (same renderer/scene, no
-  // second WebGL context) into an offscreen target, read back into a plain
-  // 2D <canvas> in the modal each frame the closet is open.
+  // A small dedicated portrait set shares the main WebGL context.
   private closetOpen = false;
-  private readonly closetPreviewSize = { width: 220, height: 280 };
+  private previewClothingId: string | null = null;
+  private closetTurn = 0;
+  private readonly closetPreviewSize = { width: 320, height: 400 };
+  private readonly closetScene = new THREE.Scene();
+  private readonly closetCharacter = new PlayerCharacter();
   private readonly closetCamera = new THREE.PerspectiveCamera(32, this.closetPreviewSize.width / this.closetPreviewSize.height, 0.05, 20);
   private readonly closetRenderTarget = new THREE.WebGLRenderTarget(this.closetPreviewSize.width, this.closetPreviewSize.height);
   private readonly closetPixelBuffer = new Uint8Array(this.closetPreviewSize.width * this.closetPreviewSize.height * 4);
@@ -89,6 +109,25 @@ export class Game {
   private ambienceStarted = false;
 
   private readonly onPageHide = () => this.economy.persist();
+  private readonly onCharacterPointerDown = (event: PointerEvent) => {
+    if (event.target !== this.canvas || (event.pointerType === 'mouse' && event.button !== 0) ||
+        this.viewMode !== 'dock' || !this.diorama.root.visible ||
+        !['idle', 'aiming'].includes(this.fishingState.getPhase())) return;
+    const rect = this.canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const pointer = new THREE.Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    this.camera.updateMatrixWorld();
+    this.playerCharacter.group.updateWorldMatrix(true, true);
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(pointer, this.camera);
+    if (!ray.intersectObject(this.playerCharacter.group, true).length) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    this.ui.openCloset();
+  };
   // A Twitch panel is frequently scrolled out of view while still "open" — pause the
   // render/update loop rather than burning GPU/CPU on a tab the viewer can't see.
   private readonly onVisibilityChange = () => {
@@ -96,7 +135,8 @@ export class Game {
     else this.loop.start();
   };
 
-  constructor(private readonly canvas: HTMLCanvasElement) {
+  constructor(private readonly canvas: HTMLCanvasElement, progress?: ProgressSession) {
+    this.saveManager = new SaveManager<GameSaveStateV1>(createDefaultSaveState, progress?.initialState, progress?.onSave, progress?.localSaveKey);
     this.renderer = createRenderer(canvas);
     this.cameraRig = new CameraRig(this.camera, this.dockCameraPos, this.dockCameraFocus);
     // Render targets default to a linear working color space (the sRGB
@@ -104,19 +144,46 @@ export class Game {
     // closet preview reads pixels straight back out, so it needs the target
     // itself to hold sRGB-encoded values or it comes out looking too dark.
     this.closetRenderTarget.texture.colorSpace = THREE.SRGBColorSpace;
+    this.closetScene.background = new THREE.Color('#c7e4db');
+    this.closetCharacter.setRodVisible(true);
+    this.closetCharacter.setShowcaseRod(true);
+    this.closetCharacter.group.rotation.y = Math.PI;
+    this.closetScene.add(this.closetCharacter.group);
+    this.closetScene.add(new THREE.HemisphereLight('#ffffff', '#77968d', 2.2));
+    const studioKey = new THREE.DirectionalLight('#fff4d9', 3.1);
+    studioKey.position.set(-2, 4, -3);
+    this.closetScene.add(studioKey);
+    const studioRim = new THREE.DirectionalLight('#91bbce', 1.8);
+    studioRim.position.set(2, 3, 2);
+    this.closetScene.add(studioRim);
+    const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.59, 0.1, 32), new THREE.MeshStandardMaterial({ color: '#d2aa70', roughness: 0.82 }));
+    plinth.position.y = -0.065;
+    this.closetScene.add(plinth);
+    const plinthEdge = new THREE.Mesh(new THREE.CylinderGeometry(0.54, 0.56, 0.025, 32), new THREE.MeshStandardMaterial({ color: '#f8e6bb', metalness: 0.35, roughness: 0.35 }));
+    plinthEdge.position.y = -0.01;
+    this.closetScene.add(plinthEdge);
+    this.closetCamera.position.set(0.68, 0.88, -2.65);
+    this.closetCamera.lookAt(0, 0.61, 0);
 
     // Pass canvas as actionSurface and #app as containerSurface so taps register on canvas or anywhere on screen
     this.input = new InputController(this.canvas, this.getElement('#app'));
 
     this.economy = new Economy(this.saveManager);
+    if (progress) this.economy.setActiveChannel(progress.channelId, progress.channelName, progress.channelAvatarUrl);
+    // Every new session begins silent, including sessions with an older saved
+    // unmuted preference. Players can turn audio back on in Settings.
+    this.economy.setAudioMix({ muted: true });
     Object.assign(this.audio.mix, this.economy.snapshot.audio);
     this.marketSystem = new MarketSystem(this.economy, this.events);
-    this.craftingSystem = new CraftingSystem(this.economy, this.events);
+    this.craftingSystem = new CraftingSystem(this.economy, this.events, () => {
+      const phase = this.fishingState.getPhase();
+      return phase === 'idle' || phase === 'aiming';
+    });
     this.fishbotSystem = new FishbotSystem(this.economy, this.events);
-    this.muxySystem = new MuxySystem(this.craftingSystem);
-    void this.muxySystem.init();
+    this.muxySystem = new MuxySystem(this.craftingSystem, this.economy, this.events);
+    void this.muxySystem.init(progress?.getAuthToken ? { token: progress.getAuthToken(), channelId: progress.channelId } : undefined);
     this.twitchAuthSystem = new TwitchAuthSystem(this.events);
-    void this.twitchAuthSystem.init();
+    void this.twitchAuthSystem.init(progress?.initialIdentity);
     this.events.on('twitchIdentityResolved', ({ displayName }) => {
       this.ui.showWelcomeName(displayName);
       this.economy.setTwitchDisplayName(displayName);
@@ -124,6 +191,8 @@ export class Game {
     });
     this.fishingState = new FishingStateMachine(this.economy, this.events);
     this.ui = new UI(this.economy, this.fishingState, this.marketSystem, this.craftingSystem, this.fishbotSystem, this.muxySystem, this.audio, this.events);
+    this.pondPresence = new PondPresenceSystem(this.economy, this.events,
+      progress?.getAuthToken ? { token: progress.getAuthToken(), channelId: progress.channelId } : undefined);
     this.wireLoadingScreen();
 
     const initialTheme = this.economy.currentTheme();
@@ -135,15 +204,30 @@ export class Game {
     this.themeManager = new ThemeManager(this.scene, this.water, this.audio, initialTheme, (diorama) => this.onDioramaRebuilt(diorama));
 
     this.diorama.playerSlot.add(this.playerCharacter.group);
+    this.canvas.addEventListener('pointerdown', this.onCharacterPointerDown, { capture: true });
+    this.diorama.playerSlot.add(this.bottomlessTackleBox.group);
+    this.diorama.playerSlot.add(this.cosmeticFishbot.group);
+    this.bottomlessTackleBox.setOwned(this.economy.ownsPremiumItem('bottomless-tackle-box'));
+    this.updateCosmeticAppearance();
+    this.events.on('candyBarsChanged', () => {
+      this.bottomlessTackleBox.setOwned(this.economy.ownsPremiumItem('bottomless-tackle-box'));
+      this.updateCosmeticAppearance();
+    });
     void this.refreshPlayerSkin();
     this.playerCharacter.setName(this.economy.displayName());
     this.events.on('clothingEquipped', () => void this.refreshPlayerSkin());
+    this.events.on('clothingPreviewChanged', ({ id }) => {
+      this.previewClothingId = id;
+      void this.refreshPlayerSkin();
+    });
     this.events.on('baseToneChanged', () => void this.refreshPlayerSkin());
+    this.events.on('cosmeticEquipped', () => this.updateCosmeticAppearance());
     this.events.on('displayNameChanged', ({ name }) => this.playerCharacter.setName(name));
     // Closet UI: dolly the (single, shared) main camera onto the player's own
     // slot while customizing, rather than standing up a second WebGL context.
     this.events.on('closetOpened', () => {
       this.closetOpen = true;
+      this.closetTurn = 0;
       this.playerCharacter.group.position.set(0, 0, 0);
       this.playerCharacter.group.rotation.y = 0;
       this.playerCharacter.setPose('idle');
@@ -152,6 +236,8 @@ export class Game {
     });
     this.events.on('closetClosed', () => {
       this.closetOpen = false;
+      this.previewClothingId = null;
+      void this.refreshPlayerSkin();
       this.cameraRig.setTarget(this.dockCameraPos, this.dockCameraFocus);
     });
     this.events.on('phaseChanged', ({ phase }) => this.onFishingPhaseChanged(phase));
@@ -164,6 +250,7 @@ export class Game {
     this.bobber = new Bobber(WATER_Y);
     this.scene.add(this.bobber.group);
     this.scene.add(this.fishingLine.mesh);
+    this.scene.add(this.castSparkles.group);
 
     document.getElementById('debug-perfect-cast')?.addEventListener('click', (e) => {
       this.fishingState.debugPerfectCastMode = !this.fishingState.debugPerfectCastMode;
@@ -204,8 +291,43 @@ export class Game {
     this.events.on('baitEquipped', ({ id }) => this.bobber.setBaitType(id));
     this.bobber.setBaitType(this.economy.equippedBait().id);
 
+    this.livingWorld = new LivingWorldSystem({
+      scene: this.scene,
+      water: this.water,
+      events: this.events,
+      hemisphereLight: this.renderPipeline.hemisphere,
+      keyLight: this.renderPipeline.keyLight,
+    });
+    this.economy.setWeatherProvider(() => this.livingWorld.getWeather());
+
+    this.questSystem = new QuestSystem(this.economy, this.events);
+    this.communitySystem = new CommunitySystem(this.economy, this.events, {
+      livingWorld: this.livingWorld,
+    });
+    this.narrativeSystem = new NarrativeSystem(this.scene, this.water, this.audio, this.events, this.economy, this.camera);
+    (this.ui as any).setLivingWorld?.(this.livingWorld);
+    (this.ui as any).setQuestSystem?.(this.questSystem);
+    (this.ui as any).setCommunitySystem?.(this.communitySystem);
+    (this.ui as any).setNarrativeSystem?.(this.narrativeSystem);
+
+    this.events.on('premiumItemPurchased', ({ id, ok }) => {
+      if (!ok) return;
+      if (id === 'rainbow-totem') {
+        this.livingWorld.setWeather('rainbow', 300);
+      } else if (id === 'whale-call-horn') {
+        this.livingWorld.triggerWhaleJump();
+      } else if (id === 'bottomless-tackle-box') {
+        this.bottomlessTackleBox.celebrate();
+      }
+      this.updateCosmeticAppearance();
+    });
+
     if (import.meta.env.DEV) {
-      (window as unknown as { __game_scene?: THREE.Scene }).__game_scene = this.scene;
+      (window as unknown as { __game_scene?: THREE.Scene; __livingWorld?: LivingWorldSystem; __questSystem?: QuestSystem; __communitySystem?: CommunitySystem; __narrativeSystem?: NarrativeSystem }).__game_scene = this.scene;
+      (window as unknown as { __livingWorld?: LivingWorldSystem }).__livingWorld = this.livingWorld;
+      (window as unknown as { __questSystem?: QuestSystem }).__questSystem = this.questSystem;
+      (window as unknown as { __communitySystem?: CommunitySystem }).__communitySystem = this.communitySystem;
+      (window as unknown as { __narrativeSystem?: NarrativeSystem }).__narrativeSystem = this.narrativeSystem;
     }
 
     this.wireAudioTriggers();
@@ -266,9 +388,46 @@ export class Game {
       if (ok) void this.audio.playSfx(SFX_MANIFEST.coinClink);
     });
     this.events.on('fishbotPurchased', ({ ok }) => {
+      if (ok) this.updateCosmeticAppearance();
       if (ok) void this.audio.playSfx(SFX_MANIFEST.coinClink);
     });
     this.events.on('fishbotClaimed', () => void this.audio.playSfx(SFX_MANIFEST.catchJingle, 0.8));
+
+    const synth = this.audio.getSynthesizer();
+    let currentWeather = 'clear';
+    this.events.on('weatherChanged', ({ weather }) => {
+      if (weather === 'rain') {
+        synth.playRain(0.35);
+      } else if (currentWeather === 'rain' && weather !== 'rain') {
+        synth.stopRain();
+      }
+      if (weather === 'fog') {
+        synth.playFoghorn();
+      }
+      currentWeather = weather;
+    });
+    this.events.on('whaleJump', () => {
+      synth.playWhaleSong();
+      synth.playWaterSplash(1.2);
+    });
+    this.events.on('krakenBreach', () => {
+      synth.playWaterSplash(1.5);
+      synth.playThunder();
+    });
+    this.events.on('communityGoalCompleted', () => {
+      synth.playFanfare();
+    });
+    this.events.on('xpGained', ({ leveledUp }) => {
+      if (leveledUp) {
+        synth.playLevelUp();
+      }
+    });
+    this.events.on('streakChanged', ({ streak }) => {
+      if (streak > 0) {
+        synth.playStreakCheer();
+      }
+    });
+
     (window as any).__FISH_GAME__ = this;
   }
 
@@ -277,15 +436,31 @@ export class Game {
     window.removeEventListener('pagehide', this.onPageHide);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
     this.input.dispose();
+    this.canvas.removeEventListener('pointerdown', this.onCharacterPointerDown, { capture: true });
     this.audio.dispose();
     this.ui.dispose();
+    this.pondPresence.dispose();
     this.bobber.dispose();
+    this.bottomlessTackleBox.dispose();
+    this.cosmeticFishbot.dispose();
+    this.castSparkles.dispose();
     this.fishingLine.dispose();
     this.water.dispose();
     this.themeManager.dispose();
     this.vfx.dispose();
     this.fishShadows.dispose();
+    this.livingWorld.dispose();
+    this.narrativeSystem.dispose();
     this.renderPipeline.dispose();
+    this.closetCharacter.dispose();
+    this.closetRenderTarget.dispose();
+    this.closetScene.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      if (mesh.isMesh && !this.closetCharacter.group.getObjectById(mesh.id)) {
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+      }
+    });
     this.economy.persist();
     this.events.clear();
     this.renderer.dispose();
@@ -296,10 +471,28 @@ export class Game {
   private onDioramaRebuilt(diorama: DioramaResult): void {
     this.diorama = diorama;
     diorama.playerSlot.add(this.playerCharacter.group);
+    diorama.playerSlot.add(this.bottomlessTackleBox.group);
+    diorama.playerSlot.add(this.cosmeticFishbot.group);
   }
 
   private async refreshPlayerSkin(): Promise<void> {
-    await this.playerCharacter.refreshSkin(this.economy.baseTone(), this.economy.equippedClothing());
+    const outfit = { ...this.economy.equippedClothing() };
+    const preview = this.closetOpen ? CLOTHING_CATALOG.find((item) => item.id === this.previewClothingId) : null;
+    if (preview) outfit[preview.slot] = preview.id;
+    await Promise.all([
+      this.playerCharacter.refreshSkin(this.economy.baseTone(), outfit),
+      this.closetCharacter.refreshSkin(this.economy.baseTone(), outfit),
+    ]);
+  }
+
+  private updateCosmeticAppearance(): void {
+    const goldenRod = this.economy.cosmeticEquipped('rod') === 'golden-rod-skin';
+    this.playerCharacter.setGoldenRod(goldenRod);
+    this.closetCharacter.setGoldenRod(goldenRod);
+    this.cosmeticFishbot.setAppearance(
+      this.economy.ownedFishbots().length > 0,
+      this.economy.cosmeticEquipped('fishbot') === 'starlight-fishbot-skin',
+    );
   }
 
   /** Keeps the player character's pose in sync with the real fishing state machine, not just decorative. */
@@ -385,6 +578,7 @@ export class Game {
     this.input.update();
 
     this.fishbotSystem.update(Date.now(), this.economy.currentTheme());
+    this.cosmeticFishbot.update(delta);
 
     if (!this.ambienceStarted && this.audio.isUnlocked()) {
       this.ambienceStarted = true;
@@ -404,6 +598,10 @@ export class Game {
       const rodTip = this.playerCharacter.getRodTipWorldPosition(new THREE.Vector3());
       const bobberTip = this.bobber.getLineAttachmentWorldPosition(new THREE.Vector3());
       this.fishingLine.update(rodTip, bobberTip, phase, this.elapsed);
+      this.castSparkles.update(rodTip, bobberTip, this.elapsed,
+        phase === 'casting' && this.economy.cosmeticEquipped('trail') === 'sparkle-trail');
+    } else {
+      this.castSparkles.group.visible = false;
     }
 
     if (phase === 'waiting') {
@@ -434,8 +632,12 @@ export class Game {
     }
 
     this.playerCharacter.update(delta);
+    this.bottomlessTackleBox.update(delta);
     this.vfx.update(delta);
     this.fishShadows.update(delta);
+    this.livingWorld.update(delta);
+    this.communitySystem.update(delta);
+    this.narrativeSystem.update(delta);
     this.ui.update();
     this.cameraRig.update(delta);
 
@@ -450,12 +652,12 @@ export class Game {
 
   private render(): void {
     this.renderPipeline.render();
-    if (this.closetOpen) this.renderClosetPreview();
+    if (this.closetOpen && this.frame % 2 === 0) this.renderClosetPreview();
   }
 
   /**
-   * Live character preview for the Closet modal: a second render of the same
-   * scene from a close-up camera, into an offscreen WebGLRenderTarget, read
+   * Live character preview for the Closet modal: render the portrait set
+   * into an offscreen WebGLRenderTarget, read
    * back into a plain 2D <canvas> in the modal — no second WebGL context, no
    * DOM/canvas coordinate-mapping tricks (the target is a fixed small size
    * independent of where the modal panel actually sits on screen).
@@ -464,12 +666,23 @@ export class Game {
     const canvas = document.getElementById('closet-preview') as HTMLCanvasElement | null;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
-
-    const slotPos = this.diorama.playerSlot.position;
-    // Character faces -Z (DioramaBuilder's playerSlot rotation) — camera sits
-    // further along -Z, in front of them, looking back at chest/head height.
-    this.closetCamera.position.set(slotPos.x, slotPos.y + 0.65, slotPos.z - 1.9);
-    this.closetCamera.lookAt(slotPos.x, slotPos.y + 0.75, slotPos.z);
+    if (!canvas.dataset.turnReady) {
+      canvas.dataset.turnReady = 'true';
+      let dragX = 0;
+      let startTurn = 0;
+      canvas.addEventListener('pointerdown', (event) => {
+        dragX = event.clientX;
+        startTurn = this.closetTurn;
+        canvas.setPointerCapture(event.pointerId);
+      });
+      canvas.addEventListener('pointermove', (event) => {
+        if (!canvas.hasPointerCapture(event.pointerId)) return;
+        this.closetTurn = startTurn + (event.clientX - dragX) * 0.012;
+      });
+      canvas.addEventListener('pointerup', (event) => {
+        if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+      });
+    }
 
     const { width, height } = this.closetPreviewSize;
     const prevClearColor = new THREE.Color();
@@ -477,9 +690,11 @@ export class Game {
     const prevClearAlpha = this.renderer.getClearAlpha();
 
     this.renderer.setRenderTarget(this.closetRenderTarget);
-    this.renderer.setClearColor(0x8fc9b8, 1);
+    this.renderer.setClearColor(0xc7e4db, 1);
     this.renderer.clear();
-    this.renderer.render(this.scene, this.closetCamera);
+    this.closetCharacter.group.rotation.y = Math.PI + this.closetTurn + Math.sin(this.elapsed * 0.5) * 0.04;
+    this.closetCharacter.update(0);
+    this.renderer.render(this.closetScene, this.closetCamera);
     this.renderer.readRenderTargetPixels(this.closetRenderTarget, 0, 0, width, height, this.closetPixelBuffer);
     this.renderer.setRenderTarget(null);
     this.renderer.setClearColor(prevClearColor, prevClearAlpha);

@@ -1,4 +1,4 @@
-import type { FishbotDefinition, ThemeId } from '../game/data';
+import type { FishbotDefinition, Rarity, ThemeId } from '../game/data';
 import { pickRandom, pickSpeciesForRarity, pickTrashItem, rollWeightKg } from '../game/loot';
 import type { Economy } from '../game/Economy';
 import type { EventBus } from '../core/EventBus';
@@ -30,7 +30,7 @@ export class FishbotSystem {
       let ticks = 0;
 
       while (nextReady <= horizon && ticks < MAX_OFFLINE_TICKS_PER_BOT) {
-        if (this.economy.hopperFull()) break;
+        if (this.economy.hopperFull(bot.id)) break;
         this.depositCatch(bot, theme);
         claimed += 1;
         ticks += 1;
@@ -45,13 +45,17 @@ export class FishbotSystem {
 
   /** Call every frame. */
   update(nowMs: number, theme: ThemeId): void {
+    if (this.economy.ownedFishbots().some((bot) => this.economy.fishbotState(bot.id)?.autoUnload)) {
+      const claimed = this.economy.claimHopper(true);
+      if (claimed.length > 0) this.events.emit('fishbotClaimed', { count: claimed.length });
+    }
     for (const bot of this.economy.ownedFishbots()) {
       const state = this.economy.fishbotState(bot.id);
       if (!state) continue;
       if (nowMs < state.nextReadyAtMs) continue;
 
-      const intervalMs = bot.baseIntervalSeconds * 1000 * this.economy.fishbotIntervalMultiplier();
-      if (!this.economy.hopperFull()) {
+      const intervalMs = bot.baseIntervalSeconds * 1000 * this.economy.fishbotIntervalMultiplier() * (state.mode === 'trophy' ? 1.5 : 1);
+      if (!this.economy.hopperFull(bot.id)) {
         this.depositCatch(bot, theme);
       }
       this.economy.setFishbotNextReady(bot.id, nowMs + intervalMs);
@@ -65,13 +69,16 @@ export class FishbotSystem {
   }
 
   private depositCatch(bot: FishbotDefinition, theme: ThemeId): void {
-    const rarity = pickRandom(bot.rarityBias);
+    const mode = this.economy.fishbotState(bot.id)?.mode ?? 'balanced';
+    const rarity = mode === 'salvage' ? pickRandom<Rarity>(['trash', 'trash', 'trash', 'common'])
+      : mode === 'trophy' ? pickRandom<Rarity>(['common', 'uncommon', 'uncommon', 'rare', 'rare'])
+      : pickRandom(bot.rarityBias);
     if (rarity === 'trash') {
       const trash = pickTrashItem();
-      this.economy.addToHopper({ catchId: trash.id, isTrash: true, weightKg: rollWeightKg(trash.weightRangeKg), caughtAt: Date.now() });
+      this.economy.addToHopper({ catchId: trash.id, isTrash: true, weightKg: rollWeightKg(trash.weightRangeKg), caughtAt: Date.now(), sourceBotId: bot.id });
       return;
     }
     const species = pickSpeciesForRarity(rarity, theme);
-    this.economy.addToHopper({ catchId: species.id, isTrash: false, weightKg: rollWeightKg(species.weightRangeKg), caughtAt: Date.now() });
+    this.economy.addToHopper({ catchId: species.id, isTrash: false, weightKg: rollWeightKg(species.weightRangeKg), caughtAt: Date.now(), sourceBotId: bot.id });
   }
 }

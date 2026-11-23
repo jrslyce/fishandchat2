@@ -24,7 +24,10 @@ import {
   type UpgradeId,
 } from './data';
 import type { SaveManager } from '../core/SaveManager';
-import { createDefaultSaveState, migrateSaveState, type BasketItem, type FishRecord, type FishbotState, type GameSaveStateV1 } from './SaveState';
+import { createDefaultSaveState, migrateSaveState, type BasketItem, type ChannelCandyWallet, type CosmeticSlot, type FishRecord, type FishbotState, type GameSaveStateV1, type OutfitPreset } from './SaveState';
+import type { DailyQuest, Milestone, StoryChapter } from './StoryGoals';
+import { getLoreBottle, type LoreBottle } from './LoreBottles';
+import { getCurioRelic, type CurioRelic } from './RelicSystem';
 
 export interface LevelUpResult {
   leveledUp: boolean;
@@ -35,7 +38,7 @@ export interface LevelUpResult {
 
 export interface UpgradePurchaseResult {
   ok: boolean;
-  reason?: 'max-tier' | 'insufficient-coins' | 'insufficient-materials' | 'insufficient-candy-bars' | 'already-owned' | 'unknown-item';
+  reason?: 'max-tier' | 'insufficient-coins' | 'insufficient-materials' | 'insufficient-candy-bars' | 'already-owned' | 'unknown-item' | 'server-required';
 }
 
 export interface BoxOpenResult extends UpgradePurchaseResult {
@@ -58,6 +61,7 @@ export class Economy {
   // Barnaby's 5th-click secret, in-memory (never persisted): the next bait purchase grants 13
   // instead of 10.
   private bakersDozenNextBait = false;
+  private serverCandyMode = false;
 
   constructor(private readonly saveManager: SaveManager<GameSaveStateV1>) {
     this.state = migrateSaveState(saveManager.load());
@@ -65,6 +69,15 @@ export class Economy {
 
   get snapshot(): Readonly<GameSaveStateV1> {
     return this.state;
+  }
+
+  get usesServerCandy(): boolean { return this.serverCandyMode; }
+
+  setServerCandyMode(): void {
+    this.serverCandyMode = true;
+    this.state.candyBars = 0;
+    const active = this.state.channelCandyWallets?.[this.state.activeChannelId ?? 'local'];
+    if (active) active.balance = 0;
   }
 
   setDebugForceNextCatch(kind: 'treasure' | 'lucky-coin-bottle' | null): void {
@@ -158,7 +171,71 @@ export class Economy {
 
   persist(): void {
     this.state.lastActiveAtMs = Date.now();
+    this.syncActiveCandyWallet();
     this.saveManager.save(this.state);
+  }
+
+  /** The active balance belongs to the channel where these bars were earned. */
+  setActiveChannel(channelId: string, name: string, avatarUrl: string | null): void {
+    const wallets = this.state.channelCandyWallets ??= {};
+    const hadWallets = Object.keys(wallets).length > 0;
+    if (hadWallets) this.syncActiveCandyWallet();
+    const existing = wallets[channelId];
+    // A legacy save has only one balance. Assign it to the first channel it opens.
+    const legacyBalance = !hadWallets ? this.state.candyBars : 0;
+    wallets[channelId] = existing ?? { name, avatarUrl, balance: legacyBalance, activity: [] };
+    wallets[channelId].name = name || wallets[channelId].name;
+    wallets[channelId].avatarUrl = avatarUrl ?? wallets[channelId].avatarUrl;
+    this.state.activeChannelId = channelId;
+    this.state.candyBars = wallets[channelId].balance;
+    this.persist();
+  }
+
+  candyWallets(): Readonly<Record<string, ChannelCandyWallet>> {
+    return this.state.channelCandyWallets ?? {};
+  }
+
+  /** Mirror the EBS ledger for display. Twitch balances and entitlements come from this snapshot. */
+  applyServerWallet(snapshot: {
+    wallets: Array<{ channel_id: string; balance: number }>;
+    ownedPremiumItemIds: string[];
+    activity?: Array<{ channel_id: string; delta: number; reason: string; created_at: string }>;
+  }): void {
+    const wallets = this.state.channelCandyWallets ??= {};
+    for (const wallet of Object.values(wallets)) wallet.balance = 0;
+    for (const entry of snapshot.wallets) {
+      if (!Number.isSafeInteger(entry.balance) || entry.balance < 0) continue;
+      const previous = wallets[entry.channel_id];
+      wallets[entry.channel_id] = previous
+        ? { ...previous, balance: entry.balance }
+        : { name: `Channel ${entry.channel_id}`, avatarUrl: null, balance: entry.balance, activity: [] };
+    }
+    if (snapshot.activity) {
+      for (const wallet of Object.values(wallets)) wallet.activity = [];
+      for (const entry of snapshot.activity) {
+        const wallet = wallets[entry.channel_id];
+        const at = Date.parse(`${entry.created_at.replace(' ', 'T')}Z`);
+        if (wallet && Number.isFinite(at)) wallet.activity.push({ at, delta: entry.delta, reason: entry.reason });
+      }
+    }
+    this.state.candyBars = wallets[this.state.activeChannelId ?? 'local']?.balance ?? 0;
+    const previouslyOwned = new Set(this.state.ownedPremiumItemIds);
+    this.state.ownedPremiumItemIds = snapshot.ownedPremiumItemIds.filter((id) => PREMIUM_CATALOG.some((item) => item.id === id));
+    for (const [slot, id] of [['rod', 'golden-rod-skin'], ['fishbot', 'starlight-fishbot-skin'], ['trail', 'sparkle-trail']] as const) {
+      if (!previouslyOwned.has(id) && this.ownsPremiumItem(id)) this.state.equippedCosmetics[slot] = id;
+      if (!this.ownsPremiumItem(id)) this.state.equippedCosmetics[slot] = null;
+    }
+    this.persist();
+  }
+
+  private syncActiveCandyWallet(): void {
+    const wallet = this.state.channelCandyWallets?.[this.state.activeChannelId ?? 'local'];
+    if (!wallet) return;
+    const delta = this.state.candyBars - wallet.balance;
+    if (delta) {
+      wallet.balance = this.state.candyBars;
+      wallet.activity = [{ at: Date.now(), delta }, ...(wallet.activity ?? [])].slice(0, 20);
+    }
   }
 
   // --- Upgrades -------------------------------------------------------
@@ -200,11 +277,18 @@ export class Economy {
   }
 
   fishbotIntervalMultiplier(): number {
-    return this.hasUpgrade('turbo-bot-chip') ? 0.7 : 1;
+    let mult = this.hasUpgrade('turbo-bot-chip') ? 0.7 : 1;
+    if (this.hasDiscoveredRelic('relic_clockwork_heart')) mult *= 0.85;
+    return mult;
   }
 
   saleMultiplier(): number {
-    return this.hasUpgrade('insulated-cooler') ? 1.15 : 1;
+    let mult = 1.0;
+    if (this.hasUpgrade('insulated-cooler')) mult += 0.15;
+    if (this.hasDiscoveredRelic('relic_galleon_doubloon')) mult += 0.15;
+    if (this.state.level >= 50) mult += 0.25;
+    if (this.state.prestige > 0) mult += this.state.prestige * 0.10;
+    return mult;
   }
 
   hasSonarScanner(): boolean {
@@ -212,10 +296,18 @@ export class Economy {
   }
 
   basketCapacity(): number {
+    if (this.ownsPremiumItem('bottomless-tackle-box')) {
+      return 999999;
+    }
     let capacity = BASKET_BASE_CAPACITY;
     capacity += this.upgradeTier('heavy-duty-basket') * 6;
     capacity += this.upgradeTier('tackle-apron') * 6;
     return capacity;
+  }
+
+  /** Existing lucky-cast saver and the permanent tackle-box bonus add before one roll. */
+  baitSaveChance(luckyCast: boolean): number {
+    return Math.min(1, (luckyCast ? 0.25 : 0) + (this.ownsPremiumItem('bottomless-tackle-box') ? 0.4 : 0));
   }
 
   // --- Bait -------------------------------------------------------------
@@ -243,6 +335,11 @@ export class Economy {
     return { ok: true };
   }
 
+  addBait(baitId: string, count: number): void {
+    this.state.baitInventory[baitId] = (this.state.baitInventory[baitId] ?? 0) + count;
+    this.persist();
+  }
+
   /** Consumes one unit of the equipped bait for a cast; falls back to Pleb Bait if exhausted. */
   consumeBaitForCast(): void {
     const bait = this.equippedBait();
@@ -255,18 +352,21 @@ export class Economy {
   }
 
   effectiveSkill(castPrecisionBonus: number): number {
-    const gearBonus =
+    let gearBonus =
       this.upgradeTier('carbon-rod') * 8 +
       this.upgradeTier('braided-line') * 8 +
       this.upgradeTier('trophy-lure') * 8 +
       this.equippedBait().skillBonus;
+    if (this.hasDiscoveredRelic('relic_leviathan_tooth')) gearBonus += 15;
     const tacticianMult = 1 + this.archetypePoints('tactician') * 0.1;
     return this.state.level + this.archetypePoints('brawler') * 2 + gearBonus * tacticianMult + castPrecisionBonus;
   }
 
   /** Flat reel-window bonus (rod tier + Patience archetype) — fed into the fight formula's flatBonusMs, separate from the skill-vs-fight margin. */
   reelWindowFlatBonusMs(): number {
-    return this.upgradeTier('carbon-rod') * 150 + this.archetypePoints('patience') * 250;
+    let bonus = this.upgradeTier('carbon-rod') * 150 + this.archetypePoints('patience') * 250;
+    if (this.hasDiscoveredRelic('relic_barnaby_pipe')) bonus += 150;
+    return bonus;
   }
 
   // --- Skill points & archetypes ------------------------------------------
@@ -297,10 +397,10 @@ export class Economy {
 
   // --- Fish Value & Pricing ------------------------------------------------
 
-  getFishValue(catchId: string, weightKg: number): number {
+  getFishValue(catchId: string, weightKg: number, golden = false): number {
     const species = FISH_CATALOG.find((f) => f.id === catchId);
     if (!species) return 0;
-    return calculateFishValue(species, weightKg, this.saleMultiplier());
+    return calculateFishValue(species, weightKg, this.saleMultiplier()) * (golden ? 3 : 1);
   }
 
   // --- Catch Records & Scrap Book -----------------------------------------
@@ -333,6 +433,10 @@ export class Economy {
 
   addToBasket(item: BasketItem): boolean {
     if (this.basketFull()) return false;
+    if (!item.isTrash) {
+      const record = this.getFishRecord(item.catchId);
+      if (record.count === 0 || item.weightKg > record.maxWeightKg) item.protectedCatch = true;
+    }
     this.state.basket.push(item);
     this.recordCatch(item.catchId, item.weightKg, item.isTrash);
     return true;
@@ -426,10 +530,13 @@ export class Economy {
   // --- Candy bars (premium currency) --------------------------------------
 
   addCandyBars(amount: number): void {
+    // Client-side catches and quests cannot mint Bits-backed bars in a Twitch wallet.
+    if (this.serverCandyMode) return;
     this.state.candyBars += amount;
   }
 
   spendCandyBars(amount: number): boolean {
+    if (this.serverCandyMode) return false;
     if (this.state.candyBars < amount) return false;
     this.state.candyBars -= amount;
     return true;
@@ -440,16 +547,33 @@ export class Economy {
   }
 
   buyPremiumItem(id: string): UpgradePurchaseResult {
+    if (this.serverCandyMode) return { ok: false, reason: 'server-required' };
     const def = PREMIUM_CATALOG.find((p) => p.id === id);
     if (!def) return { ok: false, reason: 'unknown-item' };
-    if (this.ownsPremiumItem(id)) return { ok: false, reason: 'already-owned' };
+    const isStreamEvent = id === 'rainbow-totem' || id === 'mega-chum-bucket' || id === 'whale-call-horn';
+    if (!isStreamEvent && this.ownsPremiumItem(id)) return { ok: false, reason: 'already-owned' };
     if (this.state.candyBars < def.costCandyBars) return { ok: false, reason: 'insufficient-candy-bars' };
+
     this.state.candyBars -= def.costCandyBars;
-    this.state.ownedPremiumItemIds.push(id);
+    if (id === 'rainbow-totem') {
+      this.activateStreamBuff('rainbow-totem', 300);
+    } else if (id === 'mega-chum-bucket') {
+      this.activateStreamBuff('mega-chum-bucket', 600);
+    } else if (id === 'whale-call-horn') {
+      this.addCoins(100);
+    } else {
+      if (!this.state.ownedPremiumItemIds.includes(id)) {
+        this.state.ownedPremiumItemIds.push(id);
+      }
+      const cosmeticSlot = id === 'golden-rod-skin' ? 'rod' : id === 'starlight-fishbot-skin' ? 'fishbot' : id === 'sparkle-trail' ? 'trail' : null;
+      if (cosmeticSlot) this.state.equippedCosmetics[cosmeticSlot] = id;
+    }
+    this.persist();
     return { ok: true };
   }
 
   buyMaterialBundle(id: string): UpgradePurchaseResult {
+    if (this.serverCandyMode) return { ok: false, reason: 'server-required' };
     const def = MATERIAL_BUNDLE_CATALOG.find((b) => b.id === id);
     if (!def) return { ok: false, reason: 'unknown-item' };
     if (this.state.candyBars < def.costCandyBars) return { ok: false, reason: 'insufficient-candy-bars' };
@@ -458,21 +582,26 @@ export class Economy {
     return { ok: true };
   }
 
-  /** Grants the exact, pre-disclosed BOX_OF_NOT_FISH_CONTENTS — no randomized item selection. */
-  buyBoxOfNotFish(): BoxOpenResult {
+  /** Grants exactly 20 disclosed, player-selected trash items to the uncapped trash bucket. */
+  buyBoxOfNotFish(contents: readonly { trashId: string; quantity: number }[] = BOX_OF_NOT_FISH_CONTENTS): BoxOpenResult {
+    if (this.serverCandyMode) return { ok: false, reason: 'server-required', itemsGranted: 0 };
+    const total = contents.reduce((sum, entry) => sum + entry.quantity, 0);
+    const unique = new Set(contents.map((entry) => entry.trashId));
+    if (total !== 20 || unique.size !== contents.length || contents.some((entry) =>
+      !Number.isInteger(entry.quantity) || entry.quantity < 0 || !TRASH_CATALOG.some((trash) => trash.id === entry.trashId)
+    )) return { ok: false, reason: 'unknown-item', itemsGranted: 0 };
     if (this.state.candyBars < BOX_OF_NOT_FISH_COST_CANDY_BARS) {
       return { ok: false, reason: 'insufficient-candy-bars', itemsGranted: 0 };
     }
     this.state.candyBars -= BOX_OF_NOT_FISH_COST_CANDY_BARS;
 
     let itemsGranted = 0;
-    for (const entry of BOX_OF_NOT_FISH_CONTENTS) {
+    for (const entry of contents) {
       const trash = TRASH_CATALOG.find((t) => t.id === entry.trashId);
       if (!trash) continue;
       for (let i = 0; i < entry.quantity; i++) {
-        if (this.basketFull()) break;
         const [min, max] = trash.weightRangeKg;
-        this.addToBasket({
+        this.addToTrashBucket({
           catchId: trash.id,
           isTrash: true,
           weightKg: min + (max - min) * Math.random(),
@@ -497,7 +626,9 @@ export class Economy {
       return { success: false, materialId: null, amount: 0, roll, targetLimit };
     }
 
-    const doubled = this.hasUpgrade('salvage-magnet') && Math.random() < 0.3;
+    const hasMaster = this.ownsPremiumItem('master-salvage-magnet');
+    const doubleChance = hasMaster ? 0.5 : (this.hasUpgrade('salvage-magnet') ? 0.3 : 0);
+    const doubled = doubleChance > 0 && Math.random() < doubleChance;
     const amount = doubled ? 2 : 1;
     this.addMaterial(def.recyclesInto, amount);
     return { success: true, materialId: def.recyclesInto, amount, roll, targetLimit };
@@ -579,21 +710,31 @@ export class Economy {
     if (bot) bot.nextReadyAtMs = timestampMs;
   }
 
-  hopperFull(): boolean {
-    return this.state.fishbotHopper.length >= 10;
+  hopperCapacity(id: string): number {
+    const normalCapacity = 10 + 5 * (this.state.fishbots[id]?.hopperTier ?? 0);
+    return normalCapacity * (this.ownsPremiumItem('bottomless-tackle-box') ? 5 : 1);
+  }
+
+  hopperFull(id?: string): boolean {
+    if (!id) return this.state.fishbotHopper.length >= this.ownedFishbots().reduce((sum, bot) => sum + this.hopperCapacity(bot.id), 0);
+    return this.state.fishbotHopper.filter((item) => item.sourceBotId === id).length >= this.hopperCapacity(id);
   }
 
   addToHopper(item: BasketItem): boolean {
-    if (this.hopperFull()) return false;
+    if (this.hopperFull(item.sourceBotId)) return false;
     this.state.fishbotHopper.push(item);
     return true;
   }
 
   /** Trash always drains (its bucket is uncapped); fish stays queued in the hopper once the basket is full. */
-  claimHopper(): BasketItem[] {
+  claimHopper(autoOnly = false): BasketItem[] {
     const claimed: BasketItem[] = [];
     const remaining: BasketItem[] = [];
     for (const item of this.state.fishbotHopper) {
+      if (autoOnly && !this.state.fishbots[item.sourceBotId ?? '']?.autoUnload) {
+        remaining.push(item);
+        continue;
+      }
       if (item.isTrash) {
         this.addToTrashBucket(item);
         claimed.push(item);
@@ -606,6 +747,59 @@ export class Economy {
     }
     this.state.fishbotHopper = remaining;
     return claimed;
+  }
+
+  buyBotModule(id: string, module: 'hopper' | 'unload' | 'salvage' | 'trophy'): UpgradePurchaseResult {
+    const bot = this.state.fishbots[id];
+    if (!bot?.owned) return { ok: false, reason: 'unknown-item' };
+    const tier = bot.hopperTier ?? 0;
+    if ((module === 'hopper' && tier >= 3) || (module === 'unload' && bot.autoUnload) ||
+        ((module === 'salvage' || module === 'trophy') && bot.unlockedModes?.includes(module))) return { ok: false, reason: 'max-tier' };
+    const coins = module === 'hopper' ? 250 * (tier + 1) : module === 'unload' ? 600 : 400;
+    const metal = module === 'hopper' ? tier + 1 : module === 'unload' ? 3 : 2;
+    if (this.state.coins < coins) return { ok: false, reason: 'insufficient-coins' };
+    if ((this.state.materials.metal ?? 0) < metal) return { ok: false, reason: 'insufficient-materials' };
+    this.state.coins -= coins;
+    this.state.materials.metal -= metal;
+    if (module === 'hopper') bot.hopperTier = tier + 1;
+    else if (module === 'unload') bot.autoUnload = true;
+    else { bot.unlockedModes = [...(bot.unlockedModes ?? []), module]; bot.mode = module; }
+    this.persist();
+    return { ok: true };
+  }
+
+  setBotMode(id: string, mode: 'balanced' | 'salvage' | 'trophy'): boolean {
+    const bot = this.state.fishbots[id];
+    if (!bot?.owned || (mode !== 'balanced' && !bot.unlockedModes?.includes(mode))) return false;
+    bot.mode = mode;
+    this.persist();
+    return true;
+  }
+
+  buySorterTray(): UpgradePurchaseResult {
+    if (this.state.sorterTrayOwned) return { ok: false, reason: 'already-owned' };
+    if (this.state.coins < 900) return { ok: false, reason: 'insufficient-coins' };
+    if ((this.state.materials.metal ?? 0) < 4) return { ok: false, reason: 'insufficient-materials' };
+    this.state.coins -= 900;
+    this.state.materials.metal -= 4;
+    this.state.sorterTrayOwned = true;
+    this.state.autoSellRarities = ['common', 'uncommon'];
+    this.persist();
+    return { ok: true };
+  }
+
+  toggleAutoSellRarity(rarity: string): boolean {
+    if (!this.state.sorterTrayOwned || !['common', 'uncommon', 'rare', 'epic', 'legendary'].includes(rarity)) return false;
+    const selected = new Set(this.state.autoSellRarities ?? []);
+    if (selected.has(rarity)) selected.delete(rarity); else selected.add(rarity);
+    this.state.autoSellRarities = [...selected];
+    this.persist();
+    return true;
+  }
+
+  recordAutoSale(value: number): void {
+    this.state.autoSaleCount = (this.state.autoSaleCount ?? 0) + 1;
+    this.state.autoSaleCoins = (this.state.autoSaleCoins ?? 0) + value;
   }
 
   lastActiveAtMs(): number {
@@ -644,6 +838,16 @@ export class Economy {
     return this.state.ownedClothingIds.includes(id);
   }
 
+  hasSeenWeatherClothingTip(id: string): boolean {
+    return (this.state.seenWeatherClothingTipIds ?? []).includes(id);
+  }
+
+  markWeatherClothingTipSeen(id: string): void {
+    if (this.hasSeenWeatherClothingTip(id)) return;
+    this.state.seenWeatherClothingTipIds = [...(this.state.seenWeatherClothingTipIds ?? []), id];
+    this.persist();
+  }
+
   buyClothing(id: string): UpgradePurchaseResult {
     const def = CLOTHING_CATALOG.find((c) => c.id === id);
     if (!def) return { ok: false, reason: 'unknown-item' };
@@ -669,6 +873,50 @@ export class Economy {
 
   equippedClothing(): Record<ClothingSlot, string | null> {
     return this.state.equippedClothing;
+  }
+
+  cosmeticEquipped(slot: CosmeticSlot): string | null {
+    return this.state.equippedCosmetics[slot];
+  }
+
+  setCosmeticEquipped(slot: CosmeticSlot, id: string | null): boolean {
+    const expected = { rod: 'golden-rod-skin', fishbot: 'starlight-fishbot-skin', trail: 'sparkle-trail' }[slot];
+    if (id !== null && (id !== expected || !this.ownsPremiumItem(id))) return false;
+    this.state.equippedCosmetics[slot] = id;
+    this.persist();
+    return true;
+  }
+
+  outfitPresets(): ReadonlyArray<OutfitPreset | null> {
+    return this.state.outfitPresets;
+  }
+
+  saveOutfitPreset(index: number): boolean {
+    if (!Number.isInteger(index) || index < 0 || index >= 3) return false;
+    this.state.outfitPresets[index] = {
+      name: `Outfit ${index + 1}`,
+      clothing: { ...this.state.equippedClothing },
+      baseToneId: this.state.baseToneId,
+      cosmetics: { ...this.state.equippedCosmetics },
+    };
+    this.persist();
+    return true;
+  }
+
+  wearOutfitPreset(index: number): boolean {
+    const preset = this.state.outfitPresets[index];
+    if (!preset) return false;
+    for (const slot of ['hat', 'jacket', 'pants', 'shoes'] as ClothingSlot[]) {
+      const id = preset.clothing[slot];
+      if (id === null || this.ownsClothing(id)) this.state.equippedClothing[slot] = id;
+    }
+    if (BASE_TONE_CATALOG.some((tone) => tone.id === preset.baseToneId)) this.state.baseToneId = preset.baseToneId;
+    for (const slot of ['rod', 'fishbot', 'trail'] as CosmeticSlot[]) {
+      const id = preset.cosmetics[slot];
+      this.setCosmeticEquipped(slot, id && this.ownsPremiumItem(id) ? id : null);
+    }
+    this.persist();
+    return true;
   }
 
   equipClothing(slot: ClothingSlot, id: string | null): boolean {
@@ -711,4 +959,261 @@ export class Economy {
     const trimmed = name?.trim() || null;
     this.state.displayNameOverride = trimmed && trimmed.length > 0 ? trimmed.slice(0, 24) : null;
   }
+
+  // --- Story, Quests & Milestones -------------------------------------------
+
+  setDailyQuests(quests: DailyQuest[], timestamp: number): void {
+    this.state.dailyQuests = quests;
+    this.state.lastDailyQuestRefreshMs = timestamp;
+    this.persist();
+  }
+
+  updateDailyQuests(quests: DailyQuest[]): void {
+    this.state.dailyQuests = quests;
+    this.persist();
+  }
+
+  updateChapterProgress(objectiveId: string, value: number): void {
+    this.state.storyProgress[objectiveId] = value;
+    this.persist();
+  }
+
+  claimStoryChapter(chapter: StoryChapter): void {
+    if (!this.state.completedChapterIds.includes(chapter.id)) {
+      this.state.completedChapterIds.push(chapter.id);
+    }
+    this.state.activeStoryChapter = Math.min(STORY_CHAPTERS_COUNT, chapter.chapterNumber + 1);
+    this.addCoins(chapter.rewards.coins);
+    this.addXp(chapter.rewards.xp);
+    if (chapter.rewards.candyBars) {
+      this.addCandyBars(chapter.rewards.candyBars);
+    }
+    if (chapter.rewards.titleReward) {
+      this.unlockTitle(chapter.rewards.titleReward);
+      this.equipTitle(chapter.rewards.titleReward);
+    }
+    if (chapter.rewards.bait) {
+      this.addBait(chapter.rewards.bait.id, chapter.rewards.bait.count);
+    }
+    this.persist();
+  }
+
+  claimMilestone(milestone: Milestone): void {
+    if (!this.state.claimedMilestoneIds.includes(milestone.id)) {
+      this.state.claimedMilestoneIds.push(milestone.id);
+    }
+    this.addCoins(milestone.reward.coins);
+    this.addXp(milestone.reward.xp);
+    if (milestone.reward.candyBars) {
+      this.addCandyBars(milestone.reward.candyBars);
+    }
+    this.persist();
+  }
+
+  // --- Stats & Streaks -----------------------------------------------------
+
+  incrementTotalFishCaught(count = 1, weightKg = 0): void {
+    this.state.totalFishCaught = (this.state.totalFishCaught ?? 0) + count;
+    this.state.totalWeightKgCaught = Math.round(((this.state.totalWeightKgCaught ?? 0) + weightKg) * 10) / 10;
+  }
+
+  incrementTotalTrashRecycled(): void {
+    this.state.totalTrashRecycled = (this.state.totalTrashRecycled ?? 0) + 1;
+  }
+
+  incrementTotalPerfectCasts(): void {
+    this.state.totalPerfectCasts = (this.state.totalPerfectCasts ?? 0) + 1;
+  }
+
+  incrementCatchStreak(): number {
+    this.state.catchStreak = (this.state.catchStreak ?? 0) + 1;
+    if (this.state.catchStreak > (this.state.bestCatchStreak ?? 0)) {
+      this.state.bestCatchStreak = this.state.catchStreak;
+    }
+    return this.state.catchStreak;
+  }
+
+  resetCatchStreak(): void {
+    this.state.catchStreak = 0;
+  }
+
+  catchStreak(): number {
+    return this.state.catchStreak ?? 0;
+  }
+
+  bestCatchStreak(): number {
+    return this.state.bestCatchStreak ?? 0;
+  }
+
+  // --- Prestige ------------------------------------------------------------
+
+  prestige(): number {
+    return this.state.prestige ?? 0;
+  }
+
+  canPrestige(): boolean {
+    return this.state.level >= 50;
+  }
+
+  triggerPrestige(): boolean {
+    if (!this.canPrestige()) return false;
+    this.state.prestige = (this.state.prestige ?? 0) + 1;
+    this.state.level = 1;
+    this.state.xp = 0;
+    this.unlockTitle(`Prestige ${this.state.prestige} Legend`);
+    this.equipTitle(`Prestige ${this.state.prestige} Legend`);
+    this.persist();
+    return true;
+  }
+
+  // --- Stream Buffs --------------------------------------------------------
+
+  activateStreamBuff(buffId: string, durationSeconds: number): void {
+    if (!this.state.activeStreamBuffs) this.state.activeStreamBuffs = {};
+    const now = Date.now();
+    const currentExpiry = this.state.activeStreamBuffs[buffId] ?? 0;
+    const baseTime = currentExpiry > now ? currentExpiry : now;
+    this.state.activeStreamBuffs[buffId] = baseTime + durationSeconds * 1000;
+    this.persist();
+  }
+
+  isStreamBuffActive(buffId: string): boolean {
+    const expiry = this.state.activeStreamBuffs?.[buffId] ?? 0;
+    return expiry > Date.now();
+  }
+
+  streamBuffRemainingSeconds(buffId: string): number {
+    const expiry = this.state.activeStreamBuffs?.[buffId] ?? 0;
+    return Math.max(0, Math.ceil((expiry - Date.now()) / 1000));
+  }
+
+  // --- Titles --------------------------------------------------------------
+
+  equippedTitle(): string | null {
+    return this.state.equippedTitle ?? null;
+  }
+
+  equipTitle(title: string | null): void {
+    this.state.equippedTitle = title;
+    this.persist();
+  }
+
+  unlockedTitles(): readonly string[] {
+    return this.state.unlockedTitles ?? [];
+  }
+
+  unlockTitle(title: string): void {
+    if (!this.state.unlockedTitles) this.state.unlockedTitles = [];
+    if (!this.state.unlockedTitles.includes(title)) {
+      this.state.unlockedTitles.push(title);
+      this.persist();
+    }
+  }
+
+  // --- Community Boss Raids & Group Goals -----------------------------------
+
+  activeCommunityGoalId(): string {
+    return this.state.activeCommunityGoalId ?? 'ancient-leviathan';
+  }
+
+  setActiveCommunityGoalId(id: string): void {
+    this.state.activeCommunityGoalId = id;
+    this.persist();
+  }
+
+  communityGoalProgress(): number {
+    return this.state.communityGoalProgress ?? 0;
+  }
+
+  setCommunityGoalProgress(progress: number): void {
+    this.state.communityGoalProgress = progress;
+    this.persist();
+  }
+
+  completedCommunityGoalIds(): readonly string[] {
+    return this.state.completedCommunityGoalIds ?? [];
+  }
+
+  recordCommunityGoalCompletion(goalId: string): void {
+    if (!this.state.completedCommunityGoalIds) {
+      this.state.completedCommunityGoalIds = [];
+    }
+    if (!this.state.completedCommunityGoalIds.includes(goalId)) {
+      this.state.completedCommunityGoalIds.push(goalId);
+    }
+    this.state.totalCommunityGoalsCompleted = (this.state.totalCommunityGoalsCompleted ?? 0) + 1;
+    this.persist();
+  }
+
+  totalCommunityGoalsCompleted(): number {
+    return this.state.totalCommunityGoalsCompleted ?? 0;
+  }
+
+  // Provider for current weather (can be hooked to LivingWorldSystem)
+  currentWeather: () => string = () => 'clear';
+
+  setWeatherProvider(provider: () => string): void {
+    this.currentWeather = provider;
+  }
+
+  // --- Lore Bottles & Curio Relics -----------------------------------------
+
+  discoveredBottleIds(): string[] {
+    return this.state.discoveredBottleIds ?? [];
+  }
+
+  discoverBottle(id: string): boolean {
+    if (!this.state.discoveredBottleIds) {
+      this.state.discoveredBottleIds = [];
+    }
+    if (this.state.discoveredBottleIds.includes(id)) {
+      return false;
+    }
+    this.state.discoveredBottleIds.push(id);
+    const bottle = getLoreBottle(id);
+    if (bottle) {
+      if (bottle.reward.coins) this.addCoins(bottle.reward.coins);
+      if (bottle.reward.xp) this.addXp(bottle.reward.xp);
+      if (bottle.reward.candyBars) this.addCandyBars(bottle.reward.candyBars);
+    }
+    this.persist();
+    return true;
+  }
+
+  discoveredRelicIds(): string[] {
+    return this.state.discoveredRelicIds ?? [];
+  }
+
+  discoverRelic(id: string): boolean {
+    if (!this.state.discoveredRelicIds) {
+      this.state.discoveredRelicIds = [];
+    }
+    if (this.state.discoveredRelicIds.includes(id)) {
+      return false;
+    }
+    this.state.discoveredRelicIds.push(id);
+    this.persist();
+    return true;
+  }
+
+  hasDiscoveredBottle(id: string): boolean {
+    return this.discoveredBottleIds().includes(id);
+  }
+
+  hasDiscoveredRelic(id: string): boolean {
+    return this.discoveredRelicIds().includes(id);
+  }
+
+  getDiscoveredBottles(): LoreBottle[] {
+    return this.discoveredBottleIds()
+      .map((id) => getLoreBottle(id))
+      .filter((b): b is LoreBottle => b !== undefined);
+  }
+
+  getDiscoveredRelics(): CurioRelic[] {
+    return this.discoveredRelicIds()
+      .map((id) => getCurioRelic(id))
+      .filter((r): r is CurioRelic => r !== undefined);
+  }
 }
+const STORY_CHAPTERS_COUNT = 5;

@@ -13,7 +13,30 @@ export class MarketSystem {
   constructor(
     private readonly economy: Economy,
     private readonly events: EventBus<GameEventMap>,
-  ) {}
+  ) {
+    this.events.on('catchResolved', () => this.autoSellEligible());
+    this.events.on('fishbotClaimed', () => this.autoSellEligible());
+  }
+
+  autoSellEligible(): number {
+    const state = this.economy.snapshot;
+    if (!state.sorterTrayOwned) return 0;
+    const allowed = new Set(state.autoSellRarities ?? []);
+    let sold = 0;
+    for (let index = state.basket.length - 1; index >= 0; index -= 1) {
+      const item = state.basket[index];
+      const species = FISH_CATALOG.find((fish) => fish.id === item.catchId);
+      if (!species || item.golden || item.protectedCatch || !allowed.has(species.rarity)) continue;
+      // Preserve rare catches even when their category is selected.
+      if (['rare', 'epic', 'legendary'].includes(species.rarity)) continue;
+      const value = this.economy.getFishValue(item.catchId, item.weightKg, item.golden);
+      if (this.sell(index)) {
+        this.economy.recordAutoSale(value);
+        sold += 1;
+      }
+    }
+    return sold;
+  }
 
   get patienceBones(): number {
     return 0;
@@ -29,7 +52,7 @@ export class MarketSystem {
     const species = FISH_CATALOG.find((fish) => fish.id === item.catchId);
     if (!species) return false;
 
-    const value = this.economy.getFishValue(item.catchId, item.weightKg);
+    const value = this.economy.getFishValue(item.catchId, item.weightKg, item.golden);
     this.economy.removeFromBasket(basketIndex);
     this.economy.addCoins(value);
 

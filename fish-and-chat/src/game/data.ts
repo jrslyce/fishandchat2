@@ -245,7 +245,34 @@ export const FISHBOT_CATALOG: FishbotDefinition[] = [
 ];
 
 export function xpToNextLevel(level: number): number {
-  return Math.round(40 * Math.pow(level, 1.4));
+  if (level < 5) {
+    return Math.round(50 * Math.pow(level, 1.35));
+  }
+  return Math.round(60 * Math.pow(level, 1.85));
+}
+
+export interface LevelPerk {
+  level: number;
+  name: string;
+  description: string;
+  badge: string;
+}
+
+export const LEVEL_PERKS: LevelPerk[] = [
+  { level: 2, name: 'Bait Mastery', description: '-10% bite wait time on all baits.', badge: '🪱' },
+  { level: 5, name: 'Weather Lore', description: '+25% catch value & XP during Rain, Fog, or Rainbow.', badge: '🌦️' },
+  { level: 8, name: 'Deep Vision', description: 'Underwater fish shadows emit sparkle cues hinting at rarity tier.', badge: '👁️' },
+  { level: 10, name: 'Ocean Trench Biome', description: 'Access deep abyss waters and exotic trench species.', badge: '🌊' },
+  { level: 15, name: 'Double Hook Technique', description: '5% chance to hook two catches on a single cast.', badge: '🪝' },
+  { level: 20, name: 'Cosmic Lake Biome', description: 'Access stellar waters and void leviathan fauna.', badge: '✨' },
+  { level: 25, name: 'Master Intuition', description: '+30% wider perfect cast timing sweet spot.', badge: '🎯' },
+  { level: 30, name: 'Leviathan Whisperer', description: 'Greatly increases the chance of Epic & Legendary fish shadows.', badge: '🐋' },
+  { level: 40, name: 'Sea Aura', description: 'Luminescent casting line and glowing ripples.', badge: '🌟' },
+  { level: 50, name: 'Living Legend', description: '+25% permanent catch sale value and prestige eligibility.', badge: '👑' },
+];
+
+export function getLevelPerk(level: number): LevelPerk | undefined {
+  return LEVEL_PERKS.find((p) => p.level === level);
 }
 
 export function themeForLevel(level: number): ThemeId {
@@ -335,9 +362,29 @@ export interface PremiumItemDefinition {
 }
 
 export const PREMIUM_CATALOG: PremiumItemDefinition[] = [
+  { id: 'rainbow-totem', name: 'Rainbow Totem', description: 'Shows a rainbow for 5 minutes on your pond. Your catches earn 2x XP and rare, epic, and legendary bite weights rise by 50%.', costCandyBars: 60 },
+  { id: 'mega-chum-bucket', name: 'Mega Chum Bucket', description: 'Halves your bite wait times for 10 minutes.', costCandyBars: 40 },
+  { id: 'whale-call-horn', name: 'Whale Call Horn', description: 'Summons a whale breach on your pond and grants your fisher 100 coins.', costCandyBars: 50 },
+  { id: 'bottomless-tackle-box', name: 'Bottomless Tackle Box', description: 'Permanent animated golden tackle box beside your fisher. Holds up to 999,999 fish in your basket, gives every owned fishbot 5x hopper space before it needs emptying, and adds 40 percentage points to your chance of saving paid bait on each cast (40% normally; 65% when Bait Saver also applies).', costCandyBars: 200 },
+  { id: 'master-salvage-magnet', name: 'Master Salvage Magnet', description: 'Permanent 50% chance to double all recycled materials at the crafting bench.', costCandyBars: 50 },
   { id: 'golden-rod-skin', name: 'Golden Rod Skin', description: 'A shimmering cosmetic finish for your rod.', costCandyBars: 40 },
-  { id: 'starlight-fishbot-skin', name: 'Starlight Fishbot Skin', description: 'Cosmic paint job for any owned fishbot.', costCandyBars: 60 },
+  { id: 'starlight-fishbot-skin', name: 'Starlight Fishbot Skin', description: 'Cosmic paint and orbiting stars on your dock-side fishbot when you own a fishbot.', costCandyBars: 60 },
   { id: 'party-hat', name: 'Party Hat', description: 'A cosmetic hat for your angler.', costCandyBars: 20 },
+  { id: 'captain-hat', name: "Captain's Tricorn Hat", description: 'A dashing navy tricorn hat with gold lace.', costCandyBars: 40 },
+  { id: 'royal-crown', name: 'Royal Gilded Crown', description: 'Gleaming golden crown set with radiant emeralds and rubies.', costCandyBars: 50 },
+  { id: 'royal-cloak', name: 'Royal Gilded Robe', description: 'Regal crimson velvet bordered by ermine trim and embroidered gold tassels.', costCandyBars: 50 },
+  { id: 'golden-boots', name: 'Golden High-Roller Boots', description: 'Polished solid gold boots that clink with every step.', costCandyBars: 35 },
+  { id: 'cosmic-wizard-hat', name: 'Cosmic Wizard Hat', description: 'Pointed midnight violet hat radiating celestial starlight with a golden moon crest.', costCandyBars: 45 },
+  { id: 'nebula-robe', name: 'Nebula Robe', description: 'Shimmering violet robe woven with celestial constellations and stardust.', costCandyBars: 55 },
+  { id: 'abyssal-trench-coat', name: 'Abyssal Trench Coat', description: 'Dark high-tech trench coat lined with bio-reactive neon cyan conduits.', costCandyBars: 50 },
+  { id: 'disco-crown', name: 'Disco Crown', description: 'Mirrored party crown with hot pink light panels.', costCandyBars: 35 },
+  { id: 'aurora-helmet', name: 'Aurora Helmet', description: 'Iridescent helmet with a glowing polar visor.', costCandyBars: 45 },
+  { id: 'neon-arcade-jacket', name: 'Neon Arcade Jacket', description: 'Electric purple jacket with radiant arcade stripes.', costCandyBars: 45 },
+  { id: 'dragon-scale-coat', name: 'Dragon Scale Coat', description: 'Emerald scale coat with gold finned shoulders.', costCandyBars: 55 },
+  { id: 'hologram-trousers', name: 'Hologram Trousers', description: 'Color-shifting trousers with luminous side panels.', costCandyBars: 40 },
+  { id: 'royal-sailor-pants', name: 'Royal Sailor Pants', description: 'Tailored blue-and-gold trousers for a fleet admiral.', costCandyBars: 35 },
+  { id: 'comet-skates', name: 'Comet Skates', description: 'Midnight skates with star-bright runners.', costCandyBars: 45 },
+  { id: 'jewel-slippers', name: 'Jewel Slippers', description: 'Ruby slippers with polished gold trim.', costCandyBars: 30 },
   { id: 'sparkle-trail', name: 'Sparkle Cast Trail', description: 'Your line sparkles as it casts.', costCandyBars: 30 },
 ];
 
@@ -411,6 +458,7 @@ export interface ClothingDefinition {
   slot: ClothingSlot;
   name: string;
   flavor: string;
+  isNew?: boolean;
   /** Per-body-part overlay texture URLs; only the parts relevant to `slot` need entries. */
   textures: Partial<Record<ClothingPart, string>>;
   /**
@@ -423,6 +471,37 @@ export interface ClothingDefinition {
    */
   unlock: { type: 'craft'; coins: number; materials?: Partial<Record<MaterialId, number>> } | { type: 'premium'; premiumId: string };
 }
+
+function newClosetItem(id: string, slot: ClothingSlot, name: string, flavor: string, unlock: ClothingDefinition['unlock']): ClothingDefinition {
+  const path = (part: string) => `./images/clothing/${id}-${part}.png`;
+  const textures = slot === 'hat' ? { head: path('head') }
+    : slot === 'jacket' ? { body: path('body'), rightArm: path('arm'), leftArm: path('arm') }
+      : { rightLeg: path('leg'), leftLeg: path('leg') };
+  return { id, slot, name, flavor, textures, unlock, isNew: true };
+}
+
+const CLOSET_EXPANSION: ClothingDefinition[] = [
+  newClosetItem('sunflower-bucket-hat', 'hat', 'Sunflower Bucket Hat', 'Golden canvas with a bright little flower at the crown.', { type: 'craft', coins: 95, materials: { fabric: 2 } }),
+  newClosetItem('raincloud-cap', 'hat', 'Raincloud Cap', 'Slate-blue cap with a tiny cloud over the brow.', { type: 'craft', coins: 90, materials: { fabric: 1, rubber: 1 } }),
+  newClosetItem('koi-headband', 'hat', 'Koi Headband', 'A red-and-white koi circles a lucky woven band.', { type: 'craft', coins: 85, materials: { fabric: 2 } }),
+  newClosetItem('disco-crown', 'hat', 'Disco Crown', 'Mirrored panels catch every flash at the pond.', { type: 'premium', premiumId: 'disco-crown' }),
+  newClosetItem('aurora-helmet', 'hat', 'Aurora Helmet', 'A luminous visor borrows its colors from the northern sky.', { type: 'premium', premiumId: 'aurora-helmet' }),
+  newClosetItem('mint-windbreaker', 'jacket', 'Mint Windbreaker', 'Lightweight mint shell with crisp white trim.', { type: 'craft', coins: 115, materials: { fabric: 2, rubber: 1 } }),
+  newClosetItem('coral-fishing-vest', 'jacket', 'Coral Fishing Vest', 'Bright coral pockets keep the good lures close.', { type: 'craft', coins: 120, materials: { fabric: 2, metal: 1 } }),
+  newClosetItem('tidebreaker-raincoat', 'jacket', 'Tidebreaker Raincoat', 'Deep-sea blue rainwear with a wave-cut hem.', { type: 'craft', coins: 145, materials: { fabric: 2, rubber: 2 } }),
+  newClosetItem('neon-arcade-jacket', 'jacket', 'Neon Arcade Jacket', 'A bright jacket for a fisher who likes an entrance.', { type: 'premium', premiumId: 'neon-arcade-jacket' }),
+  newClosetItem('dragon-scale-coat', 'jacket', 'Dragon Scale Coat', 'Emerald scales and gold fins command the dock.', { type: 'premium', premiumId: 'dragon-scale-coat' }),
+  newClosetItem('patched-denim', 'pants', 'Patched Denim', 'Favorite jeans repaired after one too many dock mishaps.', { type: 'craft', coins: 95, materials: { fabric: 2 } }),
+  newClosetItem('tidepool-shorts', 'pants', 'Tidepool Shorts', 'Shorts patterned with little waves and sea stars.', { type: 'craft', coins: 80, materials: { fabric: 1 } }),
+  newClosetItem('moss-overalls', 'pants', 'Moss Overalls', 'Practical green overalls with big pocket flaps.', { type: 'craft', coins: 120, materials: { fabric: 3, metal: 1 } }),
+  newClosetItem('hologram-trousers', 'pants', 'Hologram Trousers', 'Shifting light runs down every seam.', { type: 'premium', premiumId: 'hologram-trousers' }),
+  newClosetItem('royal-sailor-pants', 'pants', 'Royal Sailor Pants', 'A tailored admiral stripe and polished buttons.', { type: 'premium', premiumId: 'royal-sailor-pants' }),
+  newClosetItem('dock-sandals', 'shoes', 'Dock Sandals', 'Easy to slip off before wading in.', { type: 'craft', coins: 65, materials: { fabric: 1, rubber: 1 } }),
+  newClosetItem('coral-sneakers', 'shoes', 'Coral Sneakers', 'Cushioned pink-orange kicks with white laces.', { type: 'craft', coins: 95, materials: { fabric: 1, rubber: 2 } }),
+  newClosetItem('storm-boots', 'shoes', 'Storm Boots', 'Tall stormproof boots with a bright lightning stripe.', { type: 'craft', coins: 125, materials: { rubber: 3 } }),
+  newClosetItem('comet-skates', 'shoes', 'Comet Skates', 'Star-tipped runners leave a flash on the dock.', { type: 'premium', premiumId: 'comet-skates' }),
+  newClosetItem('jewel-slippers', 'shoes', 'Jewel Slippers', 'Ruby-red shoes with a little golden glint.', { type: 'premium', premiumId: 'jewel-slippers' }),
+];
 
 export const CLOTHING_CATALOG: ClothingDefinition[] = [
   {
@@ -473,7 +552,7 @@ export const CLOTHING_CATALOG: ClothingDefinition[] = [
     name: 'Straw Hat',
     flavor: 'Wide-brimmed and woven from old cattails.',
     textures: { head: './images/clothing/straw-hat-head.png' },
-    unlock: { type: 'craft', coins: 60, materials: { fiber: 2 } },
+    unlock: { type: 'craft', coins: 60 },
   },
   {
     id: 'cowboy-hat',
@@ -516,7 +595,7 @@ export const CLOTHING_CATALOG: ClothingDefinition[] = [
       rightArm: './images/clothing/rain-slicker-arm.png',
       leftArm: './images/clothing/rain-slicker-arm.png',
     },
-    unlock: { type: 'craft', coins: 120, materials: { rubber: 2 } },
+    unlock: { type: 'craft', coins: 120 },
   },
   {
     id: 'overalls',
@@ -562,4 +641,199 @@ export const CLOTHING_CATALOG: ClothingDefinition[] = [
     },
     unlock: { type: 'craft', coins: 65, materials: { fabric: 1, rubber: 1 } },
   },
+  {
+    id: 'captain-hat',
+    slot: 'hat',
+    name: "Captain's Tricorn",
+    flavor: 'Dark navy felt laced with fine gold thread. Commands respect on any dock.',
+    textures: { head: './images/clothing/captain-hat-head.png' },
+    unlock: { type: 'premium', premiumId: 'captain-hat' },
+  },
+  {
+    id: 'royal-crown',
+    slot: 'hat',
+    name: 'Royal Gilded Crown',
+    flavor: 'Set with glowing rubies and emeralds. For royalty among anglers.',
+    textures: { head: './images/clothing/royal-crown-head.png' },
+    unlock: { type: 'premium', premiumId: 'royal-crown' },
+  },
+  {
+    id: 'diver-mask',
+    slot: 'hat',
+    name: 'Deep Diver Helmet',
+    flavor: 'Heavy riveted brass with a thick glass port. Sealed against deep currents.',
+    textures: { head: './images/clothing/diver-mask-head.png' },
+    unlock: { type: 'craft', coins: 180, materials: { metal: 3, glass: 2 } },
+  },
+  {
+    id: 'cableknit-sweater',
+    slot: 'jacket',
+    name: 'Cableknit Sweater',
+    flavor: 'Chunky cream wool, knit by hand to withstand biting ocean gales.',
+    textures: {
+      body: './images/clothing/cableknit-sweater-body.png',
+      rightArm: './images/clothing/cableknit-sweater-arm.png',
+      leftArm: './images/clothing/cableknit-sweater-arm.png',
+    },
+    unlock: { type: 'craft', coins: 110, materials: { fabric: 3 } },
+  },
+  {
+    id: 'royal-cloak',
+    slot: 'jacket',
+    name: 'Royal Gilded Robe',
+    flavor: 'Regal crimson velvet bordered by ermine trim and embroidered gold tassels.',
+    textures: {
+      body: './images/clothing/royal-cloak-body.png',
+      rightArm: './images/clothing/royal-cloak-arm.png',
+      leftArm: './images/clothing/royal-cloak-arm.png',
+    },
+    unlock: { type: 'premium', premiumId: 'royal-cloak' },
+  },
+  {
+    id: 'yellow-waders',
+    slot: 'pants',
+    name: 'Yellow Sea Waders',
+    flavor: 'Heavy-duty waterproof vinyl. Keeps the mud and swamp water right where it belongs.',
+    textures: {
+      rightLeg: './images/clothing/yellow-waders-leg.png',
+      leftLeg: './images/clothing/yellow-waders-leg.png',
+    },
+    unlock: { type: 'craft', coins: 130, materials: { rubber: 3 } },
+  },
+  {
+    id: 'diver-boots',
+    slot: 'shoes',
+    name: 'Lead Diver Boots',
+    flavor: 'Weighted iron and lead soles. You will not be floating away anytime soon.',
+    textures: {
+      rightLeg: './images/clothing/diver-boots-leg.png',
+      leftLeg: './images/clothing/diver-boots-leg.png',
+    },
+    unlock: { type: 'craft', coins: 120, materials: { metal: 2, rubber: 1 } },
+  },
+  {
+    id: 'golden-boots',
+    slot: 'shoes',
+    name: 'Golden High-Roller Boots',
+    flavor: 'Gleaming polished gold. Makes every step on the dock clink like treasure.',
+    textures: {
+      rightLeg: './images/clothing/golden-boots-leg.png',
+      leftLeg: './images/clothing/golden-boots-leg.png',
+    },
+    unlock: { type: 'premium', premiumId: 'golden-boots' },
+  },
+  {
+    id: 'cosmic-wizard-hat',
+    slot: 'hat',
+    name: 'Cosmic Wizard Hat',
+    flavor: 'Pointed midnight indigo felt adorned with shimmering gold crescent and stellar embroidery.',
+    textures: { head: './images/clothing/cosmic-wizard-hat-head.png' },
+    unlock: { type: 'premium', premiumId: 'cosmic-wizard-hat' },
+  },
+  {
+    id: 'nebula-robe',
+    slot: 'jacket',
+    name: 'Nebula Robe',
+    flavor: 'Deep cosmic velvet swirling with glittering nebulae and ancient constellations.',
+    textures: {
+      body: './images/clothing/nebula-robe-body.png',
+      rightArm: './images/clothing/nebula-robe-arm.png',
+      leftArm: './images/clothing/nebula-robe-arm.png',
+    },
+    unlock: { type: 'premium', premiumId: 'nebula-robe' },
+  },
+  {
+    id: 'stellar-boots',
+    slot: 'shoes',
+    name: 'Stellar Boots',
+    flavor: 'Astral boots edged with pulsing cyan energy conduits, leaving faint starlight with each step.',
+    textures: {
+      rightLeg: './images/clothing/stellar-boots-leg.png',
+      leftLeg: './images/clothing/stellar-boots-leg.png',
+    },
+    unlock: { type: 'craft', coins: 140, materials: { glass: 2, fiber: 2 } },
+  },
+  {
+    id: 'pirate-bandana',
+    slot: 'hat',
+    name: 'Pirate Bandana',
+    flavor: 'Crimson headscarf stamped with a skull motif and accented by a dangling gold earring.',
+    textures: { head: './images/clothing/pirate-bandana-head.png' },
+    unlock: { type: 'craft', coins: 80, materials: { fabric: 2 } },
+  },
+  {
+    id: 'buccaneer-vest',
+    slot: 'jacket',
+    name: 'Buccaneer Vest',
+    flavor: 'Weathered leather doublet vest over an exuberant ruffled white poet shirt with brass hardware.',
+    textures: {
+      body: './images/clothing/buccaneer-vest-body.png',
+      rightArm: './images/clothing/buccaneer-vest-arm.png',
+      leftArm: './images/clothing/buccaneer-vest-arm.png',
+    },
+    unlock: { type: 'craft', coins: 110, materials: { fabric: 2, metal: 1 } },
+  },
+  {
+    id: 'striped-sailor-pants',
+    slot: 'pants',
+    name: 'Striped Sailor Pants',
+    flavor: 'Crisp navy-and-white vertical striped breeches tailored for high-seas duty.',
+    textures: {
+      rightLeg: './images/clothing/striped-sailor-pants-leg.png',
+      leftLeg: './images/clothing/striped-sailor-pants-leg.png',
+    },
+    unlock: { type: 'craft', coins: 95, materials: { fabric: 2 } },
+  },
+  {
+    id: 'anglerfish-cowl',
+    slot: 'hat',
+    name: 'Anglerfish Cowl',
+    flavor: 'Deep-sea cowl hood featuring an extended bioluminescent lure stalk arching over the brow.',
+    textures: { head: './images/clothing/anglerfish-cowl-head.png' },
+    unlock: { type: 'craft', coins: 150, materials: { metal: 2, glass: 2 } },
+  },
+  {
+    id: 'abyssal-trench-coat',
+    slot: 'jacket',
+    name: 'Abyssal Trench Coat',
+    flavor: 'Heavy midnight trench coat laced with neon cyan bio-luminescent conduits and fins.',
+    textures: {
+      body: './images/clothing/abyssal-trench-coat-body.png',
+      rightArm: './images/clothing/abyssal-trench-coat-arm.png',
+      leftArm: './images/clothing/abyssal-trench-coat-arm.png',
+    },
+    unlock: { type: 'premium', premiumId: 'abyssal-trench-coat' },
+  },
+  {
+    id: 'bear-ear-beanie',
+    slot: 'hat',
+    name: 'Bear Ear Beanie',
+    flavor: 'Warm waffle-knit fuzzy brown beanie crowned with two cute rounded bear ears.',
+    textures: { head: './images/clothing/bear-ear-beanie-head.png' },
+    unlock: { type: 'craft', coins: 85, materials: { fabric: 2 } },
+  },
+  {
+    id: 'lumberjack-puffer',
+    slot: 'jacket',
+    name: 'Lumberjack Puffer',
+    flavor: 'Quilted hunter-green puffer vest layered over rugged red-and-black buffalo plaid flannel sleeves.',
+    textures: {
+      body: './images/clothing/lumberjack-puffer-body.png',
+      rightArm: './images/clothing/lumberjack-puffer-arm.png',
+      leftArm: './images/clothing/lumberjack-puffer-arm.png',
+    },
+    unlock: { type: 'craft', coins: 125, materials: { fabric: 3, rubber: 1 } },
+  },
+  {
+    id: 'camo-cargo-pants',
+    slot: 'pants',
+    name: 'Camo Cargo Pants',
+    flavor: 'Woodland camouflage cargo trousers fitted with reinforced utility pockets and brass snaps.',
+    textures: {
+      rightLeg: './images/clothing/camo-cargo-pants-leg.png',
+      leftLeg: './images/clothing/camo-cargo-pants-leg.png',
+    },
+    unlock: { type: 'craft', coins: 105, materials: { fabric: 2, rubber: 1 } },
+  },
+  ...CLOSET_EXPANSION,
 ];

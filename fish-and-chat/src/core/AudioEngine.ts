@@ -1,3 +1,5 @@
+import { SoundSynthesizer } from './SoundSynthesizer';
+
 export type AudioGroup = 'master' | 'sfx' | 'ambience';
 
 export interface AudioMixState {
@@ -9,9 +11,8 @@ export interface AudioMixState {
 
 /**
  * Runtime audio engine: gesture-unlock, per-group volume/mute, clip loading
- * with an in-memory decode cache, one-shot SFX playback, and a single
- * crossfading ambience loop (only one plays at a time, matching the
- * one-active-theme model).
+ * with an in-memory decode cache, one-shot SFX playback, a single
+ * crossfading ambience loop, and procedural atmospheric sound synthesis.
  */
 export class AudioEngine {
   private context: AudioContext | null = null;
@@ -20,6 +21,7 @@ export class AudioEngine {
   private readonly bufferCache = new Map<string, Promise<AudioBuffer>>();
   private ambienceSource: AudioBufferSourceNode | null = null;
   private ambienceGainNode: GainNode | null = null;
+  private readonly synthesizer: SoundSynthesizer = new SoundSynthesizer();
 
   readonly mix: AudioMixState = {
     master: 1,
@@ -59,6 +61,13 @@ export class AudioEngine {
       this.gains.set(group, gain);
     }
 
+    // Initialize procedural sound synthesizer connected to destination with mirrored volumes
+    this.synthesizer.init(this.context, this.context.destination);
+    this.synthesizer.setVolume('master', this.mix.master);
+    this.synthesizer.setVolume('sfx', this.mix.sfx);
+    this.synthesizer.setVolume('ambience', this.mix.ambience);
+    this.synthesizer.setMuted(this.mix.muted);
+
     this.unlocked = true;
   }
 
@@ -66,9 +75,14 @@ export class AudioEngine {
     return this.unlocked;
   }
 
+  getSynthesizer(): SoundSynthesizer {
+    return this.synthesizer;
+  }
+
   setVolume(group: AudioGroup, value: number): void {
     this.mix[group] = Math.max(0, Math.min(1, value));
     this.gains.get(group)?.gain.setValueAtTime(this.mix[group], this.context?.currentTime ?? 0);
+    this.synthesizer.setVolume(group, this.mix[group]);
   }
 
   setMuted(muted: boolean): void {
@@ -77,6 +91,7 @@ export class AudioEngine {
     if (master) {
       master.gain.setValueAtTime(muted ? 0 : this.mix.master, this.context?.currentTime ?? 0);
     }
+    this.synthesizer.setMuted(muted);
   }
 
   private async loadBuffer(url: string): Promise<AudioBuffer | null> {
@@ -144,6 +159,7 @@ export class AudioEngine {
   }
 
   dispose(): void {
+    this.synthesizer.dispose();
     this.ambienceSource?.stop();
     void this.context?.close();
     this.context = null;

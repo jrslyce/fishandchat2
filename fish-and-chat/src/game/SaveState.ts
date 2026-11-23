@@ -1,4 +1,5 @@
 import { FISHBOT_CATALOG, type ArchetypeId, type ClothingSlot, type MaterialId, type UpgradeId } from './data';
+import type { DailyQuest } from './StoryGoals';
 
 export interface BasketItem {
   /** FISH_CATALOG id, TRASH_CATALOG id, or a fishbot-caught species id. */
@@ -6,11 +7,18 @@ export interface BasketItem {
   isTrash: boolean;
   weightKg: number;
   caughtAt: number;
+  golden?: boolean;
+  protectedCatch?: boolean;
+  sourceBotId?: string;
 }
 
 export interface FishbotState {
   owned: boolean;
   nextReadyAtMs: number;
+  hopperTier?: number;
+  autoUnload?: boolean;
+  mode?: 'balanced' | 'salvage' | 'trophy';
+  unlockedModes?: ('salvage' | 'trophy')[];
 }
 
 export interface FishRecord {
@@ -18,9 +26,27 @@ export interface FishRecord {
   maxWeightKg: number;
 }
 
+export interface ChannelCandyWallet {
+  name: string;
+  avatarUrl: string | null;
+  balance: number;
+  activity: Array<{ at: number; delta: number; reason?: string }>;
+}
+
+export type CosmeticSlot = 'rod' | 'fishbot' | 'trail';
+
+export interface OutfitPreset {
+  name: string;
+  clothing: Record<ClothingSlot, string | null>;
+  baseToneId: string;
+  cosmetics: Record<CosmeticSlot, string | null>;
+}
+
 export interface GameSaveStateV1 {
   coins: number;
   candyBars: number;
+  activeChannelId?: string;
+  channelCandyWallets?: Record<string, ChannelCandyWallet>;
   level: number;
   xp: number;
   basket: BasketItem[];
@@ -34,6 +60,10 @@ export interface GameSaveStateV1 {
   fishRecords: Record<string, FishRecord>;
   fishbots: Record<string, FishbotState>;
   fishbotHopper: BasketItem[];
+  autoSellRarities?: string[];
+  sorterTrayOwned?: boolean;
+  autoSaleCount?: number;
+  autoSaleCoins?: number;
   lastActiveAtMs: number;
   audio: { master: number; sfx: number; ambience: number; muted: boolean };
   luckyDuckyCount: number;
@@ -41,6 +71,8 @@ export interface GameSaveStateV1 {
   ownedPremiumItemIds: string[];
   ownedClothingIds: string[];
   equippedClothing: Record<ClothingSlot, string | null>;
+  equippedCosmetics: Record<CosmeticSlot, string | null>;
+  outfitPresets: Array<OutfitPreset | null>;
   baseToneId: string;
   displayNameOverride: string | null;
   skillPoints: number;
@@ -48,12 +80,35 @@ export interface GameSaveStateV1 {
   /** One-time Barnaby tutorial bubbles — dismissed permanently once the player has cast/reeled once. */
   hasSeenCastTutorial: boolean;
   hasSeenReelTutorial: boolean;
+  seenWeatherClothingTipIds?: string[];
   /** Progress through the 2-cast pleb bait onboarding tutorial (0 = cast 1, 1 = cast 2, 2 = casts done) */
   tutorialCastCount: number;
   /** Whether the full bait onboarding tutorial (dialogue + bait shop prompt) has finished */
   hasCompletedBaitTutorial: boolean;
   /** Whether the player has fished up the Lucky Coin in a Bottle with the neon lure */
   hasLuckyCoinBottle: boolean;
+  prestige: number;
+  catchStreak: number;
+  bestCatchStreak: number;
+  activeStoryChapter: number;
+  storyProgress: Record<string, number>;
+  completedChapterIds: string[];
+  dailyQuests: DailyQuest[];
+  lastDailyQuestRefreshMs: number;
+  claimedMilestoneIds: string[];
+  activeStreamBuffs: Record<string, number>;
+  totalFishCaught: number;
+  totalWeightKgCaught: number;
+  totalTrashRecycled: number;
+  totalPerfectCasts: number;
+  equippedTitle: string | null;
+  unlockedTitles: string[];
+  activeCommunityGoalId?: string;
+  communityGoalProgress?: number;
+  completedCommunityGoalIds?: string[];
+  totalCommunityGoalsCompleted?: number;
+  discoveredBottleIds?: string[];
+  discoveredRelicIds?: string[];
 }
 
 export function createDefaultSaveState(): GameSaveStateV1 {
@@ -65,6 +120,8 @@ export function createDefaultSaveState(): GameSaveStateV1 {
   return {
     coins: 50,
     candyBars: 0,
+    activeChannelId: 'local',
+    channelCandyWallets: {},
     level: 1,
     xp: 0,
     basket: [],
@@ -78,21 +135,46 @@ export function createDefaultSaveState(): GameSaveStateV1 {
     fishbots,
     fishbotHopper: [],
     lastActiveAtMs: Date.now(),
-    audio: { master: 1, sfx: 0.8, ambience: 0.6, muted: false },
+    audio: { master: 1, sfx: 0.8, ambience: 0.6, muted: true },
     luckyDuckyCount: 0,
     luckyDuckyExpiresAtMs: 0,
     ownedPremiumItemIds: [],
     ownedClothingIds: ['basic-shirt', 'basic-pants', 'basic-shoes'],
     equippedClothing: { hat: null, jacket: 'basic-shirt', pants: 'basic-pants', shoes: 'basic-shoes' },
+    equippedCosmetics: { rod: null, fishbot: null, trail: null },
+    outfitPresets: [null, null, null],
     baseToneId: 'sunfish-tan',
     displayNameOverride: null,
     skillPoints: 0,
     archetypePoints: { brawler: 0, patience: 0, trapper: 0, charmer: 0, tactician: 0 },
     hasSeenCastTutorial: false,
     hasSeenReelTutorial: false,
+    seenWeatherClothingTipIds: [],
     tutorialCastCount: 0,
     hasCompletedBaitTutorial: false,
     hasLuckyCoinBottle: false,
+    prestige: 0,
+    catchStreak: 0,
+    bestCatchStreak: 0,
+    activeStoryChapter: 1,
+    storyProgress: {},
+    completedChapterIds: [],
+    dailyQuests: [],
+    lastDailyQuestRefreshMs: 0,
+    claimedMilestoneIds: [],
+    activeStreamBuffs: {},
+    totalFishCaught: 0,
+    totalWeightKgCaught: 0,
+    totalTrashRecycled: 0,
+    totalPerfectCasts: 0,
+    equippedTitle: null,
+    unlockedTitles: [],
+    activeCommunityGoalId: 'ancient-leviathan',
+    communityGoalProgress: 0,
+    completedCommunityGoalIds: [],
+    totalCommunityGoalsCompleted: 0,
+    discoveredBottleIds: [],
+    discoveredRelicIds: [],
   };
 }
 
@@ -106,6 +188,14 @@ export function createDefaultSaveState(): GameSaveStateV1 {
  */
 export function migrateSaveState(state: GameSaveStateV1): GameSaveStateV1 {
   let next = state;
+
+  if (!next.equippedCosmetics || !next.outfitPresets) {
+    next = {
+      ...next,
+      equippedCosmetics: next.equippedCosmetics ?? { rod: null, fishbot: null, trail: null },
+      outfitPresets: next.outfitPresets ?? [null, null, null],
+    };
+  }
 
   const { jacket, pants, shoes } = next.equippedClothing;
   if (!jacket && !pants && !shoes) {
@@ -181,6 +271,38 @@ export function migrateSaveState(state: GameSaveStateV1): GameSaveStateV1 {
   if (next.hasLuckyCoinBottle === undefined) {
     next = { ...next, hasLuckyCoinBottle: false };
   }
+
+  if (next.prestige === undefined) next = { ...next, prestige: 0 };
+  if (next.catchStreak === undefined) next = { ...next, catchStreak: 0 };
+  if (next.bestCatchStreak === undefined) next = { ...next, bestCatchStreak: 0 };
+  if (next.activeStoryChapter === undefined) next = { ...next, activeStoryChapter: 1 };
+  if (next.storyProgress === undefined) next = { ...next, storyProgress: {} };
+  if (next.completedChapterIds === undefined) next = { ...next, completedChapterIds: [] };
+  if (next.dailyQuests === undefined) next = { ...next, dailyQuests: [] };
+  if (next.lastDailyQuestRefreshMs === undefined) next = { ...next, lastDailyQuestRefreshMs: 0 };
+  if (next.claimedMilestoneIds === undefined) next = { ...next, claimedMilestoneIds: [] };
+  if (next.activeStreamBuffs === undefined) next = { ...next, activeStreamBuffs: {} };
+  if (next.totalFishCaught === undefined) {
+    let count = 0;
+    let weight = 0;
+    if (next.fishRecords) {
+      for (const rec of Object.values(next.fishRecords)) {
+        count += rec.count;
+        weight += rec.count * rec.maxWeightKg * 0.8;
+      }
+    }
+    next = { ...next, totalFishCaught: count, totalWeightKgCaught: Math.round(weight * 10) / 10 };
+  }
+  if (next.totalTrashRecycled === undefined) next = { ...next, totalTrashRecycled: 0 };
+  if (next.totalPerfectCasts === undefined) next = { ...next, totalPerfectCasts: 0 };
+  if (next.equippedTitle === undefined) next = { ...next, equippedTitle: null };
+  if (next.unlockedTitles === undefined) next = { ...next, unlockedTitles: [] };
+  if (next.activeCommunityGoalId === undefined) next = { ...next, activeCommunityGoalId: 'ancient-leviathan' };
+  if (next.communityGoalProgress === undefined) next = { ...next, communityGoalProgress: 0 };
+  if (next.completedCommunityGoalIds === undefined) next = { ...next, completedCommunityGoalIds: [] };
+  if (next.totalCommunityGoalsCompleted === undefined) next = { ...next, totalCommunityGoalsCompleted: 0 };
+  if (next.discoveredBottleIds === undefined) next = { ...next, discoveredBottleIds: [] };
+  if (next.discoveredRelicIds === undefined) next = { ...next, discoveredRelicIds: [] };
 
   return next;
 }

@@ -14,11 +14,17 @@ export interface SaveEnvelope<TState> {
 }
 
 export class SaveManager<TState> {
-  constructor(private readonly defaultState: () => TState) {}
+  constructor(
+    private readonly defaultState: () => TState,
+    private readonly initialState?: TState,
+    private readonly onSave?: (state: TState) => void,
+    private readonly storageKey: string = SAVE_KEY,
+  ) {}
 
   load(): TState {
+    if (this.initialState) return this.initialState;
     try {
-      const raw = window.localStorage.getItem(SAVE_KEY);
+      const raw = window.localStorage.getItem(this.storageKey);
       if (!raw) return this.defaultState();
       const parsed = JSON.parse(raw) as SaveEnvelope<TState>;
       if (parsed.version !== SAVE_VERSION) return this.defaultState();
@@ -34,10 +40,11 @@ export class SaveManager<TState> {
       savedAt: Date.now(),
       state,
     };
-    window.localStorage.setItem(SAVE_KEY, JSON.stringify(envelope));
+    window.localStorage.setItem(this.storageKey, JSON.stringify(envelope));
+    this.onSave?.(state);
   }
 
   clear(): void {
-    window.localStorage.removeItem(SAVE_KEY);
+    window.localStorage.removeItem(this.storageKey);
   }
 }

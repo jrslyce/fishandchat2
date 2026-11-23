@@ -5,6 +5,7 @@ import '@fontsource/baloo-2/latin-800.css';
 // styles.css is linked directly in index.html's <head> (not imported here) so it's a
 // real blocking stylesheet in dev too — see the comment on that <link> tag for why.
 import { Game } from './game/Game';
+import { initializeMuxyProgress } from './systems/MuxyProgressStore';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game-canvas');
 
@@ -12,8 +13,28 @@ if (!canvas) {
   throw new Error('Missing #game-canvas element.');
 }
 
+void (async () => {
 try {
-  const game = new Game(canvas);
+  const progress = await initializeMuxyProgress();
+  if (progress.requiresIdentity) {
+    const label = document.querySelector<HTMLElement>('#title-loading-label');
+    if (label) label.textContent = 'Share your Twitch identity to keep your fisher across channels.';
+    const action = document.createElement('button');
+    action.type = 'button';
+    action.textContent = 'Share Twitch Identity';
+    const ext = (window as unknown as { Twitch?: { ext?: { viewer?: { id?: string | null }; actions?: { requestIdShare?: () => void }; onAuthorized?: (callback: () => void) => void } } }).Twitch?.ext;
+    if (!ext?.actions?.requestIdShare) {
+      action.disabled = true;
+      if (label) label.textContent = 'Twitch identity is unavailable. Reload the extension to try again.';
+    }
+    action.addEventListener('click', () => {
+      ext?.actions?.requestIdShare?.();
+    });
+    document.querySelector('#title-screen')?.append(action);
+    ext?.onAuthorized?.(() => { if (ext.viewer?.id) window.location.reload(); });
+    return;
+  }
+  const game = new Game(canvas, progress);
   game.start();
 
   if (import.meta.hot) {
@@ -31,3 +52,4 @@ try {
   document.querySelector('#app')?.appendChild(message);
   throw error;
 }
+})();

@@ -3,6 +3,8 @@ import type { MaterialLibrary } from '../assets/MaterialLibrary';
 import type { ThemeId } from '../game/data';
 import { buildDock } from './VoxelKit';
 
+export const BARNABY_DOCK_POSITION = { x: -0.38, y: 0.17, z: 0.85 } as const;
+
 export interface DioramaResult {
   root: THREE.Group;
   barnabySlot: THREE.Group;
@@ -24,18 +26,21 @@ export function buildDiorama(theme: ThemeId, materials: MaterialLibrary): Dioram
   const root = new THREE.Group();
   root.name = `diorama-${theme}`;
 
-  const dock = buildDock(materials.wood, materials.woodDark, 1);
+  // A shared deck for the angler and Barnaby, with room for both silhouettes.
+  const dock = buildDock(materials.wood, materials.woodDark, 3, 2.2);
   dock.position.set(0, 0.12, 0.9);
   root.add(dock);
 
   const playerSlot = new THREE.Group();
   playerSlot.name = 'playerSlot';
-  playerSlot.position.set(0, 0.22, 0.9);
+  playerSlot.position.set(0.24, 0.22, 0.9);
   playerSlot.rotation.y = Math.PI; // facing -Z, out toward water
   root.add(playerSlot);
 
   const barnabySlot = new THREE.Group();
   barnabySlot.name = 'barnabySlot';
+  barnabySlot.position.set(BARNABY_DOCK_POSITION.x, BARNABY_DOCK_POSITION.y, BARNABY_DOCK_POSITION.z);
+  root.add(barnabySlot);
   const fishbotSlot = new THREE.Group();
   fishbotSlot.name = 'fishbotSlot';
 

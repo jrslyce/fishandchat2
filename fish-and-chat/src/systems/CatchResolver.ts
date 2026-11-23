@@ -116,17 +116,19 @@ export function resolveCatch(
   const weightKg = rollWeightKg(species.weightRangeKg);
   let value = calculateFishValue(species, weightKg, 1.0);
   let name = species.name;
+  let golden = false;
 
   if ((L === 5 || L === 7) && Math.random() < 0.25) {
+    golden = true;
     name = `Golden ${name}`;
     value *= 3;
   }
 
   const xpAwarded = Math.round(value * RARITY_XP_MULTIPLIER[rarity]);
-  const addedToBasket = economy.addToBasket({ catchId: species.id, isTrash: false, weightKg, caughtAt: Date.now() });
+  const addedToBasket = economy.addToBasket({ catchId: species.id, isTrash: false, weightKg, caughtAt: Date.now(), golden });
 
   if ((L === 2 || L === 7) && Math.random() < 0.25 && !economy.basketFull()) {
-    economy.addToBasket({ catchId: species.id, isTrash: false, weightKg, caughtAt: Date.now() });
+    economy.addToBasket({ catchId: species.id, isTrash: false, weightKg, caughtAt: Date.now(), golden });
     name = `${name} (Double Catch!)`;
   }
 

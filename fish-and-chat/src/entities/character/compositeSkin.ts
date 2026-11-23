@@ -65,6 +65,11 @@ export async function compositeSkinTexture(
       drawJobs.push(
         loadImage(textureUrl).then((img) => {
           ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h);
+          // The old straw-hat patch painted across the eye rows. Its new 3D
+          // brim supplies the silhouette, so leave the face visible below it.
+          if (itemId === 'straw-hat' && part === 'head') {
+            ctx.clearRect(rect.x + 8, rect.y + 10, 8, 6);
+          }
         }),
       );
     }

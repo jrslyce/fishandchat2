@@ -194,12 +194,12 @@ export function buildDock(
   woodMaterial: THREE.Material,
   darkWoodMaterial: THREE.Material,
   length = 4,
+  width = 1.05,
 ): THREE.Group {
   const group = new THREE.Group();
   group.name = 'dock';
 
-  const plankWidth = 1.05;
-  const plankGeometry = new THREE.BoxGeometry(plankWidth, 0.10, 0.38);
+  const plankGeometry = new THREE.BoxGeometry(width, 0.10, 0.38);
   for (let i = -3; i < length; i++) {
     const plank = new THREE.Mesh(plankGeometry, woodMaterial);
     plank.position.set(0, 0, -i * 0.42);
@@ -209,7 +209,7 @@ export function buildDock(
   }
 
   const postGeometry = new THREE.CylinderGeometry(0.07, 0.09, 0.9, 8);
-  const postOffsets = [-0.42, 0.42];
+  const postOffsets = [-width / 2 + 0.1, width / 2 - 0.1];
   for (let i = -2; i < length; i += 2) {
     for (const offsetX of postOffsets) {
       const post = new THREE.Mesh(postGeometry, darkWoodMaterial);
