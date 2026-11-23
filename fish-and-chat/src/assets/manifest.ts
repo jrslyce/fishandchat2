@@ -72,12 +72,16 @@ export const MODEL_SOURCE_MANIFEST = {
  * These are what the running game actually loads via GLTFLoader/fetch.
  */
 export const MODEL_SOURCE_MANIFEST_PUBLIC = {
+  angler: './models/angler.glb',
   barnaby: './models/barnaby.glb',
   prismKoi: './models/prism-koi.glb',
   genericFish: './models/generic-fish.glb',
   fishbot: './models/fishbot.glb',
   oldBoot: './models/old-boot.glb',
   bobber: './models/bobber.glb',
+  dioramaShack: './models/diorama-shack.glb',
+  dioramaLantern: './models/diorama-lantern.glb',
+  dioramaChest: './models/diorama-chest.glb',
 } as const;
 
 /**

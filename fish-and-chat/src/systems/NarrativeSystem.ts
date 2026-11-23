@@ -69,6 +69,7 @@ export class NarrativeSystem {
   // 3D bottle state
   private activeBottleId: string | null = null;
   private activeBottleMesh: THREE.Group | null = null;
+  private disposed = false;
   private bottleTime = 0;
   private bottleRippleTimer = 0;
   private bottleBasePos = new THREE.Vector3(0.85, -0.05, -0.3);
@@ -101,8 +102,8 @@ export class NarrativeSystem {
     // 1. Build Barnaby dock NPC anchor
     this.barnabyRoot.name = 'DockBarnabyNPC';
     this.barnabyRoot.position.set(BARNABY_DOCK_POSITION.x, BARNABY_DOCK_POSITION.y, BARNABY_DOCK_POSITION.z);
-    // Barnaby's imported face is on local +X. Turn it toward the dock camera.
-    this.barnabyRoot.rotation.y = -Math.PI / 2;
+    // Alt-A Meshy Barnaby faces +Z locally; angle slightly toward camera and angler.
+    this.barnabyRoot.rotation.y = 0.28;
     this.scene.add(this.barnabyRoot);
 
     this.buildBarnabyPlaceholder();
@@ -631,65 +632,48 @@ export class NarrativeSystem {
     const group = new THREE.Group();
     group.name = 'BarnabyStylizedMesh';
 
-    // Wooden dock seat/crate
-    const crateGeo = new THREE.BoxGeometry(0.32, 0.22, 0.32);
-    const crateMat = new THREE.MeshStandardMaterial({ color: 0x6e4b2d, roughness: 0.85 });
-    const crate = new THREE.Mesh(crateGeo, crateMat);
-    crate.position.y = 0.11;
-    crate.castShadow = true;
-    group.add(crate);
-
-    // Torso (yellow mariner slicker coat)
-    const torsoGeo = new THREE.BoxGeometry(0.28, 0.38, 0.22);
-    const coatMat = new THREE.MeshStandardMaterial({ color: 0xf5b82e, roughness: 0.5 });
-    const torso = new THREE.Mesh(torsoGeo, coatMat);
-    torso.position.y = 0.45;
+    // Plump sitting golden clay catfish torso
+    const goldMat = new THREE.MeshStandardMaterial({ color: '#e8b647', roughness: 0.78 });
+    const torso = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), goldMat);
+    torso.scale.set(1.05, 1.0, 0.95);
+    torso.position.y = 0.22;
     torso.castShadow = true;
     group.add(torso);
 
-    // Head
-    const headGeo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-    const skinMat = new THREE.MeshStandardMaterial({ color: 0xffcd94, roughness: 0.6 });
-    const head = new THREE.Mesh(headGeo, skinMat);
-    head.position.y = 0.74;
+    // Knitted indigo denim apron bib over chest
+    const apronMat = new THREE.MeshStandardMaterial({ color: '#456896', roughness: 0.9 });
+    const apron = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.26, 12), apronMat);
+    apron.position.set(0, 0.20, 0.03);
+    apron.castShadow = true;
+    group.add(apron);
+
+    // Broad catfish head + rosy smiling lips
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), goldMat);
+    head.scale.set(1.18, 0.9, 1.05);
+    head.position.set(0, 0.48, 0.02);
     head.castShadow = true;
     group.add(head);
 
-    // The fallback needs its own face; this group is removed when the GLB loads.
-    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x24201b, roughness: 0.7 });
-    for (const z of [-0.055, 0.055]) {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 6), eyeMat);
-      eye.position.set(0.105, 0.77, z);
+    const lipMat = new THREE.MeshStandardMaterial({ color: '#f0949a', roughness: 0.65 });
+    const lips = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.025, 8, 14), lipMat);
+    lips.position.set(0, 0.45, 0.18);
+    lips.scale.set(1.3, 0.65, 0.8);
+    group.add(lips);
+
+    const eyeMat = new THREE.MeshStandardMaterial({ color: '#1b1815', roughness: 0.25 });
+    for (const x of [-0.09, 0.09]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.024, 8, 8), eyeMat);
+      eye.position.set(x, 0.54, 0.16);
       group.add(eye);
     }
 
-    // White beard
-    const beardGeo = new THREE.BoxGeometry(0.22, 0.16, 0.14);
-    const beardMat = new THREE.MeshStandardMaterial({ color: 0xe8e8e8, roughness: 0.9 });
-    const beard = new THREE.Mesh(beardGeo, beardMat);
-    beard.position.set(0, 0.68, 0.08);
-    group.add(beard);
-
-    // Yellow fisherman's sou'wester hat
-    const hatDomeGeo = new THREE.CylinderGeometry(0.12, 0.14, 0.1, 10);
-    const hatDome = new THREE.Mesh(hatDomeGeo, coatMat);
-    hatDome.position.y = 0.88;
-    group.add(hatDome);
-
-    const hatBrimGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.02, 12);
-    const hatBrim = new THREE.Mesh(hatBrimGeo, coatMat);
-    hatBrim.position.y = 0.83;
-    group.add(hatBrim);
-
-    // Dark boots
-    const bootGeo = new THREE.BoxGeometry(0.1, 0.16, 0.18);
-    const bootMat = new THREE.MeshStandardMaterial({ color: 0x222228, roughness: 0.7 });
-    const leftBoot = new THREE.Mesh(bootGeo, bootMat);
-    leftBoot.position.set(-0.09, 0.08, 0.12);
-    const rightBoot = new THREE.Mesh(bootGeo, bootMat);
-    rightBoot.position.set(0.09, 0.08, 0.12);
-    group.add(leftBoot);
-    group.add(rightBoot);
+    // Stubby webbed feet pointing forward (+Z)
+    for (const x of [-0.11, 0.11]) {
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.05, 0.15), goldMat);
+      foot.position.set(x, 0.03, 0.18);
+      foot.castShadow = true;
+      group.add(foot);
+    }
 
     this.barnabyPlaceholderMesh = group;
     this.barnabyRoot.add(group);
@@ -698,11 +682,14 @@ export class NarrativeSystem {
   private async loadBarnabyModel(): Promise<void> {
     try {
       const asset = await loadImportedAsset(MODEL_SOURCE_MANIFEST_PUBLIC.barnaby);
-      if (!asset || !asset.root) return;
+      if (!asset || !asset.root || this.disposed) return;
 
-      const model = normalizedClone(asset, 0.88);
+      const model = normalizedClone(asset, 0.68);
       model.name = 'BarnabyImportedGLB';
       model.position.set(0, 0, 0);
+      model.traverse((child) => {
+        child.userData.sharedAsset = true;
+      });
 
       // Remove placeholder mesh and attach imported GLB
       if (this.barnabyPlaceholderMesh) {
@@ -847,6 +834,7 @@ export class NarrativeSystem {
   // =========================================================================
 
   public dispose(): void {
+    this.disposed = true;
     window.removeEventListener('pointerdown', this.boundPointerDown);
 
     for (const unsubscribe of this.eventUnsubscribers) {
@@ -872,6 +860,7 @@ export class NarrativeSystem {
 
   private disposeObject(obj: THREE.Object3D): void {
     obj.traverse((child) => {
+      if (child.userData.sharedAsset) return;
       const mesh = child as THREE.Mesh;
       if (mesh.isMesh) {
         mesh.geometry?.dispose();

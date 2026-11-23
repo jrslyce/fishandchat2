@@ -57,6 +57,7 @@ export class ThemeManager {
     if (theme === this.currentTheme) return;
     this.currentTheme = theme;
 
+    this.diorama.root.userData.disposed = true;
     this.diorama.playerSlot.clear();
     this.diorama.barnabySlot.clear();
     this.diorama.fishbotSlot.clear();
@@ -84,6 +85,7 @@ export class ThemeManager {
   }
 
   dispose(): void {
+    this.diorama.root.userData.disposed = true;
     this.diorama.playerSlot.clear();
     this.diorama.barnabySlot.clear();
     this.diorama.fishbotSlot.clear();
@@ -97,7 +99,9 @@ function disposeGroup(root: THREE.Object3D): void {
   root.traverse((child) => {
     const mesh = child as THREE.Mesh;
     if (mesh.isMesh || (mesh as unknown as THREE.InstancedMesh).isInstancedMesh) {
-      mesh.geometry?.dispose();
+      if (!mesh.userData.sharedAsset) {
+        mesh.geometry?.dispose();
+      }
       // Ad-hoc materials created inside buildDiorama (lilypad buds, clouds)
       // are tagged ownedClone; MaterialLibrary materials are shared across
       // rebuilds and disposed by the library itself, so leave them alone.

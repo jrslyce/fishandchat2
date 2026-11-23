@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
 /**
  * GLTFLoader picks ImageBitmapLoader over plain ImageLoader whenever `createImageBitmap`
@@ -74,6 +75,30 @@ export async function loadImportedAsset(url: string): Promise<ImportedAsset> {
       if (mesh.isMesh) {
         mesh.castShadow = true;
         mesh.receiveShadow = true;
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        const nextMats = mats.map((mat) => {
+          const std = mat as THREE.MeshStandardMaterial | undefined;
+          if (!std?.isMeshStandardMaterial) return mat;
+          const lambert = new THREE.MeshLambertMaterial({
+            color: std.color,
+            map: std.map,
+            emissive: std.emissive,
+            emissiveMap: std.emissiveMap,
+            emissiveIntensity: std.emissiveIntensity,
+            transparent: std.transparent,
+            opacity: std.opacity,
+            side: std.side,
+            alphaTest: std.alphaTest,
+            vertexColors: std.vertexColors,
+          });
+          std.normalMap?.dispose();
+          std.roughnessMap?.dispose();
+          std.metalnessMap?.dispose();
+          std.aoMap?.dispose();
+          std.dispose();
+          return lambert;
+        });
+        mesh.material = Array.isArray(mesh.material) ? nextMats : nextMats[0];
       }
     });
     const bounds = new THREE.Box3().setFromObject(root);
@@ -93,6 +118,28 @@ export async function loadImportedAsset(url: string): Promise<ImportedAsset> {
 export function normalizedClone(asset: ImportedAsset, targetHeight: number): THREE.Group {
   const clone = new THREE.Group();
   const inner = asset.root.clone(true);
+  const size = new THREE.Vector3();
+  asset.bounds.getSize(size);
+  const scale = size.y > 0 ? targetHeight / size.y : 1;
+
+  const center = new THREE.Vector3();
+  asset.bounds.getCenter(center);
+  inner.position.set(-center.x, -asset.bounds.min.y, -center.z);
+
+  const scaleWrapper = new THREE.Group();
+  scaleWrapper.scale.setScalar(scale);
+  scaleWrapper.add(inner);
+  clone.add(scaleWrapper);
+  return clone;
+}
+
+/**
+ * Returns a SkeletonUtils-cloned normalized group so rigged SkinnedMesh GLBs
+ * keep independent skeleton/bone transforms per instance.
+ */
+export function clonedSkinnedGroup(asset: ImportedAsset, targetHeight: number): THREE.Group {
+  const clone = new THREE.Group();
+  const inner = SkeletonUtils.clone(asset.root);
   const size = new THREE.Vector3();
   asset.bounds.getSize(size);
   const scale = size.y > 0 ? targetHeight / size.y : 1;

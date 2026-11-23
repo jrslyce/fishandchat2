@@ -31,19 +31,50 @@ const FRAGMENT_SHADER = /* glsl */ `
     float horizonAlpha = smoothstep(-9.5, -7.5, vWorldPos.z);
     if (horizonAlpha <= 0.001) discard;
 
-    // Gradient based on depth away from dock
+    // Poured resin depth gradient away from the foreground dock
     float depthMix = clamp((-vWorldPos.z + 0.5) / 6.0, 0.0, 1.0);
     vec3 base = mix(uShallow, uDeep, depthMix);
 
-    // Seamless world-space caustics
-    vec2 causticUv = vWorldPos.xz * 3.8 + vec2(uTime * 0.15, uTime * 0.1);
-    float causticA = sin(causticUv.x) * sin(causticUv.y);
-    vec2 causticUv2 = vWorldPos.xz * 3.0 - vec2(uTime * 0.1, uTime * 0.18);
+    // Dual-layer hand-painted turquoise/emerald underwater caustics
+    vec2 causticUv = vWorldPos.xz * 3.8 + vec2(uTime * 0.14, uTime * 0.09);
+    float causticA = sin(causticUv.x + sin(causticUv.y * 1.4)) * sin(causticUv.y + cos(causticUv.x * 1.3));
+    vec2 causticUv2 = vWorldPos.xz * 2.9 - vec2(uTime * 0.09, uTime * 0.16);
     float causticB = sin(causticUv2.x + 1.5) * sin(causticUv2.y + 1.5);
-    float caustic = smoothstep(0.85, 1.0, causticA * causticB * 0.5 + 0.5);
+    float caustic = smoothstep(0.72, 1.0, causticA * causticB * 0.5 + 0.5);
 
-    vec3 color = base + caustic * 0.12 + vWave * 0.6;
-    gl_FragColor = vec4(color, horizonAlpha * 0.94);
+    // Analytical glossy resin surface normal for Fresnel & golden sun sparkles
+    vec2 p = vWorldPos.xz;
+    float dDx = 0.065 * cos(p.x * 2.6 + uTime * 1.1) + 0.04 * cos(p.x * 4.2 - p.y * 2.4 + uTime * 1.6);
+    float dDz = -0.055 * sin(p.y * 2.4 - uTime * 0.9) - 0.035 * cos(p.x * 4.2 - p.y * 2.4 + uTime * 1.6);
+    vec3 N = normalize(vec3(-dDx, 1.0, -dDz));
+    vec3 V = normalize(vec3(0.0, 2.1, 3.4) - vWorldPos);
+    float f1 = 1.0 - clamp(dot(N, V), 0.0, 1.0);
+    float fresnel = f1 * f1 * f1;
+
+    vec3 sunDir = normalize(vec3(-0.5, 0.82, 0.5));
+    vec3 halfVec = normalize(sunDir + V);
+    float nh = max(dot(N, halfVec), 0.0);
+    float nh2 = nh * nh;
+    float nh4 = nh2 * nh2;
+    float nh8 = nh4 * nh4;
+    float nh16 = nh8 * nh8;
+    float spec = nh16 * nh16;
+    float shimmer = sin(p.x * 14.0 + uTime * 2.8) * cos(p.y * 13.0 - uTime * 2.2);
+    float sparkle = smoothstep(0.45, 0.95, shimmer) * nh16;
+
+    // Subtle poured-resin meniscus foam hugging the dock pilings (z in [0.1, 1.5])
+    float dockZMask = smoothstep(-0.25, 0.15, vWorldPos.z) * (1.0 - smoothstep(1.35, 1.7, vWorldPos.z));
+    float dockEdgeX = smoothstep(0.72, 1.08, abs(vWorldPos.x)) * (1.0 - smoothstep(1.18, 1.48, abs(vWorldPos.x)));
+    float pilingFoam = dockZMask * dockEdgeX * (0.5 + 0.5 * sin(vWorldPos.z * 7.5 + uTime * 1.8));
+
+    vec3 fresnelTint = mix(uShallow, vec3(0.9, 0.97, 0.94), 0.55);
+    vec3 color = base + caustic * 0.2 + vWave * 0.45;
+    color = mix(color, fresnelTint, fresnel * 0.34);
+    color += vec3(1.0, 0.94, 0.72) * (spec * 0.6 + sparkle * 0.68);
+    color += vec3(0.96, 0.98, 0.95) * pilingFoam * 0.22;
+
+    float alpha = clamp(horizonAlpha * (0.91 + fresnel * 0.06), 0.0, 0.97);
+    gl_FragColor = vec4(color, alpha);
   }
 `;
 
@@ -58,7 +89,7 @@ export class WaterSystem {
     // Plane of 16x18 centered at z=-3.0 covers z from +6.0 to -12.0.
     // In bobber view (target z=-1.35), water fills 100% of the circle with no horizon cutoff.
     // In dock view, water stretches out to the horizon (z=-8.5) with sky transparent above.
-    const geometry = new THREE.PlaneGeometry(16, 18, 64, 64);
+    const geometry = new THREE.PlaneGeometry(16, 18, 32, 36);
     this.material = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },

@@ -1,5 +1,10 @@
 import * as THREE from 'three';
 import type { ThemeId } from '../game/data';
+import {
+  createBalsaWoodTexture,
+  createCottonCloudTexture,
+  createFlockedFoliageTexture,
+} from './DioramaTextures';
 
 export interface ThemePalette {
   fog: string;
@@ -19,95 +24,141 @@ export interface ThemePalette {
 
 export const THEME_PALETTES: Record<ThemeId, ThemePalette> = {
   'forest-pond': {
-    fog: '#bfe3d8',
-    sky: '#dff0d8',
-    terrainTop: '#8fbf6a',
-    terrainMid: '#6f9e54',
-    terrainLow: '#4f7a3d',
-    waterShallow: '#8fd0c8',
-    waterDeep: '#2f6f8a',
-    wood: '#a5713f',
-    woodDark: '#6b4726',
-    foliage: '#4c8a4a',
-    foliageAccent: '#79b856',
-    accentGlow: '#ffd27a',
-    lanternGlow: '#ffb75e',
+    fog: '#d7ebe2',
+    sky: '#e8f4e3',
+    terrainTop: '#88bb61',
+    terrainMid: '#76583d',
+    terrainLow: '#4f3b2a',
+    waterShallow: '#68d4c5',
+    waterDeep: '#1d727c',
+    wood: '#b47b47',
+    woodDark: '#6c4727',
+    foliage: '#4f8c44',
+    foliageAccent: '#86c255',
+    accentGlow: '#ffd57a',
+    lanternGlow: '#ffbc57',
   },
   'ocean-trench': {
-    fog: '#0f3550',
-    sky: '#134863',
-    terrainTop: '#3a6f7a',
-    terrainMid: '#295462',
-    terrainLow: '#173948',
-    waterShallow: '#3fa9c9',
-    waterDeep: '#0a3550',
-    wood: '#5c6b6f',
-    woodDark: '#33403f',
-    foliage: '#2f8f8a',
-    foliageAccent: '#57c2b8',
+    fog: '#15425d',
+    sky: '#1d5573',
+    terrainTop: '#4a858d',
+    terrainMid: '#375866',
+    terrainLow: '#213a48',
+    waterShallow: '#3fb7d1',
+    waterDeep: '#0c3b59',
+    wood: '#786b5c',
+    woodDark: '#47443c',
+    foliage: '#2f8e88',
+    foliageAccent: '#62cdb8',
     accentGlow: '#7fe6ff',
-    lanternGlow: '#63d7ff',
+    lanternGlow: '#6be6ff',
   },
   'cosmic-lake': {
-    fog: '#1c1a3a',
-    sky: '#241f4a',
-    terrainTop: '#4a3f78',
-    terrainMid: '#352c5e',
-    terrainLow: '#211a3f',
-    waterShallow: '#7a6fd0',
-    waterDeep: '#221a55',
-    wood: '#5a4a7a',
-    woodDark: '#332750',
-    foliage: '#6f5cc4',
-    foliageAccent: '#a68ef0',
+    fog: '#231f47',
+    sky: '#2c2556',
+    terrainTop: '#584a8c',
+    terrainMid: '#3d3269',
+    terrainLow: '#241d46',
+    waterShallow: '#7e70d6',
+    waterDeep: '#241c5b',
+    wood: '#645088',
+    woodDark: '#3b2d5a',
+    foliage: '#6d59c0',
+    foliageAccent: '#ad92f2',
     accentGlow: '#ffe27a',
-    lanternGlow: '#c9a6ff',
+    lanternGlow: '#ffd978',
   },
 };
 
-/** Shared material roles, reused across the voxel kit rather than one-off colors per mesh. */
+/** Shared tactile Alt-A matte materials reused across the miniature diorama kit. */
 export class MaterialLibrary {
-  readonly terrainTop: THREE.MeshStandardMaterial;
-  readonly terrainMid: THREE.MeshStandardMaterial;
-  readonly terrainLow: THREE.MeshStandardMaterial;
-  readonly wood: THREE.MeshStandardMaterial;
-  readonly woodDark: THREE.MeshStandardMaterial;
-  readonly foliage: THREE.MeshStandardMaterial;
-  readonly foliageAccent: THREE.MeshStandardMaterial;
-  readonly stone: THREE.MeshStandardMaterial;
-  readonly emissiveSignal: THREE.MeshStandardMaterial;
-  readonly glass: THREE.MeshPhysicalMaterial;
-  readonly fabric: THREE.MeshStandardMaterial;
+  readonly terrainTop: THREE.MeshLambertMaterial;
+  readonly terrainMid: THREE.MeshLambertMaterial;
+  readonly terrainLow: THREE.MeshLambertMaterial;
+  readonly wood: THREE.MeshLambertMaterial;
+  readonly woodDark: THREE.MeshLambertMaterial;
+  readonly foliage: THREE.MeshLambertMaterial;
+  readonly foliageAccent: THREE.MeshLambertMaterial;
+  readonly stone: THREE.MeshLambertMaterial;
+  readonly emissiveSignal: THREE.MeshLambertMaterial;
+  readonly glass: THREE.MeshLambertMaterial;
+  readonly fabric: THREE.MeshLambertMaterial;
+  readonly rope: THREE.MeshLambertMaterial;
+  readonly cloud: THREE.MeshLambertMaterial;
+
+  private readonly ownedTextures: THREE.Texture[] = [];
 
   constructor(palette: ThemePalette) {
-    this.terrainTop = new THREE.MeshStandardMaterial({ color: palette.terrainTop, roughness: 0.85 });
-    this.terrainMid = new THREE.MeshStandardMaterial({ color: palette.terrainMid, roughness: 0.9 });
-    this.terrainLow = new THREE.MeshStandardMaterial({ color: palette.terrainLow, roughness: 0.95 });
-    this.wood = new THREE.MeshStandardMaterial({ color: palette.wood, roughness: 0.75 });
-    this.woodDark = new THREE.MeshStandardMaterial({ color: palette.woodDark, roughness: 0.8 });
-    this.foliage = new THREE.MeshStandardMaterial({ color: palette.foliage, roughness: 0.8 });
-    this.foliageAccent = new THREE.MeshStandardMaterial({ color: palette.foliageAccent, roughness: 0.7 });
-    this.stone = new THREE.MeshStandardMaterial({ color: '#8a8f93', roughness: 0.9 });
-    this.emissiveSignal = new THREE.MeshStandardMaterial({
+    const balsaMap = createBalsaWoodTexture(palette.wood, palette.woodDark);
+    const darkBalsaMap = createBalsaWoodTexture(palette.woodDark, '#2b1b10');
+    const flockMap = createFlockedFoliageTexture(palette.foliage, palette.foliageAccent);
+    const terrainFlockMap = createFlockedFoliageTexture(palette.terrainTop, palette.foliageAccent);
+    const cloudMap = createCottonCloudTexture();
+
+    this.ownedTextures.push(
+      balsaMap,
+      darkBalsaMap,
+      flockMap,
+      terrainFlockMap,
+      cloudMap,
+    );
+
+    this.terrainTop = new THREE.MeshLambertMaterial({
+      color: '#ffffff',
+      map: terrainFlockMap,
+    });
+    this.terrainMid = new THREE.MeshLambertMaterial({
+      color: palette.terrainMid,
+    });
+    this.terrainLow = new THREE.MeshLambertMaterial({
+      color: palette.terrainLow,
+    });
+    this.wood = new THREE.MeshLambertMaterial({
+      color: '#ffffff',
+      map: balsaMap,
+    });
+    this.woodDark = new THREE.MeshLambertMaterial({
+      color: '#ffffff',
+      map: darkBalsaMap,
+    });
+    this.foliage = new THREE.MeshLambertMaterial({
+      color: '#ffffff',
+      map: flockMap,
+    });
+    this.foliageAccent = new THREE.MeshLambertMaterial({
+      color: palette.foliageAccent,
+    });
+    this.stone = new THREE.MeshLambertMaterial({
+      color: '#8e8a80',
+    });
+    this.emissiveSignal = new THREE.MeshLambertMaterial({
       color: palette.lanternGlow,
       emissive: palette.lanternGlow,
-      // 1.6 plus the bloom pass blew this out into a flat, oversaturated
-      // blob that swallowed the box shape entirely.
-      emissiveIntensity: 0.8,
-      roughness: 0.4,
+      emissiveIntensity: 0.95,
     });
-    this.glass = new THREE.MeshPhysicalMaterial({
+    this.glass = new THREE.MeshLambertMaterial({
       color: '#ffffff',
       transparent: true,
-      opacity: 0.55,
-      roughness: 0.15,
-      transmission: 0.6,
-      thickness: 0.2,
+      opacity: 0.45,
     });
-    this.fabric = new THREE.MeshStandardMaterial({ color: '#e8d9b8', roughness: 0.9 });
+    this.fabric = new THREE.MeshLambertMaterial({
+      color: '#e8d9b8',
+    });
+    this.rope = new THREE.MeshLambertMaterial({
+      color: '#c9a672',
+    });
+    this.cloud = new THREE.MeshLambertMaterial({
+      color: '#ffffff',
+      map: cloudMap,
+      emissive: '#fff4df',
+      emissiveIntensity: 0.16,
+    });
   }
 
   dispose(): void {
+    for (const tex of this.ownedTextures) {
+      tex.dispose();
+    }
     for (const mat of [
       this.terrainTop,
       this.terrainMid,
@@ -120,6 +171,8 @@ export class MaterialLibrary {
       this.emissiveSignal,
       this.glass,
       this.fabric,
+      this.rope,
+      this.cloud,
     ]) {
       mat.dispose();
     }

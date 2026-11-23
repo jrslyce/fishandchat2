@@ -92,7 +92,7 @@ export class Game {
   private closetTurn = 0;
   private readonly closetPreviewSize = { width: 320, height: 400 };
   private readonly closetScene = new THREE.Scene();
-  private readonly closetCharacter = new PlayerCharacter();
+  private readonly closetCharacter = new PlayerCharacter(() => { this.closetPreviewDirty = true; });
   private readonly closetCamera = new THREE.PerspectiveCamera(32, this.closetPreviewSize.width / this.closetPreviewSize.height, 0.05, 20);
   private readonly closetRenderTarget = new THREE.WebGLRenderTarget(this.closetPreviewSize.width, this.closetPreviewSize.height);
   private readonly closetPixelBuffer = new Uint8Array(this.closetPreviewSize.width * this.closetPreviewSize.height * 4);
@@ -651,6 +651,7 @@ export class Game {
     this.vfx.update(delta);
     this.fishShadows.update(delta);
     this.livingWorld.update(delta);
+    this.animateDioramaProps();
     this.communitySystem.update(delta);
     this.narrativeSystem.update(delta);
     this.ui.update();
@@ -734,6 +735,27 @@ export class Game {
       imageData.data.set(this.closetPixelBuffer.subarray(srcStart, srcStart + rowBytes), y * rowBytes);
     }
     ctx.putImageData(imageData, 0, 0);
+  }
+
+  private animateDioramaProps(): void {
+    const t = this.elapsed;
+    for (const cloud of this.diorama.clouds) {
+      const baseX = (cloud.userData.baseX as number | undefined) ?? cloud.position.x;
+      const baseY = (cloud.userData.baseY as number | undefined) ?? cloud.position.y;
+      const phase = (cloud.userData.phase as number | undefined) ?? 0;
+      cloud.position.x = baseX + Math.sin(t * 0.14 + phase) * 0.18;
+      cloud.position.y = baseY + Math.cos(t * 0.22 + phase) * 0.04;
+    }
+    for (const pad of this.diorama.lilypads) {
+      const baseY = (pad.userData.baseY as number | undefined) ?? pad.position.y;
+      const phase = (pad.userData.phase as number | undefined) ?? 0;
+      pad.position.y = baseY + Math.sin(t * 1.45 + phase) * 0.014;
+      pad.rotation.z = Math.sin(t * 1.1 + phase) * 0.028;
+    }
+    const glow = this.diorama.root.getObjectByName('dockLanternGlow') as THREE.Mesh | undefined;
+    if (glow?.material) {
+      (glow.material as THREE.MeshBasicMaterial).opacity = 0.24 + Math.sin(t * 4.2) * 0.06 + Math.cos(t * 7.1) * 0.03;
+    }
   }
 
   private publishDiagnostics(): void {

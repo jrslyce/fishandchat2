@@ -1,6 +1,7 @@
 fish-and-chat/node_modules/
 fish-and-chat/dist/
 fish-and-chat/test-results/
+fish-and-chat/assets-src/
 .DS_Store
 *.local
 .claude/
