@@ -60,8 +60,10 @@ export class LivingWorldSystem {
   constructor(options: LivingWorldOptions) {
     this.scene = options.scene;
     this.events = options.events;
-    this.ambientWhalesEnabled = options.ambientWhalesEnabled ?? true;
-    this.ambientKrakenEnabled = options.ambientKrakenEnabled ?? true;
+    // Ambient whale/kraken breaches are disabled for now; manual triggers (debug menu,
+    // Whale Call Horn, boss raids) still work. Pass `true` to re-enable.
+    this.ambientWhalesEnabled = options.ambientWhalesEnabled ?? false;
+    this.ambientKrakenEnabled = options.ambientKrakenEnabled ?? false;
     this.currentTheme = options.initialTheme ?? 'forest-pond';
 
     this.root.name = 'LivingWorldRoot';
