@@ -56,6 +56,9 @@ export async function handleBitsEventSub(request: Request, env: Env): Promise<Re
     },
   };
   const outcome = await creditVerifiedTransaction(env, transaction);
-  if (outcome === 'invalid') return new Response('Unknown product', { status: 400 });
+  if (outcome === 'invalid') {
+    console.warn('[ebs] Ignoring unknown EventSub Bits product', event.product.sku);
+    return new Response(null, { status: 204 });
+  }
   return new Response(null, { status: 204 });
 }

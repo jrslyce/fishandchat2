@@ -175,6 +175,10 @@ export class Economy {
     this.saveManager.save(this.state);
   }
 
+  flushCloudSave(keepalive = false): Promise<void> {
+    return this.saveManager.flush(keepalive);
+  }
+
   /** The active balance belongs to the channel where these bars were earned. */
   setActiveChannel(channelId: string, name: string, avatarUrl: string | null): void {
     const wallets = this.state.channelCandyWallets ??= {};

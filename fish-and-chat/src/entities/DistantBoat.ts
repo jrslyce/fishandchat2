@@ -43,6 +43,8 @@ export class DistantBoat {
 
   private readonly materialsToDispose: THREE.Material[] = [];
   private readonly geometriesToDispose: THREE.BufferGeometry[] = [];
+  private readonly steamGeo: THREE.SphereGeometry;
+  private readonly wakeGeo: THREE.PlaneGeometry;
 
   private speed: number;
   private minX: number;
@@ -61,7 +63,11 @@ export class DistantBoat {
     this.baseZ = options.baseZ ?? -9.2;
 
     this.group.name = 'DistantBoat';
-    this.group.position.set(options.initialX ?? -10.0, this.baseY, this.baseZ);
+    this.group.position.set(options.initialX ?? -2.2, this.baseY, this.baseZ);
+
+    this.steamGeo = new THREE.SphereGeometry(0.04, 6, 6);
+    this.wakeGeo = new THREE.PlaneGeometry(0.24, 0.42);
+    this.geometriesToDispose.push(this.steamGeo, this.wakeGeo);
 
     this.group.add(this.boatMesh);
     this.group.add(this.particleRoot);
@@ -201,6 +207,7 @@ export class DistantBoat {
     const posX = this.group.position.x + this.speed * delta;
     if (posX > this.maxX) {
       this.group.position.x = this.minX;
+      this.clearParticles();
     } else {
       this.group.position.x = posX;
     }
@@ -212,18 +219,20 @@ export class DistantBoat {
     this.boatMesh.rotation.x = Math.sin(this.time * 2.0) * 0.03; // pitch
     this.boatMesh.rotation.z = Math.cos(this.time * 1.6) * 0.04; // roll
 
-    // 3. Smokestack steam emission
-    this.steamTimer -= delta;
-    if (this.steamTimer <= 0) {
-      this.steamTimer = 0.32 + Math.random() * 0.1;
-      this.emitSteam();
-    }
+    if (this.group.visible) {
+      // 3. Smokestack steam emission
+      this.steamTimer -= delta;
+      if (this.steamTimer <= 0) {
+        this.steamTimer = 0.32 + Math.random() * 0.1;
+        this.emitSteam();
+      }
 
-    // 4. Wake ripple emission
-    this.wakeTimer -= delta;
-    if (this.wakeTimer <= 0) {
-      this.wakeTimer = 0.45;
-      this.emitWake();
+      // 4. Wake ripple emission
+      this.wakeTimer -= delta;
+      if (this.wakeTimer <= 0) {
+        this.wakeTimer = 0.45;
+        this.emitWake();
+      }
     }
 
     // 5. Update active particles
@@ -231,17 +240,14 @@ export class DistantBoat {
   }
 
   private emitSteam(): void {
-    const geo = new THREE.SphereGeometry(0.04, 6, 6);
-    this.geometriesToDispose.push(geo);
     const mat = new THREE.MeshBasicMaterial({
       color: '#f8fafc',
       transparent: true,
       opacity: 0.55,
       depthWrite: false,
     });
-    this.materialsToDispose.push(mat);
 
-    const mesh = new THREE.Mesh(geo, mat);
+    const mesh = new THREE.Mesh(this.steamGeo, mat);
 
     // Smokestack local position: (-0.54, 0.75, 0)
     mesh.position.set(-0.54, 0.75, (Math.random() - 0.5) * 0.04);
@@ -265,8 +271,6 @@ export class DistantBoat {
 
   private emitWake(): void {
     // Low-poly flat wake foam patch
-    const geo = new THREE.PlaneGeometry(0.24, 0.42);
-    this.geometriesToDispose.push(geo);
     const mat = new THREE.MeshBasicMaterial({
       color: '#e2f2fc',
       transparent: true,
@@ -274,9 +278,8 @@ export class DistantBoat {
       side: THREE.DoubleSide,
       depthWrite: false,
     });
-    this.materialsToDispose.push(mat);
 
-    const mesh = new THREE.Mesh(geo, mat);
+    const mesh = new THREE.Mesh(this.wakeGeo, mat);
     mesh.rotation.x = -Math.PI / 2;
     // Positioned trailing the stern (-0.8 in X)
     mesh.position.set(-0.85, 0.005, (Math.random() - 0.5) * 0.1);
@@ -298,6 +301,7 @@ export class DistantBoat {
       p.life -= delta;
       if (p.life <= 0) {
         this.particleRoot.remove(p.mesh);
+        (p.mesh.material as THREE.Material).dispose();
         this.steamParticles.splice(i, 1);
         continue;
       }
@@ -314,6 +318,7 @@ export class DistantBoat {
       w.life -= delta;
       if (w.life <= 0) {
         this.particleRoot.remove(w.mesh);
+        (w.mesh.material as THREE.Material).dispose();
         this.wakeParticles.splice(i, 1);
         continue;
       }
@@ -326,16 +331,22 @@ export class DistantBoat {
     }
   }
 
-  dispose(): void {
+  private clearParticles(): void {
     for (const p of this.steamParticles) {
       this.particleRoot.remove(p.mesh);
+      (p.mesh.material as THREE.Material).dispose();
     }
     this.steamParticles.length = 0;
 
     for (const w of this.wakeParticles) {
       this.particleRoot.remove(w.mesh);
+      (w.mesh.material as THREE.Material).dispose();
     }
     this.wakeParticles.length = 0;
+  }
+
+  dispose(): void {
+    this.clearParticles();
 
     for (const geo of this.geometriesToDispose) {
       geo.dispose();

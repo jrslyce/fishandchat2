@@ -19,6 +19,7 @@ export class SaveManager<TState> {
     private readonly initialState?: TState,
     private readonly onSave?: (state: TState) => void,
     private readonly storageKey: string = SAVE_KEY,
+    private readonly onFlush?: (keepalive?: boolean) => Promise<void>,
   ) {}
 
   load(): TState {
@@ -27,7 +28,9 @@ export class SaveManager<TState> {
       const raw = window.localStorage.getItem(this.storageKey);
       if (!raw) return this.defaultState();
       const parsed = JSON.parse(raw) as SaveEnvelope<TState>;
-      if (parsed.version !== SAVE_VERSION) return this.defaultState();
+      if (!parsed || typeof parsed !== 'object' || parsed.version !== SAVE_VERSION || !parsed.state || typeof parsed.state !== 'object') {
+        return this.defaultState();
+      }
       return parsed.state;
     } catch {
       return this.defaultState();
@@ -40,11 +43,23 @@ export class SaveManager<TState> {
       savedAt: Date.now(),
       state,
     };
-    window.localStorage.setItem(this.storageKey, JSON.stringify(envelope));
+    try {
+      window.localStorage.setItem(this.storageKey, JSON.stringify(envelope));
+    } catch {
+      // Third-party iframes (Safari ITP / private mode) or full quotas may reject localStorage.
+    }
     this.onSave?.(state);
   }
 
   clear(): void {
-    window.localStorage.removeItem(this.storageKey);
+    try {
+      window.localStorage.removeItem(this.storageKey);
+    } catch {
+      // Ignore storage restrictions in embedded iframes.
+    }
+  }
+
+  flush(keepalive = false): Promise<void> {
+    return this.onFlush ? this.onFlush(keepalive) : Promise.resolve();
   }
 }

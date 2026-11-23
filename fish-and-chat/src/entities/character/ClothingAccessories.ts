@@ -299,6 +299,9 @@ export function buildClothingAccessories(itemId: string): Attachment[] {
     .filter(([, group]) => group.children.length > 0)
     .map(([anchor, group]) => {
       group.rotation.y = Math.PI; // authored details face the rig's front (+Z)
+      if (anchor === 'body') group.position.set(0, 6, 0);
+      else if (anchor === 'leftArm') group.position.set(1, 2, 0);
+      else if (anchor === 'rightArm') group.position.set(-1, 2, 0);
       return { anchor, group };
     });
 }

@@ -95,6 +95,7 @@ test('bot modules use coins and metal, with independent hoppers and selective au
 
 test('Candy shop discloses chosen box quantities and unavailable visuals', async ({ page }) => {
   await page.goto('/');
+  await page.locator('#title-start:not([disabled])').click();
   await page.locator('#hud-candy-pill').click();
   await expect(page.locator('input.box-quantity')).toHaveCount(6);
   await expect(page.locator('#modal-host')).toContainText('Choose exactly 20 items');

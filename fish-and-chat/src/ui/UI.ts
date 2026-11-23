@@ -232,7 +232,7 @@ export class UI {
       <div id="hud-bait-bar" aria-label="Bait Selection">
         ${BAIT_CATALOG.map((bait) => `
           <button class="hud-bait-btn unselected" id="hud-bait-btn-${bait.id}" data-bait-id="${bait.id}" type="button" title="${bait.name}" aria-label="${bait.name}">
-            <img class="hud-bait-icon" src="${SPRITE_MANIFEST[bait.id] ?? icon(ICON.bait, bait.name)}" alt="${bait.name}" />
+            <img class="hud-bait-icon" src="${SPRITE_MANIFEST[bait.id] ?? ICON.bait}" alt="${bait.name}" />
             <span class="hud-bait-qty" id="hud-bait-qty-${bait.id}">${bait.free ? '&infin;' : '0'}</span>
           </button>
         `).join('')}
@@ -1489,9 +1489,10 @@ export class UI {
 
       const titleButtons = unlockedTitles.map((title) => {
         const isEquipped = title === equippedTitle;
+        const safeTitle = escapeWalletText(title);
         return `
-          <button class="btn-small ${isEquipped ? 'btn-primary' : 'btn-secondary'}" data-action="equip-title" data-id="${title}">
-            ${isEquipped ? '✓ ' : ''}${title}
+          <button class="btn-small ${isEquipped ? 'btn-primary' : 'btn-secondary'}" data-action="equip-title" data-id="${safeTitle}">
+            ${isEquipped ? '✓ ' : ''}${safeTitle}
           </button>
         `;
       }).join('');
@@ -1950,12 +1951,13 @@ export class UI {
     const hopperCount = state.fishbotHopper.length;
     const trashCount = this.economy.trashBucket().length;
 
+    const safeBarnabyMsg = this.barnabyMessage ? escapeWalletText(this.barnabyMessage) : '';
     const barnabyHeader = `
       <div class="barnaby-header-slot">
         <button class="barnaby-portrait-btn" data-action="click-barnaby" type="button" aria-label="Barnaby">
           <img class="barnaby-portrait-small" src="./images/barnaby-portrait.png" alt="Barnaby" />
         </button>
-        ${this.barnabyMessage ? `<button class="barnaby-bubble" type="button" data-action="close-barnaby-message">${this.barnabyMessage.toLowerCase().includes('gulp') || this.barnabyMessage.toLowerCase().includes('glurp') ? this.barnabyMessage : `${this.barnabyMessage} <em>*gulp*</em>`}</button>` : ''}
+        ${this.barnabyMessage ? `<button class="barnaby-bubble" type="button" data-action="close-barnaby-message">${this.barnabyMessage.toLowerCase().includes('gulp') || this.barnabyMessage.toLowerCase().includes('glurp') ? safeBarnabyMsg : `${safeBarnabyMsg} <em>*gulp*</em>`}</button>` : ''}
       </div>
     `;
 
@@ -2460,7 +2462,7 @@ export class UI {
         </div>
         <div class="outfit-preset-controls">
           <span>Saved outfits</span>
-          ${this.economy.outfitPresets().map((preset, index) => `<div class="outfit-preset-slot"><strong>${preset?.name ?? `Outfit ${index + 1}`}</strong><button class="btn-small" data-action="save-outfit-preset" data-index="${index}" type="button">Save</button><button class="btn-small" data-action="wear-outfit-preset" data-index="${index}" type="button" ${preset ? '' : 'disabled'}>Wear</button></div>`).join('')}
+          ${this.economy.outfitPresets().map((preset, index) => `<div class="outfit-preset-slot"><strong>${escapeWalletText(preset?.name ?? `Outfit ${index + 1}`)}</strong><button class="btn-small" data-action="save-outfit-preset" data-index="${index}" type="button">Save</button><button class="btn-small" data-action="wear-outfit-preset" data-index="${index}" type="button" ${preset ? '' : 'disabled'}>Wear</button></div>`).join('')}
         </div>
       </div>
     `;
@@ -2661,7 +2663,7 @@ export class UI {
                 <div class="scrapbook-crest">
                   <span class="scrapbook-tail-emoji">🐟</span>
                 </div>
-                <div class="scrapbook-author-text">${userName}&apos;s</div>
+                <div class="scrapbook-author-text">${escapeWalletText(userName)}&apos;s</div>
                 <h2 class="scrapbook-title-text">Big Fish Tails</h2>
                 <div class="scrapbook-ornament-line"></div>
                 <p class="scrapbook-tagline">Official Log of Record Catches &amp; Pond Lore</p>
@@ -2749,7 +2751,7 @@ export class UI {
         <div class="scrapbook-open-header">
           <div class="scrapbook-open-title">
             <span class="scrapbook-tail-badge">📖</span>
-            <strong>${userName}&apos;s Big Fish Tails</strong>
+            <strong>${escapeWalletText(userName)}&apos;s Big Fish Tails</strong>
           </div>
           <button class="btn-small scrapbook-close-cover-btn" data-action="close-scrapbook" type="button">Close Book</button>
         </div>
@@ -2769,7 +2771,7 @@ export class UI {
       `
         <div class="settings-row">
           <label for="input-display-name">Display name</label>
-          <input type="text" id="input-display-name" maxlength="24" placeholder="${this.economy.displayName()}" value="${this.economy.snapshot.displayNameOverride ?? ''}" />
+          <input type="text" id="input-display-name" maxlength="24" placeholder="${escapeWalletText(this.economy.displayName())}" value="${escapeWalletText(this.economy.snapshot.displayNameOverride ?? '')}" />
         </div>
         <p class="modal-note">Your character is named after your Twitch display name automatically when playing as a Twitch extension. Set a name here to override it (handy for testing).</p>
         <div class="settings-row">
@@ -2813,7 +2815,10 @@ export class UI {
         return;
       }
       this.economy.resetSave();
-      window.location.reload();
+      void Promise.race([
+        this.economy.flushCloudSave(true),
+        new Promise<void>((resolve) => window.setTimeout(resolve, 1500)),
+      ]).finally(() => window.location.reload());
     });
     this.bindModalActions();
   }
@@ -2852,6 +2857,7 @@ export class UI {
           this.debugResetArmed = false;
         }
 
+        let renderedModal = false;
         if (action === 'close') this.closeModal();
         else if (action === 'debug-wipe-user-data') {
           if (!this.debugResetArmed) {
@@ -2861,16 +2867,21 @@ export class UI {
           }
           this.debugResetArmed = false;
           this.economy.wipeUserData();
-          window.location.reload();
+          void Promise.race([
+            this.economy.flushCloudSave(true),
+            new Promise<void>((resolve) => window.setTimeout(resolve, 1500)),
+          ]).finally(() => window.location.reload());
           return;
         }
         else if (action === 'open-scrapbook') {
           this.scrapbookOpened = true;
           this.renderCollection();
+          renderedModal = true;
         }
         else if (action === 'close-scrapbook') {
           this.scrapbookOpened = false;
           this.renderCollection();
+          renderedModal = true;
         }
         else if (action === 'equip-bait') this.craftingSystem.equipBait(id);
         else if (action === 'buy-bait') {
@@ -2882,7 +2893,11 @@ export class UI {
         }
         else if (action === 'buy-fishbot') this.craftingSystem.purchaseFishbot(id);
         else if (action === 'buy-bot-module') this.craftingSystem.purchaseBotModule(id, button.dataset.module as 'hopper' | 'unload' | 'salvage' | 'trophy');
-        else if (action === 'set-bot-mode') { this.economy.setBotMode(id, button.dataset.mode as 'balanced' | 'salvage' | 'trophy'); this.renderShop(); }
+        else if (action === 'set-bot-mode') {
+          this.economy.setBotMode(id, button.dataset.mode as 'balanced' | 'salvage' | 'trophy');
+          this.renderShop();
+          renderedModal = true;
+        }
         else if (action === 'claim-hopper') this.fishbotSystem.claimHopper();
         else if (action === 'sell') this.marketSystem.sell(index);
         else if (action === 'sell-all') this.marketSystem.sellAll();
@@ -2890,9 +2905,15 @@ export class UI {
           const unlocked = this.craftingSystem.purchaseSorterTray();
           if (unlocked) this.marketSystem.autoSellEligible();
           this.renderModal();
+          renderedModal = true;
           if (unlocked) this.showToast('Sorter Tray unlocked! Common and uncommon auto sell are on.');
         }
-        else if (action === 'toggle-auto-sell') { this.economy.toggleAutoSellRarity(id); this.marketSystem.autoSellEligible(); this.renderMarket(); }
+        else if (action === 'toggle-auto-sell') {
+          this.economy.toggleAutoSellRarity(id);
+          this.marketSystem.autoSellEligible();
+          this.renderMarket();
+          renderedModal = true;
+        }
         else if (action === 'buy-upgrade') this.craftingSystem.purchaseUpgrade(id as UpgradeId);
         else if (action === 'spend-skill-point') this.craftingSystem.spendSkillPoint(id as ArchetypeId);
         else if (action === 'recycle-all') this.craftingSystem.recycleAllTrash();
@@ -2911,18 +2932,19 @@ export class UI {
           this.closetReturnPreviewId = id || this.previewClothingId;
           this.returnToClosetFromCandy = true;
           this.toggleModal('candy');
+          renderedModal = true;
         }
         else if (action === 'return-to-closet') {
           const returnPreview = this.closetReturnPreviewId;
           this.returnToClosetFromCandy = false;
           this.closetReturnPreviewId = null;
-          this.toggleModal('closet');
           if (returnPreview) {
             this.previewClothingId = returnPreview;
             this.events.emit('clothingPreviewChanged', { id: returnPreview });
-            this.renderCloset();
           }
+          this.toggleModal('closet');
           this.modalHost.querySelector<HTMLElement>('.modal-body')?.scrollTo({ top: 0 });
+          renderedModal = true;
         }
         else if (action === 'equip-clothing' && slot) this.craftingSystem.equipClothing(slot, id);
         else if (action === 'unequip-clothing' && slot) this.craftingSystem.equipClothing(slot, null);
@@ -2932,15 +2954,18 @@ export class UI {
           this.events.emit('clothingPreviewChanged', { id });
           this.renderCloset();
           this.modalHost.querySelector<HTMLElement>('.modal-body')?.scrollTo({ top: 0 });
+          renderedModal = true;
         }
         else if (action === 'clear-clothing-preview') {
           this.previewClothingId = null;
           this.events.emit('clothingPreviewChanged', { id: null });
           this.renderCloset();
+          renderedModal = true;
         }
         else if (action === 'save-outfit-preset') {
           this.economy.saveOutfitPreset(index);
           this.renderCloset();
+          renderedModal = true;
           this.showToast('Outfit saved across channels.');
         }
         else if (action === 'wear-outfit-preset') {
@@ -2948,7 +2973,7 @@ export class UI {
           this.events.emit('clothingEquipped', { slot: 'hat', id: this.economy.snapshot.equippedClothing.hat });
           this.events.emit('baseToneChanged', { id: this.economy.snapshot.baseToneId });
           this.events.emit('cosmeticEquipped', { slot: 'rod', id: this.economy.cosmeticEquipped('rod') });
-          this.renderCloset();
+          renderedModal = true;
           this.showToast('Saved outfit equipped.');
         }
         else if (action === 'equip-cosmetic') {
@@ -2956,6 +2981,7 @@ export class UI {
           if (this.economy.setCosmeticEquipped(cosmeticSlot, id || null)) {
             this.events.emit('cosmeticEquipped', { slot: cosmeticSlot, id: id || null });
             this.renderCandyShop();
+            renderedModal = true;
           }
         }
         else if (action === 'filter-closet-slot') {
@@ -2963,26 +2989,31 @@ export class UI {
           this.activeClosetSlotFilter = targetSlot;
           this.renderCloset();
           this.scrollClosetToCollection();
+          renderedModal = true;
         }
         else if (action === 'search-closet') {
           this.closetSearch = (this.modalHost.querySelector<HTMLInputElement>('#closet-search')?.value ?? '').trim();
           this.renderCloset();
           this.scrollClosetToCollection();
+          renderedModal = true;
         }
         else if (action === 'clear-closet-search') {
           this.closetSearch = '';
           this.renderCloset();
           this.scrollClosetToCollection();
+          renderedModal = true;
         }
         else if (action === 'filter-closet-browse') {
           this.closetBrowseFilter = id as typeof this.closetBrowseFilter;
           this.renderCloset();
           this.scrollClosetToCollection();
+          renderedModal = true;
         }
         else if (action === 'sort-closet') {
           this.closetSort = this.closetSort === 'catalog' ? 'name' : 'catalog';
           this.renderCloset();
           this.scrollClosetToCollection();
+          renderedModal = true;
         }
         else if (action === 'reset-closet-browse') {
           this.closetSearch = '';
@@ -2990,6 +3021,7 @@ export class UI {
           this.activeClosetSlotFilter = 'all';
           this.renderCloset();
           this.scrollClosetToCollection();
+          renderedModal = true;
         }
         else if (action === 'style-shuffle') {
           const slots: ClothingSlot[] = ['hat', 'jacket', 'pants', 'shoes'];
@@ -3003,26 +3035,30 @@ export class UI {
           }
           this.economy.persist();
           this.events.emit('clothingEquipped', { slot: 'hat', id: this.economy.snapshot.equippedClothing.hat });
-          this.renderCloset();
+          renderedModal = true;
           this.audio.getSynthesizer().playLevelUp();
           this.showToast('🎲 Style Shuffled! Looking sharp!');
         }
         else if (action === 'switch-quest-tab') {
           this.activeQuestTab = id as 'story' | 'daily' | 'milestones' | 'perks' | 'community' | 'lore';
           this.renderQuests();
+          renderedModal = true;
         }
         else if (action === 'read-bottle') {
           this.activeReadingBottleId = id;
           this.renderQuests();
+          renderedModal = true;
         }
         else if (action === 'close-bottle-reader') {
           this.activeReadingBottleId = null;
           this.renderQuests();
+          renderedModal = true;
         }
         else if (action === 'buy-community-cheer') {
           if (this.communitySystem?.contributeCheer(id)) {
             this.showToast('Boost added to raid! ⚓🎉');
             this.renderQuests();
+            renderedModal = true;
           } else {
             this.showToast('Need more Candy Bars! Visit the Candy Shop 🍫');
           }
@@ -3030,6 +3066,7 @@ export class UI {
         else if (action === 'spawn-next-raid') {
           this.communitySystem?.spawnNextRaid();
           this.renderQuests();
+          renderedModal = true;
         }
         else if (action === 'debug-discover-bottle') {
           const unowned = LORE_BOTTLES.find(b => !this.economy.hasDiscoveredBottle(b.id));
@@ -3107,10 +3144,8 @@ export class UI {
             const goal = this.communitySystem.getActiveGoal();
             if (goal) {
               const boost = goal.targetValue - goal.currentValue;
-              goal.currentValue += Math.max(1, boost);
-              this.communitySystem.update(0);
+              this.communitySystem.addProgress(Math.max(1, boost), 'Debug');
               this.showToast('Community Raid completed! ⚔️');
-              this.renderQuests();
             }
           }
         }
@@ -3171,7 +3206,7 @@ export class UI {
         }
 
         this.renderHud();
-        if (action !== 'close') this.renderModal();
+        if (action !== 'close' && !renderedModal) this.renderModal();
       });
     });
   }

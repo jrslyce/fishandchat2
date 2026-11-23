@@ -1,3 +1,4 @@
+import type { UpgradeId } from '../game/data';
 import type { EventBus } from '../core/EventBus';
 import type { Economy } from '../game/Economy';
 import type { GameEventMap } from '../game/events';
@@ -9,7 +10,6 @@ import {
   type Milestone,
   type StoryChapter,
 } from '../game/StoryGoals';
-import { checkBottleDiscovery } from '../game/LoreBottles';
 import { getCurioRelic } from '../game/RelicSystem';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -60,12 +60,8 @@ export class QuestSystem {
       this.onWhaleJump();
     });
 
-    this.events.on('krakenBreach', () => {
-      this.checkBottleDiscoveryTrigger({ type: 'kraken' });
-    });
-
-    this.events.on('weatherChanged', ({ weather }) => {
-      this.checkBottleDiscoveryTrigger({ type: 'weather', weather });
+    this.events.on('loreBottleDiscovered', ({ bottle, bottleId }) => {
+      this.unlockRelicForBottle(bottle?.id ?? bottleId);
     });
 
     this.events.on('marketSold', ({ value }) => {
@@ -133,7 +129,25 @@ export class QuestSystem {
   }
 
   public getChapterProgress(objectiveId: string): number {
-    return this.economy.snapshot.storyProgress[objectiveId] ?? 0;
+    const stored = this.economy.snapshot.storyProgress[objectiveId] ?? 0;
+    for (const chapter of STORY_CHAPTERS) {
+      const obj = chapter.objectives.find((item) => item.id === objectiveId);
+      if (!obj) continue;
+      if (obj.type === 'reach_level') {
+        return Math.max(stored, this.economy.snapshot.level);
+      }
+      if (obj.type === 'craft_upgrade') {
+        if (obj.id === 'ch2_craft_rod') {
+          const crafted = this.economy.upgradeTier('carbon-rod') > 0 || this.economy.upgradeTier('braided-line') > 0;
+          return Math.max(stored, crafted ? 1 : 0);
+        }
+        if (obj.param) {
+          return Math.max(stored, this.economy.upgradeTier(obj.param as UpgradeId) > 0 ? 1 : 0);
+        }
+      }
+      break;
+    }
+    return stored;
   }
 
   public isChapterCompleted(chapterId: string): boolean {
@@ -187,6 +201,7 @@ export class QuestSystem {
     if (q.reward.candyBars) {
       this.economy.addCandyBars(q.reward.candyBars);
     }
+    this.economy.persist();
     this.events.emit('questCompleted', {
       questId: q.id,
       title: q.title,
@@ -233,6 +248,11 @@ export class QuestSystem {
     if (!m) return false;
 
     this.economy.claimMilestone(m);
+    this.events.emit('milestoneClaimed', {
+      milestoneId: m.id,
+      name: m.name,
+      reward: this.economy.usesServerCandy ? { ...m.reward, candyBars: 0 } : m.reward,
+    });
     return true;
   }
 
@@ -241,7 +261,8 @@ export class QuestSystem {
   private onCatch(result: { catchId: string; rarity: string; isTrash: boolean; weightKg: number }): void {
     if (!result.isTrash) {
       this.economy.incrementTotalFishCaught(1, result.weightKg);
-      this.economy.incrementCatchStreak();
+      const streak = this.economy.incrementCatchStreak();
+      this.events.emit('streakChanged', { streak, bestStreak: this.economy.bestCatchStreak() });
 
       // Check current weather
       const currentWeather = this.economy.currentWeather?.() ?? 'clear';
@@ -254,13 +275,12 @@ export class QuestSystem {
       this.updateChapterObjective('catch_rarity', 1, result.rarity);
       this.updateDailyProgress('catch_total', 1);
       this.updateDailyProgress('catch_weight', result.weightKg);
-
-      this.checkBottleDiscoveryTrigger({ type: 'catch', rarity: result.rarity });
     }
   }
 
   private onMiss(): void {
     this.economy.resetCatchStreak();
+    this.events.emit('streakChanged', { streak: 0, bestStreak: this.economy.bestCatchStreak() });
   }
 
   private onPerfectCast(): void {
@@ -281,33 +301,18 @@ export class QuestSystem {
 
   private onLevelUp(newLevel: number): void {
     this.updateChapterObjective('reach_level', newLevel, undefined, true);
-    this.checkBottleDiscoveryTrigger({ type: 'level', level: newLevel });
   }
 
   private onWhaleJump(): void {
     this.updateChapterObjective('whale_jump', 1);
-    this.checkBottleDiscoveryTrigger({ type: 'whale' });
   }
 
   private onMarketSold(value: number): void {
     this.updateDailyProgress('sell_value', value);
   }
 
-  private checkBottleDiscoveryTrigger(trigger: {
-    type: 'catch' | 'weather' | 'whale' | 'kraken' | 'level';
-    rarity?: string;
-    weather?: string;
-    level?: number;
-  }): void {
-    const owned = this.economy.discoveredBottleIds();
-    const bottle = checkBottleDiscovery(trigger, owned);
-    if (!bottle) return;
-
-    const ok = this.economy.discoverBottle(bottle.id);
-    if (!ok) return;
-
-    this.events.emit('loreBottleDiscovered', { bottle });
-    this.events.emit('toast', { message: `📜 Bottle Discovered: "${bottle.title}"!` });
+  private unlockRelicForBottle(bottleId?: string): void {
+    if (!bottleId) return;
 
     // Curio Relic discovery association
     const BOTTLE_RELIC_MAP: Record<string, string> = {
@@ -321,7 +326,7 @@ export class QuestSystem {
       bottle_cosmic_meteor: 'relic_starfall_shard',
     };
 
-    const relicId = BOTTLE_RELIC_MAP[bottle.id];
+    const relicId = BOTTLE_RELIC_MAP[bottleId];
     if (relicId && !this.economy.hasDiscoveredRelic(relicId)) {
       this.economy.discoverRelic(relicId);
       const relic = getCurioRelic(relicId);
@@ -343,6 +348,8 @@ export class QuestSystem {
           if (type === 'catch_rarity') {
             const tiers = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
             if (tiers.indexOf(param) < tiers.indexOf(obj.param)) continue;
+          } else if (obj.id === 'ch2_craft_rod') {
+            if (param !== 'carbon-rod' && param !== 'braided-line') continue;
           } else if (param !== obj.param) {
             continue;
           }

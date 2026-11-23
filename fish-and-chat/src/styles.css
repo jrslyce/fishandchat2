@@ -3,15 +3,19 @@
   --paper-dark: #efe4cc;
   --ink: #2c3a30;
   --ink-soft: rgba(44, 58, 48, 0.68);
+  --ink-light: var(--ink-soft);
+  --border-soft: rgba(44, 58, 48, 0.16);
   --wood: #a5713f;
   --wood-dark: #6b4726;
   --accent: #f2a65a;
   --accent-dark: #d9863f;
   --danger: #d94f35;
   --good: #6fae4e;
+  --success: var(--good);
   --radius-lg: 20px;
   --radius-md: 14px;
   --radius-sm: 9px;
+  --shadow-sm: 0 2px 6px rgba(24, 34, 28, 0.14);
   --shadow-panel: 0 10px 28px rgba(44, 30, 10, 0.22);
 
   color: var(--ink);
@@ -288,25 +292,28 @@ body {
 
 #hud-top {
   position: absolute;
-  top: max(12px, env(safe-area-inset-top));
-  left: max(12px, env(safe-area-inset-left));
-  right: max(12px, env(safe-area-inset-right));
+  top: max(8px, env(safe-area-inset-top));
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 5px 6px;
   pointer-events: auto;
 }
 
 #hud-level-block {
+  order: 1;
+  margin-right: auto;
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding: 6px 10px;
+  padding: 4px 8px;
   border-radius: var(--radius-md);
   background: var(--paper);
   box-shadow: var(--shadow-panel);
-  min-width: 104px;
+  min-width: 78px;
 }
 
 #hud-level {
@@ -331,27 +338,41 @@ body {
 }
 
 #hud-pills {
-  display: flex;
-  gap: 8px;
+  display: contents;
+}
+
+#hud-coins-pill {
+  order: 2;
+}
+
+#hud-candy-pill {
+  order: 3;
+}
+
+#hud-weather-pill,
+#hud-streak-pill,
+#hud-community-pill,
+#hud-lucky-ducky-pill {
+  order: 4;
 }
 
 .hud-pill {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 9px;
+  gap: 4px;
+  padding: 3px 7px;
   border-radius: 999px;
   background: var(--paper);
   box-shadow: var(--shadow-panel);
   font-weight: 800;
-  font-size: 0.74rem;
+  font-size: 0.68rem;
   white-space: nowrap;
   border: none;
   color: var(--ink);
 }
 
 .hud-pill-button {
-  min-height: 36px;
+  min-height: 28px;
 }
 
 #hud-lucky-ducky-pill {

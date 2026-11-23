@@ -10,7 +10,9 @@ test('Sorter Tray unlock updates the open market immediately', async ({ page }) 
     state.materials.metal = 4;
     return state;
   });
-  await page.evaluate((state) => {
+  await page.addInitScript((state) => {
+    if (sessionStorage.getItem('__sorter_tray_seeded')) return;
+    sessionStorage.setItem('__sorter_tray_seeded', '1');
     localStorage.setItem('fish-and-chat-save-v1', JSON.stringify({ version: 3, savedAt: Date.now(), state }));
   }, save);
   await page.reload();

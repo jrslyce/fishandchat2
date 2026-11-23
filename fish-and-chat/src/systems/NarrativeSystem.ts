@@ -63,6 +63,7 @@ export class NarrativeSystem {
   private bubbleTextElement: HTMLElement | null = null;
   private bubbleMoodBadgeElement: HTMLElement | null = null;
   private speechState: SpeechState | null = null;
+  private queuedDialogue: { text: string; durationSeconds: number; mood: DialogueMood } | null = null;
   private soundBlipCooldown = 0;
 
   // 3D bottle state
@@ -584,11 +585,16 @@ export class NarrativeSystem {
     const candidate = checkBottleDiscovery(trigger, owned);
     if (candidate) {
       this.spawnWaterBottle(candidate.id);
-      this.showDialogue(
-        'Look there! Something bobbing in the shallows near the shore... looks like an old bottle!',
-        7.5,
-        'mysterious',
-      );
+      const hintText = 'Look there! Something bobbing in the shallows near the shore... looks like an old bottle!';
+      if (this.speechState) {
+        this.queuedDialogue = {
+          text: hintText,
+          durationSeconds: 7.5,
+          mood: 'mysterious',
+        };
+      } else {
+        this.showDialogue(hintText, 7.5, 'mysterious');
+      }
     }
   }
 
@@ -827,7 +833,12 @@ export class NarrativeSystem {
           this.dismissDialogue();
         }
       }
+    }
 
+    if (!this.speechState && this.queuedDialogue) {
+      const next = this.queuedDialogue;
+      this.queuedDialogue = null;
+      this.showDialogue(next.text, next.durationSeconds, next.mood);
     }
   }
 
@@ -844,6 +855,7 @@ export class NarrativeSystem {
     this.eventUnsubscribers.length = 0;
 
     this.removeWaterBottle();
+    this.queuedDialogue = null;
     this.dismissDialogue();
 
     if (this.bubbleElement && this.bubbleElement.parentElement) {

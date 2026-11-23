@@ -32,6 +32,7 @@ export class FlockOfBirds {
 
   private flightTime = 0;
   private readonly flightSpeed: number;
+  private readonly center: THREE.Vector3;
 
   // Swooping state machine
   private swoopTimer = 18; // interval between swoops
@@ -45,7 +46,15 @@ export class FlockOfBirds {
 
   constructor(options: FlockOfBirdsOptions = {}) {
     const count = THREE.MathUtils.clamp(options.birdCount ?? 4, 3, 5);
-    this.flightSpeed = options.flightSpeed ?? 0.32;
+    this.flightSpeed = Math.max(0.05, options.flightSpeed ?? 0.55);
+    this.center = options.center?.clone() ?? new THREE.Vector3(0, 1.05, -7.2);
+
+    this.leaderPos.set(
+      this.center.x,
+      this.center.y,
+      this.center.z + 1.6,
+    );
+    this.prevLeaderPos.copy(this.leaderPos);
 
     this.group.name = 'FlockOfBirds';
 
@@ -195,9 +204,9 @@ export class FlockOfBirds {
       if (this.swoopProgress >= 1.0) {
         this.isSwooping = false;
       } else {
-        // Bell curve dip down to water surface (y offset down by up to ~2.6 units)
+        // Bell curve dip down toward water surface without sinking below it
         const dip = Math.sin(this.swoopProgress * Math.PI);
-        swoopYOffset = -dip * 2.5;
+        swoopYOffset = -dip * 0.9;
 
         // Glides on way down, flaps briskly on climb
         if (this.swoopProgress < 0.45) {
@@ -206,13 +215,13 @@ export class FlockOfBirds {
       }
     }
 
-    // 2. Leader parametric trajectory (wide smooth figure-8 loop over the lake)
+    // 2. Leader parametric trajectory (wide smooth figure-8 loop inside panel frustum)
     const t = this.flightTime;
     this.prevLeaderPos.copy(this.leaderPos);
 
-    this.leaderPos.x = Math.sin(t * 1.0) * 6.8 + Math.sin(t * 2.2) * 1.4;
-    this.leaderPos.z = -5.8 + Math.cos(t * 1.0) * 3.8;
-    this.leaderPos.y = 3.2 + Math.sin(t * 1.6) * 0.7 + swoopYOffset;
+    this.leaderPos.x = this.center.x + Math.sin(t * 1.0) * 2.1 + Math.sin(t * 2.2) * 0.45;
+    this.leaderPos.z = this.center.z + Math.cos(t * 1.0) * 1.6;
+    this.leaderPos.y = this.center.y + Math.sin(t * 1.6) * 0.28 + swoopYOffset;
 
     this.leaderVelocity.subVectors(this.leaderPos, this.prevLeaderPos);
     if (delta > 0) {
@@ -250,9 +259,9 @@ export class FlockOfBirds {
       const lookTarget = bird.currentPos.clone().add(forward);
       bird.root.lookAt(lookTarget);
 
-      // Banking roll into curves
+      // Banking roll into curves (local Z so lookAt yaw/pitch stays intact)
       const curvature = Math.sin(t * 1.0);
-      bird.root.rotation.z = -curvature * 0.45;
+      bird.root.rotateZ(-curvature * 0.45);
 
       // Wing flapping animation
       const flap = Math.sin((this.flightTime / this.flightSpeed) * flapSpeed + bird.flapPhase) * flapAmp;

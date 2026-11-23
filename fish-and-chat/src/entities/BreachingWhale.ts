@@ -42,6 +42,8 @@ export class BreachingWhale {
 
   private readonly materialsToDispose: THREE.Material[] = [];
   private readonly geometriesToDispose: THREE.BufferGeometry[] = [];
+  private readonly dropletGeo: THREE.BoxGeometry;
+  private readonly ringGeo: THREE.RingGeometry;
 
   private readonly waterY: number;
   private breachCallback?: (position: THREE.Vector3) => void;
@@ -67,6 +69,11 @@ export class BreachingWhale {
 
     this.group.name = 'BreachingWhale';
     this.group.visible = false;
+    this.whaleMesh.rotation.order = 'YXZ';
+
+    this.dropletGeo = new THREE.BoxGeometry(0.08, 0.08, 0.08);
+    this.ringGeo = new THREE.RingGeometry(0.3, 0.45, 24);
+    this.geometriesToDispose.push(this.dropletGeo, this.ringGeo);
 
     this.group.add(this.whaleMesh);
     this.group.add(this.splashRoot);
@@ -226,16 +233,17 @@ export class BreachingWhale {
   triggerBreach(targetPos?: THREE.Vector3): void {
     if (this.breaching) return;
 
+    // Choose a random horizontal coordinate framed cleanly inside the 318x496 viewport
     const center = targetPos?.clone() ?? new THREE.Vector3(
-      (Math.random() - 0.5) * 5.0,
+      (Math.random() - 0.5) * 2.2,
       this.waterY,
       -7.5 - Math.random() * 1.5,
     );
 
-    // Leap travels horizontally along X while arching high into the sky
+    // Leap travels horizontally along X while arching inside the upper frustum
     const travelDir = Math.random() > 0.5 ? 1 : -1;
-    const horizontalDistance = 3.2;
-    const peakHeight = 2.7 + Math.random() * 0.5;
+    const horizontalDistance = 2.2;
+    const peakHeight = 1.66 + Math.random() * 0.08;
 
     this.startPos.set(center.x - travelDir * horizontalDistance * 0.5, this.waterY - 1.8, center.z);
     this.apexPos.set(center.x, this.waterY + peakHeight, center.z);
@@ -260,7 +268,12 @@ export class BreachingWhale {
     // Always update any lingering splash particles even when whale has submerged
     this.updateParticles(delta);
 
-    if (!this.breaching) return;
+    if (!this.breaching) {
+      if (this.droplets.length === 0 && this.ripples.length === 0) {
+        this.group.visible = false;
+      }
+      return;
+    }
 
     this.progress += delta / this.duration;
 
@@ -286,7 +299,7 @@ export class BreachingWhale {
 
     this.whaleMesh.position.copy(this.currentPos);
 
-    // Orientation / Rotations along breach trajectory:
+    // Orientation / Rotations along breach trajectory (YXZ order):
     // Velocity vector direction
     const travelDir = Math.sign(this.endPos.x - this.startPos.x) || 1;
     const dy = this.currentPos.y - this.prevPos.y;
@@ -294,12 +307,12 @@ export class BreachingWhale {
 
     // Pitch: points steep up on ascent, level at peak, steep down on descent
     const pitch = Math.atan2(dy, Math.abs(dx)) * 0.9;
-    this.whaleMesh.rotation.z = travelDir > 0 ? pitch : -pitch;
     this.whaleMesh.rotation.y = travelDir > 0 ? Math.PI / 2 : -Math.PI / 2;
+    this.whaleMesh.rotation.x = -pitch;
 
-    // Humpback barrel roll during peak: exposes white belly toward camera (+Z)
+    // Humpback barrel roll around body forward axis (+Z): exposes white belly toward camera
     const roll = Math.sin(t * Math.PI) * 0.85;
-    this.whaleMesh.rotation.x = roll;
+    this.whaleMesh.rotation.z = travelDir > 0 ? roll : -roll;
 
     // Articulated tail flapping / flexion
     this.tailGroup.rotation.x = Math.sin(t * Math.PI * 3.5) * 0.45;
@@ -324,19 +337,14 @@ export class BreachingWhale {
   }
 
   private spawnSplashSpray(worldX: number, worldZ: number, count: number, force: number): void {
-    const geo = new THREE.BoxGeometry(0.08, 0.08, 0.08);
-    this.geometriesToDispose.push(geo);
-
-    const mat = new THREE.MeshBasicMaterial({
-      color: '#e0f2fe',
-      transparent: true,
-      opacity: 0.85,
-      depthWrite: false,
-    });
-    this.materialsToDispose.push(mat);
-
     for (let i = 0; i < count; i++) {
-      const mesh = new THREE.Mesh(geo, mat);
+      const mat = new THREE.MeshBasicMaterial({
+        color: '#e0f2fe',
+        transparent: true,
+        opacity: 0.85,
+        depthWrite: false,
+      });
+      const mesh = new THREE.Mesh(this.dropletGeo, mat);
       mesh.position.set(worldX + (Math.random() - 0.5) * 0.5, this.waterY + 0.05, worldZ + (Math.random() - 0.5) * 0.5);
       this.splashRoot.add(mesh);
 
@@ -358,8 +366,6 @@ export class BreachingWhale {
     }
 
     // Expanding foam ring
-    const ringGeo = new THREE.RingGeometry(0.3, 0.45, 24);
-    this.geometriesToDispose.push(ringGeo);
     const ringMat = new THREE.MeshBasicMaterial({
       color: '#dbeafe',
       transparent: true,
@@ -367,9 +373,8 @@ export class BreachingWhale {
       side: THREE.DoubleSide,
       depthWrite: false,
     });
-    this.materialsToDispose.push(ringMat);
 
-    const ring = new THREE.Mesh(ringGeo, ringMat);
+    const ring = new THREE.Mesh(this.ringGeo, ringMat);
     ring.rotation.x = -Math.PI / 2;
     ring.position.set(worldX, this.waterY + 0.01, worldZ);
     this.splashRoot.add(ring);
@@ -390,6 +395,7 @@ export class BreachingWhale {
       d.life -= delta;
       if (d.life <= 0) {
         this.splashRoot.remove(d.mesh);
+        (d.mesh.material as THREE.Material).dispose();
         this.droplets.splice(i, 1);
         continue;
       }
@@ -400,6 +406,7 @@ export class BreachingWhale {
       // Hit water
       if (d.mesh.position.y <= this.waterY && d.velocity.y < 0) {
         this.splashRoot.remove(d.mesh);
+        (d.mesh.material as THREE.Material).dispose();
         this.droplets.splice(i, 1);
         continue;
       }
@@ -415,6 +422,7 @@ export class BreachingWhale {
       r.life -= delta;
       if (r.life <= 0) {
         this.splashRoot.remove(r.mesh);
+        (r.mesh.material as THREE.Material).dispose();
         this.ripples.splice(i, 1);
         continue;
       }
@@ -429,11 +437,13 @@ export class BreachingWhale {
   dispose(): void {
     for (const d of this.droplets) {
       this.splashRoot.remove(d.mesh);
+      (d.mesh.material as THREE.Material).dispose();
     }
     this.droplets.length = 0;
 
     for (const r of this.ripples) {
       this.splashRoot.remove(r.mesh);
+      (r.mesh.material as THREE.Material).dispose();
     }
     this.ripples.length = 0;
 

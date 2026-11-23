@@ -169,13 +169,13 @@ test.describe('Story and Goals System & Stream Engagement', () => {
     await expect(modalHost).toBeVisible();
     await expect(modalHost.locator('.modal-header h3')).toHaveText('Candy Bar Shop');
 
-    // Check stream event section
-    const streamSection = modalHost.locator('h4', { hasText: 'Stream-Wide Events' });
+    // Check pond event section
+    const streamSection = modalHost.locator('h4', { hasText: 'Pond Events' });
     await expect(streamSection).toBeVisible();
 
     const rainbowBtn = modalHost.locator('button[data-id="rainbow-totem"]');
     await expect(rainbowBtn).toBeVisible();
-    await expect(rainbowBtn).toContainText('Cheer Stream (60 🍫)');
+    await expect(rainbowBtn).toContainText('Activate (60 🍫)');
 
     // Click Rainbow Totem
     await rainbowBtn.click();
@@ -224,21 +224,22 @@ test.describe('Story and Goals System & Stream Engagement', () => {
     await expect(modalHost.locator('.modal-header h3')).toHaveText('Closet');
 
     // Find Captain's Tricorn or Deep Diver Helmet in hat section
-    const captainHatRow = modalHost.locator('li.row', { hasText: "Captain's Tricorn" });
+    const captainHatRow = modalHost.locator('li.closet-card', { hasText: "Captain's Tricorn" });
     await expect(captainHatRow).toBeVisible();
 
-    // Buy it
+    // Buy it (auto-equips in Closet)
     const buyBtn = captainHatRow.locator('button[data-action="buy-clothing"]');
     await buyBtn.click();
 
-    // Now it should show Equip
+    // Now it should show Remove (unequip), then toggle off & back on
+    const unequipBtn = captainHatRow.locator('button[data-action="unequip-clothing"]');
+    await expect(unequipBtn).toBeVisible();
+    await unequipBtn.click();
+
     const equipBtn = captainHatRow.locator('button[data-action="equip-clothing"]');
     await expect(equipBtn).toBeVisible();
     await equipBtn.click();
-
-    // Now it should show Unequip
-    const unequipBtn = captainHatRow.locator('button[data-action="unequip-clothing"]');
-    await expect(unequipBtn).toBeVisible();
+    await expect(captainHatRow.locator('button[data-action="unequip-clothing"]')).toBeVisible();
 
     // Verify character skin updated
     const equippedHat = await page.evaluate(() => {
@@ -258,9 +259,9 @@ test.describe('Story and Goals System & Stream Engagement', () => {
     await hatFilterPill.click();
 
     // Verify only hat rows are displayed (e.g. Red Beanie, Straw Hat, Cowboy Hat, Captain's Tricorn, Cosmic Wizard Hat)
-    await expect(modalHost.locator('li.row', { hasText: 'Cosmic Wizard Hat' })).toBeVisible();
-    await expect(modalHost.locator('li.row', { hasText: 'Bear Ear Beanie' })).toBeVisible();
-    await expect(modalHost.locator('li.row', { hasText: 'Flannel Jacket' })).toBeHidden();
+    await expect(modalHost.locator('li.closet-card', { hasText: 'Cosmic Wizard Hat' })).toBeVisible();
+    await expect(modalHost.locator('li.closet-card', { hasText: 'Bear Ear Beanie' })).toBeVisible();
+    await expect(modalHost.locator('li.closet-card', { hasText: 'Flannel Jacket' })).toBeHidden();
 
     // Test Style Shuffle button
     const shuffleBtn = modalHost.locator('button[data-action="style-shuffle"]');

@@ -46,6 +46,8 @@ export class KrakenTentacle {
 
   private readonly materialsToDispose: THREE.Material[] = [];
   private readonly geometriesToDispose: THREE.BufferGeometry[] = [];
+  private readonly dropletGeo: THREE.BoxGeometry;
+  private readonly ringGeo: THREE.RingGeometry;
 
   private readonly waterY: number;
   private breachCallback?: (position: THREE.Vector3) => void;
@@ -69,6 +71,10 @@ export class KrakenTentacle {
 
     this.group.name = 'KrakenTentacle';
     this.group.visible = false;
+
+    this.dropletGeo = new THREE.BoxGeometry(0.08, 0.08, 0.08);
+    this.ringGeo = new THREE.RingGeometry(0.35, 0.55, 24);
+    this.geometriesToDispose.push(this.dropletGeo, this.ringGeo);
 
     this.group.add(this.tentacleRoot);
     this.group.add(this.splashRoot);
@@ -186,11 +192,11 @@ export class KrakenTentacle {
   triggerBreach(targetPos?: THREE.Vector3): void {
     if (this.breaching) return;
 
-    // Distant ocean horizon coordinate (e.g. x: -4..4, z: -8..-10)
+    // Distant ocean horizon coordinate framed inside 318x496 viewport
     this.centerPos = targetPos?.clone() ?? new THREE.Vector3(
-      (Math.random() - 0.5) * 6.0,
+      (Math.random() - 0.5) * 3.0,
       this.waterY,
-      -8.5 - Math.random() * 2.0,
+      -8.0 - Math.random() * 1.5,
     );
 
     this.group.position.copy(this.centerPos);
@@ -216,7 +222,12 @@ export class KrakenTentacle {
     this.time += delta;
     this.updateParticles(delta);
 
-    if (!this.breaching) return;
+    if (!this.breaching) {
+      if (this.droplets.length === 0 && this.ripples.length === 0) {
+        this.group.visible = false;
+      }
+      return;
+    }
 
     this.progress += delta / this.duration;
 
@@ -298,46 +309,41 @@ export class KrakenTentacle {
     // 1. Initial breach splash as tentacle erupts from water
     if (!this.breachSplashTriggered && rootY > -0.8 && t < 0.3) {
       this.breachSplashTriggered = true;
-      this.spawnSplashSpray(this.centerPos.x, this.centerPos.z, 32, 1.3);
+      this.spawnSplashSpray(0, 0, 32, 1.3);
       this.rippleEmitter?.(this.centerPos.x, this.centerPos.z);
     }
 
     // 2. Colossal surface slap impact when tip strikes the water
-    if (!this.slapSplashTriggered && t >= 0.76 && t <= 0.83) {
+    if (!this.slapSplashTriggered && t >= 0.76) {
       this.slapSplashTriggered = true;
       // Slap strikes in front of base (along local Z curve)
-      const slapX = this.centerPos.x + (Math.random() - 0.5) * 0.4;
-      const slapZ = this.centerPos.z + 1.4;
-      this.spawnSplashSpray(slapX, slapZ, 48, 2.6);
-      this.rippleEmitter?.(slapX, slapZ);
+      const slapLocalX = (Math.random() - 0.5) * 0.4;
+      const slapLocalZ = 1.4;
+      this.spawnSplashSpray(slapLocalX, slapLocalZ, 48, 2.6);
+      this.rippleEmitter?.(this.centerPos.x + slapLocalX, this.centerPos.z + slapLocalZ);
     }
 
     // 3. Submergence churning splash as tentacle slips under
     if (!this.submergeSplashTriggered && t >= 0.90) {
       this.submergeSplashTriggered = true;
-      this.spawnSplashSpray(this.centerPos.x, this.centerPos.z, 24, 0.9);
+      this.spawnSplashSpray(0, 0, 24, 0.9);
       this.rippleEmitter?.(this.centerPos.x, this.centerPos.z);
     }
   }
 
-  private spawnSplashSpray(worldX: number, worldZ: number, count: number, force: number): void {
-    const geo = new THREE.BoxGeometry(0.08, 0.08, 0.08);
-    this.geometriesToDispose.push(geo);
-
-    const mat = new THREE.MeshBasicMaterial({
-      color: '#e0f2fe',
-      transparent: true,
-      opacity: 0.85,
-      depthWrite: false,
-    });
-    this.materialsToDispose.push(mat);
-
+  private spawnSplashSpray(localX: number, localZ: number, count: number, force: number): void {
     for (let i = 0; i < count; i++) {
-      const mesh = new THREE.Mesh(geo, mat);
+      const mat = new THREE.MeshBasicMaterial({
+        color: '#e0f2fe',
+        transparent: true,
+        opacity: 0.85,
+        depthWrite: false,
+      });
+      const mesh = new THREE.Mesh(this.dropletGeo, mat);
       mesh.position.set(
-        worldX + (Math.random() - 0.5) * 0.6,
-        this.waterY + 0.05,
-        worldZ + (Math.random() - 0.5) * 0.6,
+        localX + (Math.random() - 0.5) * 0.6,
+        0.05,
+        localZ + (Math.random() - 0.5) * 0.6,
       );
       this.splashRoot.add(mesh);
 
@@ -359,8 +365,6 @@ export class KrakenTentacle {
     }
 
     // Expanding foam shockwave ring
-    const ringGeo = new THREE.RingGeometry(0.35, 0.55, 24);
-    this.geometriesToDispose.push(ringGeo);
     const ringMat = new THREE.MeshBasicMaterial({
       color: '#dbeafe',
       transparent: true,
@@ -368,11 +372,10 @@ export class KrakenTentacle {
       side: THREE.DoubleSide,
       depthWrite: false,
     });
-    this.materialsToDispose.push(ringMat);
 
-    const ring = new THREE.Mesh(ringGeo, ringMat);
+    const ring = new THREE.Mesh(this.ringGeo, ringMat);
     ring.rotation.x = -Math.PI / 2;
-    ring.position.set(worldX, this.waterY + 0.012, worldZ);
+    ring.position.set(localX, 0.012, localZ);
     this.splashRoot.add(ring);
 
     this.ripples.push({
@@ -391,6 +394,7 @@ export class KrakenTentacle {
       d.life -= delta;
       if (d.life <= 0) {
         this.splashRoot.remove(d.mesh);
+        (d.mesh.material as THREE.Material).dispose();
         this.droplets.splice(i, 1);
         continue;
       }
@@ -398,9 +402,10 @@ export class KrakenTentacle {
       d.velocity.y -= d.gravity * delta;
       d.mesh.position.addScaledVector(d.velocity, delta);
 
-      // Hit water
-      if (d.mesh.position.y <= this.waterY && d.velocity.y < 0) {
+      // Hit water (in splashRoot local space where y = 0 is waterY)
+      if (d.mesh.position.y <= 0 && d.velocity.y < 0) {
         this.splashRoot.remove(d.mesh);
+        (d.mesh.material as THREE.Material).dispose();
         this.droplets.splice(i, 1);
         continue;
       }
@@ -416,6 +421,7 @@ export class KrakenTentacle {
       r.life -= delta;
       if (r.life <= 0) {
         this.splashRoot.remove(r.mesh);
+        (r.mesh.material as THREE.Material).dispose();
         this.ripples.splice(i, 1);
         continue;
       }
@@ -430,11 +436,13 @@ export class KrakenTentacle {
   dispose(): void {
     for (const d of this.droplets) {
       this.splashRoot.remove(d.mesh);
+      (d.mesh.material as THREE.Material).dispose();
     }
     this.droplets.length = 0;
 
     for (const r of this.ripples) {
       this.splashRoot.remove(r.mesh);
+      (r.mesh.material as THREE.Material).dispose();
     }
     this.ripples.length = 0;
 

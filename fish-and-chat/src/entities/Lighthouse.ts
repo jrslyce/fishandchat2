@@ -38,9 +38,9 @@ export class Lighthouse {
     this.targetFogIntensity = this.currentFogIntensity;
 
     this.group.name = 'Lighthouse';
-    // Distant horizon placement: e.g. x ~ 10, y ~ -0.3, z ~ -13
-    const pos = options.position ?? new THREE.Vector3(10.0, -0.3, -13.0);
+    const pos = options.position ?? new THREE.Vector3(2.4, -0.25, -11.0);
     this.group.position.copy(pos);
+    this.lighthouseMesh.scale.setScalar(0.32);
 
     this.group.add(this.lighthouseMesh);
 
@@ -57,7 +57,7 @@ export class Lighthouse {
     this.lensGlowMesh = lensGlowMesh;
     this.lensGlowMaterial = lensGlowMat;
 
-    this.updateAtmosphere(0.4, true);
+    this.updateAtmosphere(this.currentFogIntensity, true);
   }
 
   private buildArchitecture(): number {
@@ -280,6 +280,7 @@ export class Lighthouse {
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
       depthWrite: false,
+      fog: false,
     });
     this.materialsToDispose.push(beamMat);
 
@@ -299,6 +300,7 @@ export class Lighthouse {
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
       depthWrite: false,
+      fog: false,
     });
     this.materialsToDispose.push(lensGlowMat);
 

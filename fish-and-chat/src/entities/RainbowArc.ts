@@ -88,8 +88,8 @@ export class RainbowArc {
   private time = 0;
 
   constructor(options: RainbowArcOptions = {}) {
-    const innerRadius = options.innerRadius ?? 8.5;
-    const outerRadius = options.outerRadius ?? 11.2;
+    const innerRadius = options.innerRadius ?? 1.35;
+    const outerRadius = options.outerRadius ?? 1.95;
 
     this.group.name = 'RainbowArc';
 
@@ -113,8 +113,8 @@ export class RainbowArc {
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.renderOrder = 3;
 
-    // Distant horizon default placement: z=-13.5, y=-0.6 (roots submerged in distant water)
-    const pos = options.position ?? new THREE.Vector3(0, -0.6, -13.5);
+    // Distant horizon default placement framed cleanly in the 318x496 viewport
+    const pos = options.position ?? new THREE.Vector3(0, -0.45, -12.0);
     this.mesh.position.copy(pos);
     // Slight backward tilt on X gives grand atmospheric scale
     this.mesh.rotation.x = -0.06;

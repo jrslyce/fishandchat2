@@ -133,7 +133,13 @@ test('Twitch wallet ignores client-awarded bars and local candy spends', async (
 
 test('unshared Twitch identity cannot start cross-channel progress', async ({ page }) => {
   await page.goto('/');
-  const result = await page.evaluate(async () => {
+  await page.evaluate(() => {
+    const frame = document.createElement('iframe');
+    frame.id = 'identity-test-frame';
+    document.body.append(frame);
+  });
+  const frame = page.frames().find((candidate) => candidate !== page.mainFrame())!;
+  const result = await frame.evaluate(async () => {
     const { initializeMuxyProgress } = await import(String('/src/systems/MuxyProgressStore.ts'));
     const originalSetTimeout = window.setTimeout;
     let shareRequested = false;

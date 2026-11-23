@@ -96,6 +96,10 @@ export class Game {
   private readonly closetCamera = new THREE.PerspectiveCamera(32, this.closetPreviewSize.width / this.closetPreviewSize.height, 0.05, 20);
   private readonly closetRenderTarget = new THREE.WebGLRenderTarget(this.closetPreviewSize.width, this.closetPreviewSize.height);
   private readonly closetPixelBuffer = new Uint8Array(this.closetPreviewSize.width * this.closetPreviewSize.height * 4);
+  private closetImageData: ImageData | null = null;
+  private closetPreviewDirty = true;
+  private lastClosetCanvas: HTMLCanvasElement | null = null;
+  private lastClosetRenderAt = 0;
 
   private readonly loop = new Loop(
     (delta, elapsed) => this.update(delta, elapsed),
@@ -108,7 +112,10 @@ export class Game {
   private rippleTimer = 0;
   private ambienceStarted = false;
 
-  private readonly onPageHide = () => this.economy.persist();
+  private readonly onPageHide = () => {
+    this.economy.persist();
+    void this.economy.flushCloudSave(true);
+  };
   private readonly onCharacterPointerDown = (event: PointerEvent) => {
     if (event.target !== this.canvas || (event.pointerType === 'mouse' && event.button !== 0) ||
         this.viewMode !== 'dock' || !this.diorama.root.visible ||
@@ -136,7 +143,7 @@ export class Game {
   };
 
   constructor(private readonly canvas: HTMLCanvasElement, progress?: ProgressSession) {
-    this.saveManager = new SaveManager<GameSaveStateV1>(createDefaultSaveState, progress?.initialState, progress?.onSave, progress?.localSaveKey);
+    this.saveManager = new SaveManager<GameSaveStateV1>(createDefaultSaveState, progress?.initialState, progress?.onSave, progress?.localSaveKey, progress?.flushSave);
     this.renderer = createRenderer(canvas);
     this.cameraRig = new CameraRig(this.camera, this.dockCameraPos, this.dockCameraFocus);
     // Render targets default to a linear working color space (the sRGB
@@ -228,6 +235,7 @@ export class Game {
     this.events.on('closetOpened', () => {
       this.closetOpen = true;
       this.closetTurn = 0;
+      this.closetPreviewDirty = true;
       this.playerCharacter.group.position.set(0, 0, 0);
       this.playerCharacter.group.rotation.y = 0;
       this.playerCharacter.setPose('idle');
@@ -237,6 +245,8 @@ export class Game {
     this.events.on('closetClosed', () => {
       this.closetOpen = false;
       this.previewClothingId = null;
+      this.lastClosetCanvas = null;
+      this.closetPreviewDirty = true;
       void this.refreshPlayerSkin();
       this.cameraRig.setTarget(this.dockCameraPos, this.dockCameraFocus);
     });
@@ -285,6 +295,7 @@ export class Game {
 
     this.events.on('themeChanged', ({ theme }) => {
       void this.themeManager.setTheme(theme);
+      this.livingWorld.setTheme(theme);
       const palette = THEME_PALETTES[theme];
       if (palette) this.fishShadows.setThemeColor(palette.waterDeep);
     });
@@ -297,6 +308,7 @@ export class Game {
       events: this.events,
       hemisphereLight: this.renderPipeline.hemisphere,
       keyLight: this.renderPipeline.keyLight,
+      initialTheme,
     });
     this.economy.setWeatherProvider(() => this.livingWorld.getWeather());
 
@@ -452,6 +464,7 @@ export class Game {
     this.livingWorld.dispose();
     this.narrativeSystem.dispose();
     this.renderPipeline.dispose();
+    this.playerCharacter.dispose();
     this.closetCharacter.dispose();
     this.closetRenderTarget.dispose();
     this.closetScene.traverse((object) => {
@@ -483,6 +496,7 @@ export class Game {
       this.playerCharacter.refreshSkin(this.economy.baseTone(), outfit),
       this.closetCharacter.refreshSkin(this.economy.baseTone(), outfit),
     ]);
+    this.closetPreviewDirty = true;
   }
 
   private updateCosmeticAppearance(): void {
@@ -493,6 +507,7 @@ export class Game {
       this.economy.ownedFishbots().length > 0,
       this.economy.cosmeticEquipped('fishbot') === 'starlight-fishbot-skin',
     );
+    this.closetPreviewDirty = true;
   }
 
   /** Keeps the player character's pose in sync with the real fishing state machine, not just decorative. */
@@ -652,7 +667,7 @@ export class Game {
 
   private render(): void {
     this.renderPipeline.render();
-    if (this.closetOpen && this.frame % 2 === 0) this.renderClosetPreview();
+    if (this.closetOpen) this.renderClosetPreview();
   }
 
   /**
@@ -678,11 +693,21 @@ export class Game {
       canvas.addEventListener('pointermove', (event) => {
         if (!canvas.hasPointerCapture(event.pointerId)) return;
         this.closetTurn = startTurn + (event.clientX - dragX) * 0.012;
+        this.closetPreviewDirty = true;
       });
       canvas.addEventListener('pointerup', (event) => {
         if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
       });
     }
+
+    const now = performance.now();
+    const canvasReplaced = canvas !== this.lastClosetCanvas;
+    if (!canvasReplaced && !this.closetPreviewDirty && now - this.lastClosetRenderAt < 250) return;
+
+    const previewDelta = this.lastClosetRenderAt > 0 ? Math.min((now - this.lastClosetRenderAt) / 1000, 0.1) : 0;
+    this.lastClosetCanvas = canvas;
+    this.closetPreviewDirty = false;
+    this.lastClosetRenderAt = now;
 
     const { width, height } = this.closetPreviewSize;
     const prevClearColor = new THREE.Color();
@@ -693,14 +718,16 @@ export class Game {
     this.renderer.setClearColor(0xc7e4db, 1);
     this.renderer.clear();
     this.closetCharacter.group.rotation.y = Math.PI + this.closetTurn + Math.sin(this.elapsed * 0.5) * 0.04;
-    this.closetCharacter.update(0);
+    this.closetCharacter.update(previewDelta);
     this.renderer.render(this.closetScene, this.closetCamera);
     this.renderer.readRenderTargetPixels(this.closetRenderTarget, 0, 0, width, height, this.closetPixelBuffer);
     this.renderer.setRenderTarget(null);
     this.renderer.setClearColor(prevClearColor, prevClearAlpha);
 
     // WebGL readback is bottom-up; Canvas2D ImageData is top-down.
-    const imageData = ctx.createImageData(width, height);
+    const imageData = this.closetImageData && this.closetImageData.width === width && this.closetImageData.height === height
+      ? this.closetImageData
+      : (this.closetImageData = ctx.createImageData(width, height));
     const rowBytes = width * 4;
     for (let y = 0; y < height; y++) {
       const srcStart = (height - 1 - y) * rowBytes;

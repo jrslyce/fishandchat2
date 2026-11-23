@@ -120,6 +120,7 @@ export class PlayerCharacter {
 
   /** Recomposites the skin texture from a base tone + equipped clothing and applies it. */
   async refreshSkin(baseToneId: string, equipped: Record<ClothingSlot, string | null>): Promise<void> {
+    if (this.disposed) return;
     const request = ++this.skinRequest;
     this.accessories = setOutfitAccessories(this.player, this.accessories, equipped);
     const texture = await compositeSkinTexture(baseToneId, equipped);
@@ -207,6 +208,21 @@ export class PlayerCharacter {
     this.skinRequest++;
     this.player.skin.map?.dispose();
     this.accessories = setOutfitAccessories(this.player, this.accessories, { hat: null, jacket: null, pants: null, shoes: null });
+    const geometries = new Set<THREE.BufferGeometry>();
+    const materials = new Set<THREE.Material>();
+    for (const root of [this.pole, this.player]) {
+      root.traverse((object) => {
+        const mesh = object as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        if (mesh.geometry) geometries.add(mesh.geometry);
+        const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const mat of list) {
+          if (mat) materials.add(mat);
+        }
+      });
+    }
+    for (const geo of geometries) geo.dispose();
+    for (const mat of materials) mat.dispose();
     this.nameTagTexture.dispose();
     (this.nameTag.material as THREE.Material).dispose();
   }

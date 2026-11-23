@@ -24,7 +24,7 @@ test('Barnaby offers a coin-only sunny hat and character tap opens the Closet', 
   await expect(page.locator('#modal-host')).toContainText('Straw Hat');
   const coinsBeforeHat = await page.evaluate(() => (window as any).__FISH_GAME__.economy.snapshot.coins as number);
   await page.locator('button[data-action="buy-clothing"][data-id="straw-hat"]').click();
-  await expect(page.locator('button[data-action="equip-clothing"][data-id="straw-hat"]')).toBeVisible();
+  await expect(page.locator('button[data-action="unequip-clothing"][data-id="straw-hat"]')).toBeVisible();
   expect(await page.evaluate(() => (window as any).__FISH_GAME__.economy.snapshot.coins)).toBe(coinsBeforeHat - 60);
   await page.locator('.modal-close').click();
 
@@ -54,6 +54,6 @@ test('Barnaby offers a coin-only rain slicker in rainy weather', async ({ page }
   await expect(page.locator('button[data-action="buy-clothing"][data-id="rain-slicker"]')).toBeVisible();
   const coinsBeforeSlicker = await page.evaluate(() => (window as any).__FISH_GAME__.economy.snapshot.coins as number);
   await page.locator('button[data-action="buy-clothing"][data-id="rain-slicker"]').click();
-  await expect(page.locator('button[data-action="equip-clothing"][data-id="rain-slicker"]')).toBeVisible();
+  await expect(page.locator('button[data-action="unequip-clothing"][data-id="rain-slicker"]')).toBeVisible();
   expect(await page.evaluate(() => (window as any).__FISH_GAME__.economy.snapshot.coins)).toBe(coinsBeforeSlicker - 120);
 });

@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('candy shop shows the current channel wallet', async ({ page }) => {
   await page.goto('/');
+  await page.locator('#title-start:not([disabled])').click();
   await page.locator('#hud-candy-pill').click();
   await expect(page.locator('#modal-host')).toContainText('Channel Candy Wallets');
   await expect(page.locator('.candy-wallet-row')).toContainText('Local game');

@@ -17,7 +17,7 @@ const STAR_VERTEX_SHADER = /* glsl */ `
 
     // Multi-harmonic celestial twinkling
     float twinkle = 0.65 + 0.35 * sin(uTime * 3.2 + aPhase);
-    gl_PointSize = aSize * (360.0 / -mvPosition.z) * (0.8 + 0.2 * twinkle);
+    gl_PointSize = aSize * (360.0 / max(-mvPosition.z, 0.1)) * (0.8 + 0.2 * twinkle);
     vAlpha = uOpacity * twinkle;
   }
 `;
@@ -139,10 +139,11 @@ export class CelestialSky {
     this.group.name = 'CelestialSky';
 
     // 1. Build 3D Crescent Moon & Glow Halo
-    const moonPos = options.moonPosition ?? new THREE.Vector3(-7.2, 7.8, -15.5);
+    const moonPos = options.moonPosition ?? new THREE.Vector3(-2.1, 0.95, -15.0);
     this.moonGroup.position.copy(moonPos);
     // Slight tilt gives an elegant celestial poise
     this.moonGroup.rotation.set(0.12, 0.28, -0.32);
+    this.moonGroup.scale.setScalar(0.38);
     this.group.add(this.moonGroup);
 
     const { moonMesh, moonMat, haloMesh, haloMat } = this.buildMoon();
@@ -258,11 +259,10 @@ export class CelestialSky {
     ];
 
     for (let i = 0; i < count; i++) {
-      // Distribute stars across the distant celestial sky hemisphere
-      // x: -22 to +22, y: 1.2 to 14.5, z: -22 to -12
-      const x = (Math.random() - 0.5) * 44.0;
-      const y = 1.2 + Math.random() * 13.5;
-      const z = -12.0 - Math.random() * 10.0;
+      // Distribute stars across the distant celestial sky visible in the panel viewport
+      const x = (Math.random() - 0.5) * 8.4;
+      const y = 0.05 + Math.random() * 1.5;
+      const z = -13.5 - Math.random() * 3.0;
 
       positions[i * 3] = x;
       positions[i * 3 + 1] = y;
@@ -305,11 +305,11 @@ export class CelestialSky {
     meteorGeo: THREE.BufferGeometry;
   } {
     // Ribbon mesh: length along X (0 to 1), width along Y
-    const meteorGeo = new THREE.PlaneGeometry(3.6, 0.12, 1, 1);
+    const meteorGeo = new THREE.PlaneGeometry(1.4, 0.06, 1, 1);
     this.geometriesToDispose.push(meteorGeo);
 
     // Anchor pivot so x=0 is head, extending backwards
-    meteorGeo.translate(-1.8, 0, 0);
+    meteorGeo.translate(-0.7, 0, 0);
 
     const meteorMat = new THREE.ShaderMaterial({
       uniforms: {
@@ -363,13 +363,13 @@ export class CelestialSky {
   triggerShootingStar(): void {
     if (this.currentNightOpacity < 0.1) return; // invisible during day
 
-    // Randomize trajectory high in the sky
-    const startX = -12.0 + Math.random() * 10.0;
-    const startY = 8.5 + Math.random() * 4.5;
-    const startZ = -14.0 - Math.random() * 4.0;
+    // Randomize trajectory inside the visible celestial night vault
+    const startX = -3.4 + Math.random() * 2.4;
+    const startY = 0.9 + Math.random() * 0.55;
+    const startZ = -14.0 - Math.random() * 1.5;
 
-    const angle = -0.45 - Math.random() * 0.25; // angled down and right
-    const travelDistance = 16.0 + Math.random() * 8.0;
+    const angle = -0.18 - Math.random() * 0.14; // angled down and right
+    const travelDistance = 3.5 + Math.random() * 2.0;
 
     this.meteorStart.set(startX, startY, startZ);
     this.meteorEnd.set(
@@ -423,6 +423,7 @@ export class CelestialSky {
       if (this.meteorProgress >= 1.0) {
         this.meteorActive = false;
         this.meteorMesh.visible = false;
+        this.group.visible = this.currentNightOpacity > 0.002;
       } else {
         const t = this.meteorProgress;
         this.meteorMesh.position.lerpVectors(this.meteorStart, this.meteorEnd, t);

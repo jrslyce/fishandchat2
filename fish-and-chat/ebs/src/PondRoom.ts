@@ -24,23 +24,25 @@ function cleanOutfit(value: unknown): Record<string, string | null> {
 export class PondRoom {
   constructor(private readonly state: DurableObjectState) {}
 
-  private fishers(): Fisher[] {
+  private fishers(exclude?: WebSocket): Fisher[] {
     const byId = new Map<string, Fisher>();
     for (const socket of this.state.getWebSockets()) {
+      if (socket === exclude) continue;
       const fisher = socket.deserializeAttachment() as Fisher | null;
       if (fisher) byId.set(fisher.id, fisher);
     }
     return [...byId.values()].slice(0, 101);
   }
 
-  private broadcast(message: object): void {
+  private broadcast(message: object, exclude?: WebSocket): void {
     const data = JSON.stringify(message);
     for (const socket of this.state.getWebSockets()) {
+      if (socket === exclude) continue;
       try { socket.send(data); } catch { /* closed socket */ }
     }
   }
 
-  private roster(): void { this.broadcast({ type: 'roster', fishers: this.fishers() }); }
+  private roster(exclude?: WebSocket): void { this.broadcast({ type: 'roster', fishers: this.fishers(exclude) }, exclude); }
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
@@ -100,8 +102,14 @@ export class PondRoom {
     this.roster();
   }
 
-  async webSocketClose(): Promise<void> { this.roster(); }
-  async webSocketError(): Promise<void> { this.roster(); }
+  async webSocketClose(socket: WebSocket, code: number, reason: string): Promise<void> {
+    try { socket.close(code, reason); } catch { /* already closed */ }
+    this.roster(socket);
+  }
+  async webSocketError(socket: WebSocket): Promise<void> {
+    try { socket.close(1011, 'Socket error'); } catch { /* already closed */ }
+    this.roster(socket);
+  }
 
   async alarm(): Promise<void> {
     const tickets = await this.state.storage.list<Ticket>({ prefix: 'ticket:' });

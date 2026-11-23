@@ -17,9 +17,39 @@ export interface ProgressSession {
   channelAvatarUrl: string | null;
   localSaveKey?: string;
   onSave?: (state: GameSaveStateV1) => void;
+  flushSave?: (keepalive?: boolean) => Promise<void>;
   getAuthToken?: () => string;
   initialIdentity?: { clientId: string; helixToken?: string; viewerId: string | null };
   requiresIdentity?: boolean;
+}
+
+function safeGetStorage(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSetStorage(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Ignore restricted third-party iframe storage or quota errors.
+  }
+}
+
+function readLocalSavedAt(raw: string | null): number | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { version?: unknown; savedAt?: unknown; state?: unknown };
+    if (!parsed || typeof parsed !== 'object' || parsed.version !== 3 || !parsed.state || typeof parsed.state !== 'object') {
+      return null;
+    }
+    return typeof parsed.savedAt === 'number' && Number.isFinite(parsed.savedAt) ? parsed.savedAt : 0;
+  } catch {
+    return null;
+  }
 }
 
 function parseState(value: unknown): Record<string, unknown> {
@@ -54,7 +84,12 @@ async function channelProfile(channelId: string, clientId: string, helixToken?: 
   }
 }
 
-async function muxyState(auth: { clientId: string; token: string }, method: 'GET' | 'POST', body?: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function muxyState(
+  auth: { clientId: string; token: string },
+  method: 'GET' | 'POST',
+  body?: Record<string, unknown>,
+  keepalive = false,
+): Promise<Record<string, unknown>> {
   const response = await fetch('https://api.muxy.io/v1/e/extension_viewer_state', {
     method,
     headers: {
@@ -62,7 +97,8 @@ async function muxyState(auth: { clientId: string; token: string }, method: 'GET
       ...(body ? { 'Content-Type': 'application/json' } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(8000),
+    keepalive,
+    signal: keepalive ? undefined : AbortSignal.timeout(8000),
   });
   if (!response.ok) throw new Error(`Muxy state ${response.status}`);
   return parseState(await response.text());
@@ -111,48 +147,84 @@ export async function initializeMuxyProgress(): Promise<ProgressSession> {
   };
   if (!auth.viewerId) return { ...fallback, requiresIdentity: true };
   const owner = auth.viewerId;
-  const localOwner = window.localStorage.getItem(OWNER_KEY);
-  const hasScopedSave = window.localStorage.getItem(fallback.localSaveKey!) !== null;
+  const localOwner = safeGetStorage(OWNER_KEY);
+  const rawScopedSave = safeGetStorage(fallback.localSaveKey!);
+  const scopedSavedAt = readLocalSavedAt(rawScopedSave);
+  const hasScopedSave = rawScopedSave !== null;
   const scopedLocal = new SaveManager(createDefaultSaveState, undefined, undefined, fallback.localSaveKey).load();
+  const useUnscoped = !hasScopedSave && (!localOwner || localOwner === owner);
+  const rawUnscopedSave = useUnscoped ? safeGetStorage('fish-and-chat-save-v1') : null;
+  const unscopedSavedAt = readLocalSavedAt(rawUnscopedSave);
   const local = hasScopedSave ? scopedLocal :
     localOwner && localOwner !== owner ? createDefaultSaveState() : new SaveManager(createDefaultSaveState).load();
+  const localSavedAt = hasScopedSave ? scopedSavedAt : localOwner === owner ? unscopedSavedAt : null;
   fallback.initialState = local;
 
   try {
     const cloud = await muxyState(auth, 'GET');
     const envelope = parseState(cloud[CLOUD_KEY]);
-    const state = validSave(envelope.state) ? envelope.state : local;
-    window.localStorage.setItem(OWNER_KEY, owner);
+    const cloudSavedAt = typeof envelope.savedAt === 'number' && Number.isFinite(envelope.savedAt) ? envelope.savedAt : 0;
+    const state = validSave(envelope.state) && (localSavedAt === null || cloudSavedAt >= localSavedAt)
+      ? envelope.state
+      : local;
+    safeSetStorage(OWNER_KEY, owner);
 
     let pending: GameSaveStateV1 | null = null;
     let timer: number | null = null;
-    let writing = false;
-    const flush = async (): Promise<void> => {
-      if (writing || !pending) return;
-      writing = true;
-      while (pending) {
-        const current = pending;
-        pending = null;
-        try {
-          await muxyState({ ...auth, token: latestToken }, 'POST', {
-            ...cloud,
-            [CLOUD_KEY]: { version: 1, savedAt: Date.now(), state: current },
-          });
-        } catch (error) {
-          console.error('[MuxyProgressStore] Cloud save failed; retaining the local save.', error);
-          // A later local mutation will retry; avoid an unbounded retry loop.
-          break;
+    let firstPendingAt: number | null = null;
+    let inflight: Promise<void> | null = null;
+    const flush = async (keepalive = false): Promise<void> => {
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+      while (inflight) {
+        await inflight;
+      }
+      if (!pending) return;
+      inflight = (async () => {
+        while (pending) {
+          const current = pending;
+          pending = null;
+          firstPendingAt = null;
+          try {
+            await muxyState({ ...auth, token: latestToken }, 'POST', {
+              ...cloud,
+              [CLOUD_KEY]: { version: 1, savedAt: Date.now(), state: current },
+            }, keepalive);
+          } catch (error) {
+            console.error('[MuxyProgressStore] Cloud save failed; retaining the local save.', error);
+            // A later local mutation will retry; avoid an unbounded retry loop.
+            break;
+          }
+        }
+      })();
+      try {
+        await inflight;
+      } finally {
+        inflight = null;
+        if (pending && timer === null) {
+          timer = window.setTimeout(() => { timer = null; void flush(); }, 3000);
         }
       }
-      writing = false;
     };
     return {
       ...fallback,
       initialState: state,
+      flushSave: (keepalive = false) => flush(keepalive),
       onSave: (next) => {
         pending = structuredClone(next);
-        if (timer !== null) window.clearTimeout(timer);
-        timer = window.setTimeout(() => { timer = null; void flush(); }, 3000);
+        const now = Date.now();
+        if (firstPendingAt === null) firstPendingAt = now;
+        if (timer !== null) {
+          window.clearTimeout(timer);
+          timer = null;
+        }
+        if (now - firstPendingAt >= 10_000) {
+          void flush();
+        } else {
+          timer = window.setTimeout(() => { timer = null; void flush(); }, 3000);
+        }
       },
     };
   } catch (error) {

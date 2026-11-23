@@ -92,7 +92,7 @@ export class LivingWorldSystem {
 
     // 5. Lighthouse (distant rocky horizon cliff)
     this.lighthouse = new Lighthouse({
-      position: new THREE.Vector3(10.0, -0.3, -13.0),
+      position: new THREE.Vector3(2.4, -0.25, -11.0),
       initialFogIntensity: options.initialWeather === 'fog' ? 2.2 : 0.4,
     });
     this.root.add(this.lighthouse.group);

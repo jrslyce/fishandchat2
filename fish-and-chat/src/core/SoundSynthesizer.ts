@@ -9,6 +9,7 @@ import type { AudioGroup } from './AudioEngine';
  */
 export class SoundSynthesizer {
   private context: AudioContext | null = null;
+  private compressor: DynamicsCompressorNode | null = null;
   private masterGain: GainNode | null = null;
   private sfxGain: GainNode | null = null;
   private ambienceGain: GainNode | null = null;
@@ -22,13 +23,18 @@ export class SoundSynthesizer {
   private rainSource: AudioBufferSourceNode | null = null;
   private rainGain: GainNode | null = null;
   private rainLfo: OscillatorNode | null = null;
+  private rainHp: BiquadFilterNode | null = null;
   private rainFilter: BiquadFilterNode | null = null;
+  private rainLfoGain: GainNode | null = null;
+  private rainPitchModGain: GainNode | null = null;
   private rainDropletTimer: ReturnType<typeof setTimeout> | null = null;
+  private rainStopTimer: ReturnType<typeof setTimeout> | null = null;
   private rainActive = false;
   private rainTargetVolume = 0.5;
 
-  // Active transient nodes for clean disposal
+  // Active transient nodes and cleanup timers for clean disposal
   private readonly activeNodes = new Set<{ stop?: (when?: number) => void; disconnect: () => void }>();
+  private readonly cleanupTimers = new Set<ReturnType<typeof setTimeout>>();
 
   // Mix state matching AudioEngine
   private readonly volumes: Record<AudioGroup, number> = {
@@ -53,9 +59,17 @@ export class SoundSynthesizer {
     this.context = context;
     const dest = destination ?? context.destination;
 
+    this.compressor = context.createDynamicsCompressor();
+    this.compressor.threshold.setValueAtTime(-6, context.currentTime);
+    this.compressor.knee.setValueAtTime(12, context.currentTime);
+    this.compressor.ratio.setValueAtTime(12, context.currentTime);
+    this.compressor.attack.setValueAtTime(0.003, context.currentTime);
+    this.compressor.release.setValueAtTime(0.15, context.currentTime);
+    this.compressor.connect(dest);
+
     this.masterGain = context.createGain();
     this.masterGain.gain.setValueAtTime(this.muted ? 0 : this.volumes.master, context.currentTime);
-    this.masterGain.connect(dest);
+    this.masterGain.connect(this.compressor);
 
     this.sfxGain = context.createGain();
     this.sfxGain.gain.setValueAtTime(this.volumes.sfx, context.currentTime);
@@ -266,10 +280,18 @@ export class SoundSynthesizer {
     source.start(now);
     lfo.start(now);
 
+    if (this.rainStopTimer) {
+      clearTimeout(this.rainStopTimer);
+      this.rainStopTimer = null;
+    }
+
     this.rainSource = source;
     this.rainGain = rainGain;
+    this.rainHp = hp;
     this.rainFilter = lp;
     this.rainLfo = lfo;
+    this.rainLfoGain = lfoGain;
+    this.rainPitchModGain = pitchModGain;
 
     // Schedule random high-frequency droplet ticks
     this.scheduleRainDropletTick();
@@ -289,32 +311,57 @@ export class SoundSynthesizer {
       clearTimeout(this.rainDropletTimer);
       this.rainDropletTimer = null;
     }
+    if (this.rainStopTimer) {
+      clearTimeout(this.rainStopTimer);
+      this.rainStopTimer = null;
+    }
 
     const now = this.context.currentTime;
     const gain = this.rainGain;
     const source = this.rainSource;
     const lfo = this.rainLfo;
+    const hp = this.rainHp;
     const filter = this.rainFilter;
+    const lfoGain = this.rainLfoGain;
+    const pitchModGain = this.rainPitchModGain;
+
+    this.rainSource = null;
+    this.rainGain = null;
+    this.rainHp = null;
+    this.rainFilter = null;
+    this.rainLfo = null;
+    this.rainLfoGain = null;
+    this.rainPitchModGain = null;
+
+    const cleanup = () => {
+      for (const node of [source, lfo, hp, filter, lfoGain, pitchModGain, gain]) {
+        if (!node) continue;
+        try {
+          if ('stop' in node && typeof node.stop === 'function') node.stop();
+        } catch {
+          // Node may already be stopped
+        }
+        try {
+          node.disconnect();
+        } catch {
+          // Ignore disconnect errors
+        }
+      }
+    };
+
+    if (fadeSeconds <= 0) {
+      cleanup();
+      return;
+    }
 
     gain.gain.cancelScheduledValues(now);
     gain.gain.setValueAtTime(gain.gain.value, now);
     gain.gain.linearRampToValueAtTime(0, now + fadeSeconds);
 
-    setTimeout(() => {
-      try {
-        source?.stop();
-        lfo?.stop();
-        filter?.disconnect();
-        gain.disconnect();
-      } catch {
-        // Node may already be stopped
-      }
+    this.rainStopTimer = setTimeout(() => {
+      this.rainStopTimer = null;
+      cleanup();
     }, Math.floor((fadeSeconds + 0.1) * 1000));
-
-    this.rainSource = null;
-    this.rainGain = null;
-    this.rainFilter = null;
-    this.rainLfo = null;
   }
 
   private scheduleRainDropletTick(): void {
@@ -330,7 +377,7 @@ export class SoundSynthesizer {
   }
 
   private triggerSingleRainDroplet(): void {
-    if (!this.context || !this.rainGain) return;
+    if (!this.context || !this.rainGain || this.context.state !== 'running') return;
 
     const now = this.context.currentTime;
     const osc = this.context.createOscillator();
@@ -481,6 +528,8 @@ export class SoundSynthesizer {
     sub.start(now);
 
     const stopTime = now + 5.0;
+    delayFeedback.gain.setValueAtTime(0.38, stopTime);
+    delayFeedback.gain.linearRampToValueAtTime(0, stopTime + 2.0);
     osc1.stop(stopTime);
     osc2.stop(stopTime);
     sub.stop(stopTime);
@@ -488,6 +537,9 @@ export class SoundSynthesizer {
     this.registerTransientNode(osc1, stopTime);
     this.registerTransientNode(osc2, stopTime);
     this.registerTransientNode(sub, stopTime);
+    this.registerTransientNode(delay, stopTime + 2.4);
+    this.registerTransientNode(delayFilter, stopTime + 2.4);
+    this.registerTransientNode(delayFeedback, stopTime + 2.4);
   }
 
   /**
@@ -562,6 +614,8 @@ export class SoundSynthesizer {
     lfo.start(now);
 
     const stopTime = now + 4.6;
+    feedback.gain.setValueAtTime(0.46, stopTime);
+    feedback.gain.linearRampToValueAtTime(0, stopTime + 2.0);
     carrier.stop(stopTime);
     harmonic.stop(stopTime);
     lfo.stop(stopTime);
@@ -569,6 +623,9 @@ export class SoundSynthesizer {
     this.registerTransientNode(carrier, stopTime);
     this.registerTransientNode(harmonic, stopTime);
     this.registerTransientNode(lfo, stopTime);
+    this.registerTransientNode(delay, stopTime + 2.4);
+    this.registerTransientNode(echoFilter, stopTime + 2.4);
+    this.registerTransientNode(feedback, stopTime + 2.4);
   }
 
   /**
@@ -947,9 +1004,16 @@ export class SoundSynthesizer {
     if (!this.context) return;
 
     const delayMs = Math.max(0, Math.floor((stopTime - this.context.currentTime + 0.05) * 1000));
-    setTimeout(() => {
+    const timer = setTimeout(() => {
+      this.cleanupTimers.delete(timer);
       this.activeNodes.delete(node);
+      try {
+        node.disconnect();
+      } catch {
+        // Node may already be disconnected
+      }
     }, delayMs);
+    this.cleanupTimers.add(timer);
   }
 
   /**
@@ -957,6 +1021,16 @@ export class SoundSynthesizer {
    */
   dispose(): void {
     this.stopRain(0);
+
+    for (const timer of this.cleanupTimers) {
+      clearTimeout(timer);
+    }
+    this.cleanupTimers.clear();
+
+    if (this.rainStopTimer) {
+      clearTimeout(this.rainStopTimer);
+      this.rainStopTimer = null;
+    }
 
     for (const node of this.activeNodes) {
       try {
@@ -977,10 +1051,12 @@ export class SoundSynthesizer {
       this.sfxGain?.disconnect();
       this.ambienceGain?.disconnect();
       this.masterGain?.disconnect();
+      this.compressor?.disconnect();
     } catch {
       // Ignore disconnect errors during teardown
     }
 
+    this.compressor = null;
     this.masterGain = null;
     this.sfxGain = null;
     this.ambienceGain = null;

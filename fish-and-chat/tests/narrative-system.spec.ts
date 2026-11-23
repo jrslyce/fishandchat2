@@ -108,7 +108,7 @@ test.describe('NarrativeSystem & In-World Reactive Dialogue', () => {
       narrative.update(0.5);
       return narrative.getCurrentDialogue();
     });
-    expect(krakenDialogue).toContain('tentacles');
+    expect(krakenDialogue.toLowerCase()).toContain('tentacles');
 
     // 4. Legendary catch event
     const legendaryDialogue = await page.evaluate(() => {

@@ -259,7 +259,7 @@ test.describe('Atmosphere & Living World System', () => {
       return { initialPos, rotated: rot1 > rot0, fog0, fog1, beamOpacity, visibleFalse };
     });
 
-    expect(lighthouseData.initialPos.x).toBe(10.0);
+    expect(lighthouseData.initialPos.x).toBe(2.4);
     expect(lighthouseData.rotated).toBe(true);
     expect(lighthouseData.fog1).toBeGreaterThan(1.2);
     expect(lighthouseData.beamOpacity).toBeGreaterThan(0.35);

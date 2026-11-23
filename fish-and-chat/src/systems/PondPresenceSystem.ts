@@ -17,7 +17,9 @@ export class PondPresenceSystem {
   private channelId: string | null = null;
   private fishers: Fisher[] = [];
   private stopped = false;
+  private connecting = false;
   private retryTimer: number | null = null;
+  private announcementTimer: number | null = null;
   private readonly baseUrl = (import.meta.env.VITE_EBS_BASE_URL ?? '').replace(/\/$/, '');
   private readonly button = document.createElement('button');
   private readonly panel = document.createElement('section');
@@ -78,9 +80,11 @@ export class PondPresenceSystem {
 
     twitch!.onAuthorized((auth) => {
       this.token = auth.token;
-      if (this.channelId !== auth.channelId || !this.socket) {
+      if (this.channelId !== auth.channelId) {
         this.channelId = auth.channelId;
-        void this.connect();
+        void this.connect(true);
+      } else if (!this.socket && !this.connecting) {
+        void this.connect(false);
       }
     });
     this.events.on('clothingEquipped', () => this.sendAppearance());
@@ -88,34 +92,64 @@ export class PondPresenceSystem {
     this.events.on('xpGained', ({ leveledUp }) => { if (leveledUp) this.sendAppearance(); });
   }
 
-  private async connect(): Promise<void> {
-    if (this.stopped || !this.token || !this.channelId || this.socket?.readyState === WebSocket.OPEN) return;
+  private clearRetryTimer(): void {
+    if (this.retryTimer !== null) {
+      window.clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+  }
+
+  private async connect(forceReconnect = false): Promise<void> {
+    if (this.stopped || !this.token || !this.channelId) return;
+    if (!forceReconnect && (this.connecting || this.socket?.readyState === WebSocket.OPEN || this.socket?.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+    this.clearRetryTimer();
+    if (forceReconnect && this.socket) {
+      this.socket.onmessage = null;
+      this.socket.onclose = null;
+      this.socket.close();
+      this.socket = null;
+    }
+
+    this.connecting = true;
     try {
       const response = await fetch(`${this.baseUrl}/pond/ticket`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${this.token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ level: this.economy.snapshot.level, outfit: this.economy.snapshot.equippedClothing }),
       });
+      if (this.stopped) return;
       if (!response.ok) throw new Error(`Pond ticket ${response.status}`);
       const { ticket } = await response.json() as { ticket: string };
+      if (this.stopped) return;
       const url = new URL(this.baseUrl);
       url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
       url.pathname = '/pond/ws';
       url.searchParams.set('channelId', this.channelId);
       url.searchParams.set('ticket', ticket);
       const socket = new WebSocket(url);
-      this.socket?.close();
+      if (this.socket) {
+        this.socket.onmessage = null;
+        this.socket.onclose = null;
+        this.socket.close();
+      }
       this.socket = socket;
       socket.onmessage = (event) => this.handleMessage(event.data);
       socket.onclose = () => {
         if (this.socket !== socket || this.stopped) return;
         this.status.textContent = 'Reconnecting to the pond…';
+        this.clearRetryTimer();
         this.retryTimer = window.setTimeout(() => { this.retryTimer = null; void this.connect(); }, 5000);
       };
     } catch (error) {
+      if (this.stopped) return;
       console.error('[PondPresence] Connection failed', error);
       this.status.textContent = 'Pond presence unavailable';
+      this.clearRetryTimer();
       this.retryTimer = window.setTimeout(() => { this.retryTimer = null; void this.connect(); }, 10000);
+    } finally {
+      this.connecting = false;
     }
   }
 
@@ -129,7 +163,11 @@ export class PondPresenceSystem {
     if (message.type === 'fashion' && message.name && message.itemName) {
       this.announcement.textContent = `✨ ${message.name} unlocked ${message.itemName}!`;
       this.announcement.hidden = false;
-      window.setTimeout(() => { this.announcement.hidden = true; }, 5500);
+      if (this.announcementTimer !== null) window.clearTimeout(this.announcementTimer);
+      this.announcementTimer = window.setTimeout(() => {
+        this.announcementTimer = null;
+        this.announcement.hidden = true;
+      }, 5500);
     }
   }
 
@@ -180,8 +218,17 @@ export class PondPresenceSystem {
 
   dispose(): void {
     this.stopped = true;
-    if (this.retryTimer !== null) window.clearTimeout(this.retryTimer);
-    this.socket?.close();
+    this.clearRetryTimer();
+    if (this.announcementTimer !== null) {
+      window.clearTimeout(this.announcementTimer);
+      this.announcementTimer = null;
+    }
+    if (this.socket) {
+      this.socket.onmessage = null;
+      this.socket.onclose = null;
+      this.socket.close();
+      this.socket = null;
+    }
     this.button.remove();
     this.panel.remove();
     this.announcement.remove();

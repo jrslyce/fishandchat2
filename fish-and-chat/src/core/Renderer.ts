@@ -23,7 +23,7 @@ export function resizeRenderer(
   const canvas = renderer.domElement;
   const width = Math.max(1, Math.floor(canvas.clientWidth));
   const height = Math.max(1, Math.floor(canvas.clientHeight));
-  const dpr = window.devicePixelRatio || 1;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const bufferWidth = Math.floor(width * dpr);
   const bufferHeight = Math.floor(height * dpr);
   const needsResize = canvas.width !== bufferWidth || canvas.height !== bufferHeight;

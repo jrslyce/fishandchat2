@@ -60,9 +60,15 @@ export class CommunitySystem {
     const savedGoalId = options?.initialGoalId ?? this.economy.activeCommunityGoalId();
     this.activeGoal = createCommunityGoal(savedGoalId);
 
-    // Restore saved progress
+    // Restore saved progress; if a reload interrupted the 15s post-completion cooldown at 100%, advance to the next raid.
     const savedProgress = this.economy.communityGoalProgress();
-    this.activeGoal.currentValue = Math.min(this.activeGoal.targetValue, Math.max(0, savedProgress));
+    if (savedProgress >= this.activeGoal.targetValue) {
+      this.activeGoal = getNextGoalTemplate(this.activeGoal.id);
+      this.economy.setActiveCommunityGoalId(this.activeGoal.id);
+      this.economy.setCommunityGoalProgress(0);
+    } else {
+      this.activeGoal.currentValue = Math.max(0, savedProgress);
+    }
 
     this.resetAmbientTimer();
     this.wireEvents();
@@ -237,10 +243,11 @@ export class CommunitySystem {
     const rewards = goal.completionRewards;
     const firstCompletion = !this.economy.snapshot.completedCommunityGoalIds?.includes(goal.id);
 
-    // 1. Boss emergence event (whale jump breach)
-    this.events.emit('whaleJump', { position: { x: 0, y: 0, z: -12 } });
+    // 1. Boss emergence event (LivingWorldSystem emits whaleJump via onBreach)
     if (this.livingWorld) {
       this.livingWorld.triggerWhaleJump();
+    } else {
+      this.events.emit('whaleJump', { position: { x: 0, y: 0, z: -12 } });
     }
     this.events.emit('toast', {
       message: `🌊 BOSS EMERGENCE: ${goal.bossName} emerges from the waters!`,
