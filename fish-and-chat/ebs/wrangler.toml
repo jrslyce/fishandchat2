@@ -1,8 +1,23 @@
-name = "fish-and-chat-ebs"
+name = "fish-and-chat-social"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "fish-and-chat-wallets"
+database_id = "3cf9817b-3211-48a1-9388-0c82b36fb300"
+migrations_dir = "migrations"
+
+[[durable_objects.bindings]]
+name = "PONDS"
+class_name = "PondRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["PondRoom"]
 
 # Secrets (never set here — use `wrangler secret put <NAME>` / .dev.vars locally):
 #   TWITCH_EXTENSION_SECRET  — base64 JWT-signing secret from the Twitch dev console
 #   TWITCH_CLIENT_SECRET     — OAuth client secret for the extension's client ID (Helix app tokens)
 #   TWITCH_CLIENT_ID         — the extension's client ID (not secret, but set alongside the above)
+#   TWITCH_EVENTSUB_SECRET   — random ASCII 10-100 chars used when creating the Bits EventSub webhook

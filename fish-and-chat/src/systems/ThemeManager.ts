@@ -57,6 +57,9 @@ export class ThemeManager {
     if (theme === this.currentTheme) return;
     this.currentTheme = theme;
 
+    this.diorama.playerSlot.clear();
+    this.diorama.barnabySlot.clear();
+    this.diorama.fishbotSlot.clear();
     this.scene.remove(this.diorama.root);
     disposeGroup(this.diorama.root);
     this.materials.dispose();
@@ -81,6 +84,9 @@ export class ThemeManager {
   }
 
   dispose(): void {
+    this.diorama.playerSlot.clear();
+    this.diorama.barnabySlot.clear();
+    this.diorama.fishbotSlot.clear();
     this.scene.remove(this.diorama.root);
     disposeGroup(this.diorama.root);
     this.materials.dispose();

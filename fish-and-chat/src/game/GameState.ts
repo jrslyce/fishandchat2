@@ -219,7 +219,8 @@ export class FishingStateMachine {
     
     this.events.emit('castLocked', { precision: this.lockedPrecision, rolls: this.lockedRolls });
     
-    if (this.lockedRolls && (this.lockedRolls.L === 1 || this.lockedRolls.L === 7) && Math.random() < 0.25) {
+    const luckyBaitCast = this.lockedRolls !== null && (this.lockedRolls.L === 1 || this.lockedRolls.L === 7);
+    if (Math.random() < this.economy.baitSaveChance(luckyBaitCast)) {
       this.baitSaverActive = true;
       this.events.emit('toast', { message: 'Bait Saver! Your bait was not consumed.' });
     } else {
@@ -239,7 +240,7 @@ export class FishingStateMachine {
       if (this.lockedRolls && this.lockedRolls.T > 0) {
         waitMultiplier *= (1 - this.lockedRolls.T * 0.1); 
       }
-      this.waitDurationSeconds = rollWaitSeconds(waitMultiplier);
+      this.waitDurationSeconds = rollWaitSeconds(waitMultiplier * (this.economy.isStreamBuffActive('mega-chum-bucket') ? 0.5 : 1));
     }
     this.setPhase('waiting');
   }
@@ -258,6 +259,13 @@ export class FishingStateMachine {
     const S = this.lockedRolls ? this.lockedRolls.S : 0;
     const skill = this.economy.effectiveSkill(precisionBonus + S * 5);
     const weights = computeRarityWeights(skill, this.economy.hasSonarScanner(), this.economy.snapshot.level);
+    if (this.economy.isStreamBuffActive('rainbow-totem')) {
+      weights.rare *= 1.5;
+      weights.epic *= 1.5;
+      weights.legendary *= 1.5;
+      const total = (Object.values(weights) as number[]).reduce((sum, weight) => sum + weight, 0);
+      for (const rarity of Object.keys(weights) as Rarity[]) weights[rarity] = weights[rarity] * 100 / total;
+    }
     const rarity = rollRarity(weights);
     const fight = rollFightValue(rarity, this.economy.charmerVarianceReduction());
 
@@ -331,6 +339,7 @@ export class FishingStateMachine {
     const rarity = this.hookedRarity ?? 'common';
 
     const result = resolveCatch(this.economy, precisionBonus, theme, L, S, rarity);
+    if (this.economy.isStreamBuffActive('rainbow-totem')) result.xpAwarded *= 2;
     const levelResult = this.economy.addXp(result.xpAwarded);
     this.lastCatch = result;
 

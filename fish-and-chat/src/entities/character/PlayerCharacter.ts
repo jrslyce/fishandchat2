@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { ClothingSlot } from '../../game/data';
 import { compositeSkinTexture } from './compositeSkin';
 import { PlayerObject } from './PlayerObject';
+import { setOutfitAccessories } from './ClothingAccessories';
 import { FishingAnimation, IdleAnimation, PlayerAnimation, WalkingAnimation, WaveAnimation, type FishingPose } from './animations';
 
 /** Minecraft-format character is 32 "MC units" tall; scaled here to ~1 game unit (roughly Barnaby's height). */
@@ -32,9 +33,16 @@ export class PlayerCharacter {
   private readonly waveAnim = new WaveAnimation('left');
 
   private readonly rodTipAnchor = new THREE.Object3D();
+  private readonly pole: THREE.Group;
+  private readonly goldenRodMaterial: THREE.MeshStandardMaterial;
+  private goldenRodEnabled = false;
+  private rodTime = 0;
 
   private pose: CharacterPose = 'idle';
   private waveTimer = 0;
+  private skinRequest = 0;
+  private disposed = false;
+  private accessories: ReturnType<typeof setOutfitAccessories> = [];
 
   constructor() {
     this.player = new PlayerObject();
@@ -60,8 +68,9 @@ export class PlayerCharacter {
     this.setName('Angler');
 
     // Model and attach a fishing pole in the character's right hand
-    const pole = buildFishingPole();
-    this.player.skin.rightArm.add(pole);
+    this.pole = buildFishingPole();
+    this.goldenRodMaterial = (this.pole.getObjectByName('rod-blank') as THREE.Mesh).material as THREE.MeshStandardMaterial;
+    this.player.skin.rightArm.add(this.pole);
 
     // Tip of the held rod (rightArm local space, MC units)
     this.rodTipAnchor.position.set(0, -8.3, 29.2);
@@ -111,7 +120,14 @@ export class PlayerCharacter {
 
   /** Recomposites the skin texture from a base tone + equipped clothing and applies it. */
   async refreshSkin(baseToneId: string, equipped: Record<ClothingSlot, string | null>): Promise<void> {
+    if (this.disposed) return;
+    const request = ++this.skinRequest;
+    this.accessories = setOutfitAccessories(this.player, this.accessories, equipped);
     const texture = await compositeSkinTexture(baseToneId, equipped);
+    if (request !== this.skinRequest || this.disposed) {
+      texture.dispose();
+      return;
+    }
     this.player.skin.map?.dispose();
     this.player.skin.map = texture;
   }
@@ -134,6 +150,35 @@ export class PlayerCharacter {
     return this.rodTipAnchor.getWorldPosition(target);
   }
 
+  setGoldenRod(enabled: boolean): void {
+    this.goldenRodEnabled = enabled;
+    this.pole.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.name.startsWith('rod-')) return;
+      const material = mesh.material as THREE.MeshStandardMaterial;
+      if (mesh.name === 'rod-blank') {
+        material.color.set(enabled ? '#f7be2b' : '#1a1f26');
+        material.emissive.set(enabled ? '#6a3900' : '#000000');
+        material.metalness = enabled ? 0.95 : 0.4;
+      } else if (mesh.name === 'rod-reel') {
+        material.color.set(enabled ? '#fff1a4' : '#3a4454');
+      } else if (mesh.name === 'rod-tip') {
+        material.color.set(enabled ? '#fff4a8' : '#f26849');
+        material.emissive.set(enabled ? '#8f5b00' : '#000000');
+      }
+    });
+  }
+
+  setRodVisible(visible: boolean): void {
+    this.pole.visible = visible;
+  }
+
+  /** Poses the Closet rod to the side so it remains visible without crossing the face. */
+  setShowcaseRod(enabled: boolean): void {
+    this.pole.rotation.y = enabled ? -0.62 : 0;
+    this.pole.scale.setScalar(enabled ? 0.84 : 1);
+  }
+
   private activeAnimation(): PlayerAnimation {
     switch (this.pose) {
       case 'walking':
@@ -148,6 +193,8 @@ export class PlayerCharacter {
   }
 
   update(delta: number): void {
+    this.rodTime += delta;
+    if (this.goldenRodEnabled) this.goldenRodMaterial.emissiveIntensity = 0.55 + 0.25 * Math.sin(this.rodTime * 3.6);
     if (this.pose === 'wave') {
       this.waveTimer -= delta;
       if (this.waveTimer <= 0) this.pose = 'idle';
@@ -157,8 +204,27 @@ export class PlayerCharacter {
   }
 
   dispose(): void {
+    this.disposed = true;
+    this.skinRequest++;
     this.player.skin.map?.dispose();
+    this.accessories = setOutfitAccessories(this.player, this.accessories, { hat: null, jacket: null, pants: null, shoes: null });
+    const geometries = new Set<THREE.BufferGeometry>();
+    const materials = new Set<THREE.Material>();
+    for (const root of [this.pole, this.player]) {
+      root.traverse((object) => {
+        const mesh = object as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        if (mesh.geometry) geometries.add(mesh.geometry);
+        const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const mat of list) {
+          if (mat) materials.add(mat);
+        }
+      });
+    }
+    for (const geo of geometries) geo.dispose();
+    for (const mat of materials) mat.dispose();
     this.nameTagTexture.dispose();
+    (this.nameTag.material as THREE.Material).dispose();
   }
 }
 
@@ -186,6 +252,7 @@ function buildFishingPole(): THREE.Group {
   });
   const reelGeo = new THREE.CylinderGeometry(0.9, 0.9, 0.8, 10);
   const reel = new THREE.Mesh(reelGeo, metalMat);
+  reel.name = 'rod-reel';
   reel.rotation.z = Math.PI / 2;
   reel.position.set(0.6, -11.5, 0.2);
   reel.castShadow = true;
@@ -199,6 +266,7 @@ function buildFishingPole(): THREE.Group {
   });
   const blankGeo = new THREE.CylinderGeometry(0.12, 0.38, 28, 8);
   const blank = new THREE.Mesh(blankGeo, blankMat);
+  blank.name = 'rod-blank';
   blank.rotation.x = Math.PI / 2 + 0.08;
   blank.position.set(0, -9.5, 15.0);
   blank.castShadow = true;
@@ -211,6 +279,7 @@ function buildFishingPole(): THREE.Group {
   });
   const tipRingGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.6, 8);
   const tipRing = new THREE.Mesh(tipRingGeo, tipMat);
+  tipRing.name = 'rod-tip';
   tipRing.rotation.x = Math.PI / 2;
   tipRing.position.set(0, -8.3, 29.0);
   pole.add(tipRing);

@@ -23,17 +23,23 @@ export class TwitchAuthSystem {
 
   constructor(private readonly events: EventBus<GameEventMap>) {}
 
-  async init(): Promise<void> {
+  async init(initial?: { clientId: string; helixToken?: string; viewerId: string | null }): Promise<void> {
     const twitch = (window as unknown as { Twitch?: TwitchGlobal }).Twitch;
     if (!twitch?.ext) {
       console.error('[TwitchAuthSystem] Twitch Extension Helper not present; identity features disabled.');
       return;
     }
 
+    if (initial) {
+      this.clientId = initial.clientId;
+      this.helixToken = initial.helixToken ?? null;
+      if (initial.viewerId) void this.fetchProfile(twitch, initial.viewerId);
+    }
+
     twitch.ext.onAuthorized((auth) => {
       this.helixToken = auth.helixToken ?? null;
       this.clientId = auth.clientId;
-      if (!this.requestedIdShare) {
+      if (!this.requestedIdShare && !twitch.ext?.viewer?.id) {
         this.requestedIdShare = true;
         twitch.ext?.actions?.requestIdShare?.();
       }
@@ -41,8 +47,8 @@ export class TwitchAuthSystem {
     });
   }
 
-  private async fetchProfile(twitch: TwitchGlobal): Promise<void> {
-    const viewerId = twitch.ext?.viewer?.id;
+  private async fetchProfile(twitch: TwitchGlobal, initialViewerId?: string): Promise<void> {
+    const viewerId = initialViewerId ?? twitch.ext?.viewer?.id;
     if (!viewerId || !this.helixToken || !this.clientId) return;
     try {
       const res = await fetch(`https://api.twitch.tv/helix/users?id=${encodeURIComponent(viewerId)}`, {
