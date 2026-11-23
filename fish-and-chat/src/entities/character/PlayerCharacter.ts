@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import type { ClothingSlot } from '../../game/data';
 import { MODEL_SOURCE_MANIFEST_PUBLIC } from '../../assets/manifest';
-import { clonedSkinnedGroup, loadImportedAsset } from '../../assets/ImportedAssetRegistry';
+import { loadImportedAsset } from '../../assets/ImportedAssetRegistry';
+import { buildClayAnglerRig, type ClayAnglerRig } from './ClayAnglerRig';
 import { compositeSkinTexture } from './compositeSkin';
 import { PlayerObject } from './PlayerObject';
 import { setOutfitAccessories } from './ClothingAccessories';
@@ -17,11 +18,10 @@ const CLAY_DEFAULT_REEL_COLOR = '#c79642';
 const CLAY_DEFAULT_TIP_COLOR = '#e3553f';
 
 export type CharacterPose = 'idle' | 'walking' | 'fishing' | 'wave';
-
-type AccessorySockets = Record<'head' | 'body' | 'leftArm' | 'rightArm' | 'leftLeg' | 'rightLeg', THREE.Group>;
+export type CharacterGender = 'male' | 'female';
 
 /**
- * Owns the player's 3D angler representation (meshed Alt-A clay figurine when loaded,
+ * Owns the player's 3D angler representation (articulated Alt-A clay figurine when loaded,
  * voxel PlayerObject fallback until ready), clothing/hat sockets, fishing rod pivot,
  * name tag, and pose animations for both the main dock scene and Closet studio.
  */
@@ -46,12 +46,12 @@ export class PlayerCharacter {
   private showcaseEnabled = false;
   private rodTime = 0;
 
-  // Sculpted Alt-A Meshy clay figurine assembly (replaces blocky PlayerObject visuals once loaded)
+  // Articulated Alt-A Meshy clay figurine assembly (replaces blocky PlayerObject visuals once loaded)
   private readonly clayBodyPivot = new THREE.Group();
-  private readonly clayRodPivot = new THREE.Group();
-  private readonly claySockets: AccessorySockets = createClaySockets();
-  private clayModelGroup: THREE.Group | null = null;
+  private clayRig: ClayAnglerRig | null = null;
   private clayAnimClock = 0;
+  private gender: CharacterGender = 'male';
+  private loadGeneration = 0;
 
   private pose: CharacterPose = 'idle';
   private waveTimer = 0;
@@ -70,11 +70,6 @@ export class PlayerCharacter {
 
     this.clayBodyPivot.name = 'clayAnglerBodyPivot';
     this.clayBodyPivot.visible = false;
-    this.clayRodPivot.name = 'clayAnglerRodPivot';
-    // Hand socket on the right side of the sculpted A-pose clay figurine.
-    this.clayRodPivot.position.set(-0.20, 0.35, 0.02);
-    this.clayBodyPivot.add(this.clayRodPivot);
-    Object.values(this.claySockets).forEach((socket) => this.clayBodyPivot.add(socket));
     this.group.add(this.clayBodyPivot);
 
     this.player.traverse((child) => {
@@ -106,37 +101,83 @@ export class PlayerCharacter {
     void this.loadClayAngler();
   }
 
-  private async loadClayAngler(): Promise<void> {
-    try {
-      const asset = await loadImportedAsset(MODEL_SOURCE_MANIFEST_PUBLIC.angler);
-      if (this.disposed) return;
+  getGender(): CharacterGender {
+    return this.gender;
+  }
 
-      const model = clonedSkinnedGroup(asset, 0.98);
-      model.name = 'AnglerClayGLB';
-      this.clayModelGroup = model;
-      this.clayBodyPivot.add(model);
+  setGender(gender: CharacterGender): void {
+    const normalized: CharacterGender = gender === 'female' ? 'female' : 'male';
+    if (this.gender === normalized && (this.clayRig || this.loadGeneration > 0)) return;
+    this.gender = normalized;
+    void this.loadClayAngler();
+  }
+
+  private async loadClayAngler(): Promise<void> {
+    const gen = ++this.loadGeneration;
+    const primaryUrl =
+      this.gender === 'female'
+        ? MODEL_SOURCE_MANIFEST_PUBLIC.anglerFemale
+        : MODEL_SOURCE_MANIFEST_PUBLIC.angler;
+
+    try {
+      let asset;
+      try {
+        asset = await loadImportedAsset(primaryUrl);
+      } catch {
+        asset = await loadImportedAsset(MODEL_SOURCE_MANIFEST_PUBLIC.angler);
+      }
+      if (this.disposed || gen !== this.loadGeneration) return;
+
+      // Clean up any previous rigged instance before mounting the new gender model
+      this.disposeClayRig();
+
+      const rig = buildClayAnglerRig(asset, 0.98);
+      this.clayRig = rig;
+      this.clayBodyPivot.add(rig.root);
       this.clayBodyPivot.visible = true;
       this.player.visible = false;
 
-      // Move rod assembly into the clay hand socket at world-scale equivalent of PlayerObject (1/32).
+      // Seat the cork grip directly inside the right hand palm socket
       this.poleHoldGroup.removeFromParent();
       this.poleHoldGroup.scale.setScalar(CHARACTER_SCALE);
-      this.poleHoldGroup.position.set(0, 10.5 * CHARACTER_SCALE, -1.0 * CHARACTER_SCALE);
-      this.clayRodPivot.add(this.poleHoldGroup);
+      this.poleHoldGroup.position.set(0.004, 10.5 * CHARACTER_SCALE, -1.0 * CHARACTER_SCALE);
+      rig.rightHandSocket.add(this.poleHoldGroup);
 
       this.syncClayAccessorySockets();
       this.applyRodShowcaseTransform();
+      this.updateClayFigurineAnimation(0);
       this.onModelLoaded?.();
     } catch {
       // Keep PlayerObject fallback if the GLB cannot load.
     }
   }
 
-  private syncClayAccessorySockets(): void {
-    if (!this.clayModelGroup) return;
+  private disposeClayRig(): void {
+    if (!this.clayRig) return;
+    this.poleHoldGroup.removeFromParent();
     for (const { anchor, group } of this.accessories) {
       if (anchor === 'head') {
-        this.claySockets.head.add(group);
+        group.removeFromParent();
+      }
+    }
+    this.clayRig.root.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (mesh.isMesh) {
+        mesh.geometry?.dispose();
+        if (mesh.name === 'anglerContactShadow' || mesh.parent?.name === 'clayAnglerRodPivot') {
+          (mesh.material as THREE.Material)?.dispose();
+        }
+      }
+    });
+    this.clayBodyPivot.remove(this.clayRig.root);
+    this.clayRig = null;
+  }
+
+  private syncClayAccessorySockets(): void {
+    if (!this.clayRig) return;
+    for (const { anchor, group } of this.accessories) {
+      if (anchor === 'head') {
+        this.clayRig.headSocket.add(group);
       }
     }
   }
@@ -240,15 +281,15 @@ export class PlayerCharacter {
     this.pole.visible = visible;
   }
 
-  /** Poses the Closet rod to the side so it remains visible without crossing the face. */
+  /** Poses the Closet rod slightly outward so it remains visible without crossing the face. */
   setShowcaseRod(enabled: boolean): void {
     this.showcaseEnabled = enabled;
     this.applyRodShowcaseTransform();
   }
 
   private applyRodShowcaseTransform(): void {
-    this.pole.rotation.y = this.showcaseEnabled ? -0.58 : 0;
-    this.pole.scale.setScalar(this.showcaseEnabled ? 0.84 : 1);
+    this.pole.rotation.y = this.showcaseEnabled ? -0.32 : 0;
+    this.pole.scale.setScalar(this.showcaseEnabled ? 0.86 : 1);
   }
 
   private activeAnimation(): PlayerAnimation {
@@ -264,82 +305,155 @@ export class PlayerCharacter {
     }
   }
 
+  /**
+   * Drives the articulated 7-bone clay rig while keeping `pelvisBone` and `clayBodyPivot`
+   * planted at y = 0 on the dock planks (zero floating or whole-statue tilting).
+   */
   private updateClayFigurineAnimation(delta: number): void {
+    const rig = this.clayRig;
+    if (!rig) return;
+
     this.clayAnimClock += delta;
     const t = this.clayAnimClock;
 
-    let bodyY = 0;
-    let bodyRx = 0;
-    let bodyRy = 0;
-    let bodyRz = 0;
-    let rodRx = -0.35;
-    let rodRy = -0.08;
-    let rodRz = 0.05;
+    // Keep feet & pelvis 100% planted on the dock at all times
+    this.clayBodyPivot.position.set(0, 0, 0);
+    this.clayBodyPivot.rotation.set(0, 0, 0);
+    rig.pelvisBone.position.set(0, 0, 0);
+    rig.pelvisBone.rotation.set(0, 0, 0);
+
+    // Relaxed natural fishing stance defaults (arms brought down from 33 deg A-pose)
+    let spineRx = 0.02;
+    let spineRy = 0;
+    let spineRz = 0;
+
+    let headRx = 0;
+    let headRy = 0;
+    let headRz = 0;
+
+    // Left arm relaxed naturally by the angler's left side
+    let lUpperRx = -0.06;
+    let lUpperRy = 0;
+    let lUpperRz = -0.42;
+    let lForeRx = -0.10;
+    let lForeRz = -0.02;
+
+    // Right arm tucked down by the right ribs with forearm bent forward holding the rod
+    let rUpperRx = -0.26;
+    let rUpperRy = -0.08;
+    let rUpperRz = 0.38;
+    let rForeRx = -0.56;
+    let rForeRy = 0.10;
+    let rForeRz = 0.08;
+
+    // Rod pitch inside the gripping hand (counter-balances forearm forward bend so rod angles ~35 deg over water)
+    let rodRx = 0.28;
+    let rodRy = -0.04;
+    let rodRz = -0.10;
+    const poseKey = this.showcaseEnabled
+      ? 'showcase'
+      : this.pose === 'fishing'
+        ? `fishing:${this.fishAnim.pose}`
+        : this.pose;
 
     if (this.pose === 'idle') {
-      bodyY = Math.sin(t * 2.1) * 0.008;
-      bodyRz = Math.sin(t * 1.4) * 0.025;
-      rodRx = -0.32 + Math.sin(t * 2.1) * 0.04;
-      rodRy = -0.08 + Math.cos(t * 1.3) * 0.03;
+      const breath = Math.sin(t * 2.0);
+      rodRx = 0.28 + breath * 0.025;
+      rodRy = -0.04 + Math.cos(t * 1.3) * 0.015;
     } else if (this.pose === 'walking') {
-      bodyY = Math.abs(Math.sin(t * 7.5)) * 0.035;
-      bodyRz = Math.sin(t * 7.5) * 0.08;
-      bodyRx = 0.05;
-      rodRx = -0.45 + Math.sin(t * 7.5) * 0.14;
+      spineRx = 0.05;
+      lUpperRx = -0.18;
+      rUpperRx = -0.32;
+      rodRx = 0.22 + Math.sin(t * 7.0) * 0.10;
     } else if (this.pose === 'wave') {
-      const hopPhase = Math.max(0, 1.5 - this.waveTimer) * Math.PI * 3.5;
-      bodyY = Math.abs(Math.sin(hopPhase)) * 0.07;
-      bodyRy = Math.sin(hopPhase * 0.5) * 0.22;
-      bodyRz = Math.sin(hopPhase) * 0.09;
-      rodRx = -0.65 + Math.sin(hopPhase) * 0.18;
-      rodRy = -0.22;
+      // Friendly left-arm raised wave while feet stay planted on the dock
+      spineRz = -0.03;
+      headRz = 0.04;
+      headRy = 0.06;
+      lUpperRz = 0.55;
+      lUpperRx = -0.25;
+      lForeRx = -0.45;
+      lForeRz = 0.18;
+      const wavePhase = Math.max(0, 1.5 - this.waveTimer) * Math.PI * 4.0;
+      rodRx = 0.24 + Math.sin(wavePhase) * 0.06;
     } else if (this.pose === 'fishing') {
       switch (this.fishAnim.pose) {
         case 'aiming':
-          bodyRx = -0.11;
-          bodyY = -0.012;
-          rodRx = -1.05 + Math.sin(t * 6.0) * 0.04;
-          rodRy = -0.18;
+          // Draw right arm & rod back over the right shoulder to wind up the cast
+          spineRx = -0.08;
+          spineRy = -0.10;
+          headRx = -0.06;
+          rUpperRx = -0.68;
+          rUpperRz = 0.32;
+          rForeRx = -0.78;
+          rodRx = 0.15 + Math.sin(t * 5.5) * 0.04;
           break;
         case 'casting':
-          bodyRx = 0.16;
-          bodyY = 0.01;
-          rodRx = 0.42;
-          rodRy = -0.05;
+          // Snap right arm and forearm forward to launch the bobber
+          spineRx = 0.12;
+          spineRy = 0.08;
+          headRx = 0.05;
+          rUpperRx = -0.45;
+          rForeRx = -0.15;
+          rodRx = 0.85;
           break;
-        case 'waiting':
-          bodyY = Math.sin(t * 1.8) * 0.007;
-          bodyRz = Math.sin(t * 1.2) * 0.02;
-          rodRx = -0.36 + Math.sin(t * 2.4) * 0.05;
-          rodRy = -0.08;
+        case 'waiting': {
+          const breath = Math.sin(t * 1.7);
+          spineRx = 0.03;
+          rForeRx = -0.58;
+          rodRx = 0.26 + breath * 0.035;
           break;
+        }
         case 'bite':
-          bodyRx = 0.06 + Math.sin(t * 18) * 0.03;
-          bodyRz = Math.sin(t * 16) * 0.045;
-          rodRx = -0.25 + Math.sin(t * 18) * 0.22;
-          rodRz = -0.08 + Math.cos(t * 14) * 0.08;
+          // Sharp tug on the line pulls the forearm & rod tip down-forward
+          spineRx = 0.06;
+          rUpperRx = -0.34;
+          rForeRx = -0.48;
+          rodRx = 0.42 + Math.sin(t * 18) * 0.18;
+          rodRz = -0.10 + Math.cos(t * 14) * 0.06;
           break;
         case 'resolving':
-          bodyRx = -0.14 + Math.sin(t * 12) * 0.04;
-          bodyY = Math.abs(Math.sin(t * 12)) * 0.015;
-          rodRx = -0.78 + Math.sin(t * 12) * 0.24;
+          // Pumping the rod & reeling in
+          spineRx = -0.08;
+          rUpperRx = -0.52;
+          rForeRx = -0.72;
+          rodRx = 0.18 + Math.sin(t * 10) * 0.20;
           break;
       }
     }
 
     if (this.showcaseEnabled) {
-      bodyRx = 0;
-      bodyRy = 0;
-      bodyRz = 0;
-      bodyY = Math.sin(t * 1.6) * 0.005;
-      rodRx = -0.52 + Math.sin(t * 1.8) * 0.03;
-      rodRy = -0.26;
+      // Closet studio: relaxed front-facing portrait pose with rod held neatly at the right side
+      const breath = Math.sin(t * 1.6);
+      spineRx = 0.01;
+      spineRy = 0;
+      spineRz = 0;
+      headRx = 0;
+      headRy = 0;
+      headRz = 0;
+      lUpperRx = -0.05;
+      lUpperRz = -0.40;
+      lForeRx = -0.10;
+      lForeRz = -0.02;
+      rUpperRx = -0.22;
+      rUpperRy = -0.12;
+      rUpperRz = 0.34;
+      rForeRx = -0.52;
+      rForeRy = 0.06;
+      rForeRz = 0.06;
+      rodRx = 0.22 + breath * 0.025;
+      rodRy = -0.18;
       rodRz = -0.12;
     }
 
-    this.clayBodyPivot.position.y = bodyY;
-    this.clayBodyPivot.rotation.set(bodyRx, bodyRy, bodyRz);
-    this.clayRodPivot.rotation.set(rodRx, rodRy, rodRz);
+    rig.spineBone.rotation.set(spineRx, spineRy, spineRz);
+    rig.headBone.rotation.set(headRx, headRy, headRz);
+    rig.leftUpperArmBone.rotation.set(lUpperRx, lUpperRy, lUpperRz);
+    rig.leftForearmBone.rotation.set(lForeRx, 0, lForeRz);
+    rig.rightUpperArmBone.rotation.set(rUpperRx, rUpperRy, rUpperRz);
+    rig.rightForearmBone.rotation.set(rForeRx, rForeRy, rForeRz);
+    rig.rightHandSocket.rotation.set(rodRx, rodRy, rodRz);
+    rig.applyPose(poseKey);
   }
 
   update(delta: number): void {
@@ -351,16 +465,16 @@ export class PlayerCharacter {
     }
     this.player.resetJoints();
     this.activeAnimation().update(this.player, delta);
-    if (this.clayModelGroup) {
+    if (this.clayRig) {
       this.updateClayFigurineAnimation(delta);
     }
   }
 
   dispose(): void {
     this.disposed = true;
-    this.skinRequest++;
     this.player.skin.map?.dispose();
     this.accessories = setOutfitAccessories(this.player, this.accessories, { hat: null, jacket: null, pants: null, shoes: null });
+    this.disposeClayRig();
 
     // Only dispose procedural geometries/materials owned by this instance (not shared cached clay GLB assets).
     const geometries = new Set<THREE.BufferGeometry>();
@@ -383,40 +497,6 @@ export class PlayerCharacter {
   }
 }
 
-function createClaySockets(): AccessorySockets {
-  const head = new THREE.Group();
-  head.name = 'claySocketHead';
-  head.position.set(0, 0.67, -0.01);
-  head.scale.setScalar(0.027);
-
-  const body = new THREE.Group();
-  body.name = 'claySocketBody';
-  body.position.set(0, 0.29, 0);
-  body.scale.setScalar(0.031);
-
-  const leftArm = new THREE.Group();
-  leftArm.name = 'claySocketLeftArm';
-  leftArm.position.set(0.18, 0.44, 0);
-  leftArm.scale.setScalar(0.029);
-
-  const rightArm = new THREE.Group();
-  rightArm.name = 'claySocketRightArm';
-  rightArm.position.set(-0.18, 0.44, 0);
-  rightArm.scale.setScalar(0.029);
-
-  const leftLeg = new THREE.Group();
-  leftLeg.name = 'claySocketLeftLeg';
-  leftLeg.position.set(0.075, 0.34, 0);
-  leftLeg.scale.setScalar(0.028);
-
-  const rightLeg = new THREE.Group();
-  rightLeg.name = 'claySocketRightLeg';
-  rightLeg.position.set(-0.075, 0.34, 0);
-  rightLeg.scale.setScalar(0.028);
-
-  return { head, body, leftArm, rightArm, leftLeg, rightLeg };
-}
-
 function buildFishingPole(): THREE.Group {
   const pole = new THREE.Group();
   pole.name = 'fishingPole';
@@ -426,24 +506,24 @@ function buildFishingPole(): THREE.Group {
     color: '#d6b182',
     roughness: 0.85,
   });
-  const handleGeo = new THREE.CylinderGeometry(0.62, 0.62, 6, 10);
+  const handleGeo = new THREE.CylinderGeometry(0.56, 0.56, 5.6, 10);
   const handle = new THREE.Mesh(handleGeo, corkMat);
   handle.rotation.x = Math.PI / 2;
   handle.position.set(0, -10.5, 1.0);
   handle.castShadow = true;
   pole.add(handle);
 
-  // Miniature brushed-brass reel attached to handle base
+  // Miniature brushed-brass reel attached snug under the cork handle
   const metalMat = new THREE.MeshStandardMaterial({
     color: CLAY_DEFAULT_REEL_COLOR,
     metalness: 0.72,
     roughness: 0.32,
   });
-  const reelGeo = new THREE.CylinderGeometry(0.95, 0.95, 0.85, 12);
+  const reelGeo = new THREE.CylinderGeometry(0.85, 0.85, 0.78, 12);
   const reel = new THREE.Mesh(reelGeo, metalMat);
   reel.name = 'rod-reel';
   reel.rotation.z = Math.PI / 2;
-  reel.position.set(0.65, -11.5, 0.2);
+  reel.position.set(0.55, -11.35, -0.4);
   reel.castShadow = true;
   pole.add(reel);
 
@@ -453,11 +533,11 @@ function buildFishingPole(): THREE.Group {
     roughness: 0.65,
     metalness: 0.08,
   });
-  const blankGeo = new THREE.CylinderGeometry(0.14, 0.42, 28, 10);
+  const blankGeo = new THREE.CylinderGeometry(0.14, 0.40, 28, 10);
   const blank = new THREE.Mesh(blankGeo, blankMat);
   blank.name = 'rod-blank';
-  blank.rotation.x = Math.PI / 2 + 0.08;
-  blank.position.set(0, -9.5, 15.0);
+  blank.rotation.x = Math.PI / 2 + 0.06;
+  blank.position.set(0, -9.6, 15.0);
   blank.castShadow = true;
   pole.add(blank);
 

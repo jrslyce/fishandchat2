@@ -144,7 +144,7 @@ export function buildDiorama(theme: ThemeId, materials: MaterialLibrary): Dioram
 
   const playerSlot = new THREE.Group();
   playerSlot.name = 'playerSlot';
-  playerSlot.position.set(0.25, 0.175, 0.9);
+  playerSlot.position.set(0.25, 0.156, 0.9);
   playerSlot.rotation.y = Math.PI; // facing -Z, out toward water
   root.add(playerSlot);
 

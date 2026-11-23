@@ -394,6 +394,16 @@ export class UI {
     this.tutorialBubble.addEventListener('click', onTutorialBubbleClick);
 
     this.titleStart.addEventListener('click', () => this.dismissTitleScreen());
+    this.syncTitleCharacterCards();
+    this.titleScreen.querySelectorAll<HTMLButtonElement>('button[data-character-gender]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const gender = btn.dataset.characterGender === 'female' ? 'female' : 'male';
+        if (this.economy.setCharacterGender(gender)) {
+          this.syncTitleCharacterCards();
+          this.events.emit('characterGenderChanged', { gender });
+        }
+      });
+    });
 
     this.bindEvents();
     this.renderHud();
@@ -468,6 +478,15 @@ export class UI {
   private dismissTitleScreen(): void {
     this.titleScreen?.classList.add('hidden');
     this.maybeOfferWeatherClothing();
+  }
+
+  private syncTitleCharacterCards(): void {
+    const current = this.economy.characterGender();
+    this.titleScreen?.querySelectorAll<HTMLButtonElement>('button[data-character-gender]').forEach((btn) => {
+      const active = btn.dataset.characterGender === current;
+      btn.classList.toggle('selected', active);
+      btn.setAttribute('aria-checked', String(active));
+    });
   }
 
   /** The rail's 7 buttons overflow a 496px-tall Twitch panel stacked open — nested behind the
@@ -2619,6 +2638,10 @@ export class UI {
         ${walletBanner}
         ${ensembleBanner}
         <h4 class="modal-subhead">Appearance</h4>
+        <div class="closet-gender-row" role="radiogroup" aria-label="Angler character">
+          <button class="btn-small closet-gender-btn ${this.economy.characterGender() === 'male' ? 'active' : ''}" data-action="set-character-gender" data-id="male" type="button" aria-pressed="${this.economy.characterGender() === 'male'}">Boy Angler</button>
+          <button class="btn-small closet-gender-btn ${this.economy.characterGender() === 'female' ? 'active' : ''}" data-action="set-character-gender" data-id="female" type="button" aria-pressed="${this.economy.characterGender() === 'female'}">Girl Angler</button>
+        </div>
         <div class="tone-swatch-row">${toneRow}</div>
         <section id="closet-collection" aria-label="Clothing styles">
           <h4 class="modal-subhead">${this.activeClosetSlotFilter === 'all' ? 'Browse all styles' : `${shopCategories.find((category) => category.slot === this.activeClosetSlotFilter)?.label} styles`}</h4>
@@ -2949,6 +2972,16 @@ export class UI {
         else if (action === 'equip-clothing' && slot) this.craftingSystem.equipClothing(slot, id);
         else if (action === 'unequip-clothing' && slot) this.craftingSystem.equipClothing(slot, null);
         else if (action === 'set-base-tone') this.craftingSystem.setBaseTone(id);
+        else if (action === 'set-character-gender' && (id === 'male' || id === 'female')) {
+          if (this.economy.setCharacterGender(id)) {
+            this.syncTitleCharacterCards();
+            this.events.emit('characterGenderChanged', { gender: id });
+            this.renderCloset();
+            this.modalHost.querySelector<HTMLElement>('.modal-body')?.scrollTo({ top: 0 });
+            this.modalHost.querySelector<HTMLElement>('.closet-preview-frame')?.scrollIntoView({ block: 'start' });
+            renderedModal = true;
+          }
+        }
         else if (action === 'preview-clothing' && CLOTHING_CATALOG.some((item) => item.id === id)) {
           this.previewClothingId = id;
           this.events.emit('clothingPreviewChanged', { id });

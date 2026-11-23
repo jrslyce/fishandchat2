@@ -942,6 +942,17 @@ export class Economy {
     return true;
   }
 
+  characterGender(): 'male' | 'female' {
+    return this.state.characterGender === 'female' ? 'female' : 'male';
+  }
+
+  setCharacterGender(gender: 'male' | 'female'): boolean {
+    if (gender !== 'male' && gender !== 'female') return false;
+    this.state.characterGender = gender;
+    this.persist();
+    return true;
+  }
+
   /**
    * A manually-set local override always wins (it's an explicit "rename my
    * character" action, so it should stick even inside a real Twitch

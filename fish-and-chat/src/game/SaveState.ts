@@ -74,6 +74,7 @@ export interface GameSaveStateV1 {
   equippedCosmetics: Record<CosmeticSlot, string | null>;
   outfitPresets: Array<OutfitPreset | null>;
   baseToneId: string;
+  characterGender?: 'male' | 'female';
   displayNameOverride: string | null;
   skillPoints: number;
   archetypePoints: Record<ArchetypeId, number>;
@@ -144,6 +145,7 @@ export function createDefaultSaveState(): GameSaveStateV1 {
     equippedCosmetics: { rod: null, fishbot: null, trail: null },
     outfitPresets: [null, null, null],
     baseToneId: 'sunfish-tan',
+    characterGender: 'male',
     displayNameOverride: null,
     skillPoints: 0,
     archetypePoints: { brawler: 0, patience: 0, trapper: 0, charmer: 0, tactician: 0 },
@@ -303,6 +305,7 @@ export function migrateSaveState(state: GameSaveStateV1): GameSaveStateV1 {
   if (next.totalCommunityGoalsCompleted === undefined) next = { ...next, totalCommunityGoalsCompleted: 0 };
   if (next.discoveredBottleIds === undefined) next = { ...next, discoveredBottleIds: [] };
   if (next.discoveredRelicIds === undefined) next = { ...next, discoveredRelicIds: [] };
+  if (next.characterGender === undefined) next = { ...next, characterGender: 'male' };
 
   return next;
 }

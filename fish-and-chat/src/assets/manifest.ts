@@ -73,6 +73,7 @@ export const MODEL_SOURCE_MANIFEST = {
  */
 export const MODEL_SOURCE_MANIFEST_PUBLIC = {
   angler: './models/angler.glb',
+  anglerFemale: './models/angler-female.glb',
   barnaby: './models/barnaby.glb',
   prismKoi: './models/prism-koi.glb',
   genericFish: './models/generic-fish.glb',

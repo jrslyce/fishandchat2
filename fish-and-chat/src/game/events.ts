@@ -61,6 +61,7 @@ export interface GameEventMap {
   clothingPreviewChanged: { id: string | null };
   cosmeticEquipped: { slot: CosmeticSlot; id: string | null };
   baseToneChanged: { id: string };
+  characterGenderChanged: { gender: 'male' | 'female' };
   displayNameChanged: { name: string };
   closetOpened: Record<string, never>;
   closetClosed: Record<string, never>;

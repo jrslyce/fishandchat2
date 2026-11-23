@@ -221,6 +221,8 @@ export class Game {
       this.updateCosmeticAppearance();
     });
     void this.refreshPlayerSkin();
+    this.playerCharacter.setGender(this.economy.characterGender());
+    this.closetCharacter.setGender(this.economy.characterGender());
     this.playerCharacter.setName(this.economy.displayName());
     this.events.on('clothingEquipped', () => void this.refreshPlayerSkin());
     this.events.on('clothingPreviewChanged', ({ id }) => {
@@ -228,6 +230,11 @@ export class Game {
       void this.refreshPlayerSkin();
     });
     this.events.on('baseToneChanged', () => void this.refreshPlayerSkin());
+    this.events.on('characterGenderChanged', ({ gender }) => {
+      this.playerCharacter.setGender(gender);
+      this.closetCharacter.setGender(gender);
+      this.closetPreviewDirty = true;
+    });
     this.events.on('cosmeticEquipped', () => this.updateCosmeticAppearance());
     this.events.on('displayNameChanged', ({ name }) => this.playerCharacter.setName(name));
     // Closet UI: dolly the (single, shared) main camera onto the player's own

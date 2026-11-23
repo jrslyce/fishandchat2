@@ -22,6 +22,33 @@
         </div>
         <p id="title-tagline">A cozy fishing afternoon awaits.</p>
         <p id="title-welcome" class="hidden"></p>
+        <div id="title-character-select" role="radiogroup" aria-label="Choose your angler">
+          <p class="title-character-prompt">Choose your angler</p>
+          <div class="title-character-cards">
+            <button
+              id="title-select-male"
+              class="title-character-card selected"
+              type="button"
+              role="radio"
+              aria-checked="true"
+              data-character-gender="male"
+            >
+              <img class="title-character-thumb" src="./images/angler-male-card.png" alt="Male clay angler" width="56" height="56" />
+              <span class="title-character-name">Boy Angler</span>
+            </button>
+            <button
+              id="title-select-female"
+              class="title-character-card"
+              type="button"
+              role="radio"
+              aria-checked="false"
+              data-character-gender="female"
+            >
+              <img class="title-character-thumb" src="./images/angler-female-card.png" alt="Female clay angler" width="56" height="56" />
+              <span class="title-character-name">Girl Angler</span>
+            </button>
+          </div>
+        </div>
         <div id="title-loading">
           <div id="title-loading-bar"><div id="title-loading-fill"></div></div>
           <p id="title-loading-label">Loading&hellip;</p>
