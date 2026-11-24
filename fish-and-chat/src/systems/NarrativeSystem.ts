@@ -225,12 +225,15 @@ export class NarrativeSystem {
       existing.setAttribute('role', 'status');
       existing.setAttribute('aria-live', 'polite');
       existing.innerHTML = `
-        <div class="bubble-header">
-          <span class="bubble-speaker">Old Barnaby</span>
-          <span class="bubble-mood-badge">💬</span>
-        </div>
-        <div class="bubble-body">
-          <p class="bubble-text"></p>
+        <img class="bubble-avatar" src="./images/barnaby-portrait.png" alt="Old Barnaby" />
+        <div class="bubble-content">
+          <div class="bubble-header">
+            <span class="bubble-speaker">Old Barnaby</span>
+            <span class="bubble-mood-badge">💬</span>
+          </div>
+          <div class="bubble-body">
+            <p class="bubble-text"></p>
+          </div>
         </div>
         <button type="button" class="bubble-dismiss-btn" aria-label="Dismiss message">✕</button>
       `;

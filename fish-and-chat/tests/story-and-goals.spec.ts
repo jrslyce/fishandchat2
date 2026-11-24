@@ -10,10 +10,9 @@ test.describe('Story and Goals System & Stream Engagement', () => {
     await expect(page.locator('#title-screen')).toBeHidden({ timeout: 10000 });
   });
 
-  test('HUD renders weather pill and streak pill correctly', async ({ page }) => {
+  test('HUD hides weather pill and renders streak pill correctly', async ({ page }) => {
     const weatherPill = page.locator('#hud-weather-pill');
-    await expect(weatherPill).toBeVisible();
-    await expect(weatherPill).toContainText('Clear');
+    await expect(weatherPill).toHaveCount(0);
 
     // Test streak pill hidden at 0 streak
     const streakPill = page.locator('#hud-streak-pill');
@@ -28,7 +27,7 @@ test.describe('Story and Goals System & Stream Engagement', () => {
       game.ui.update();
     });
 
-    await expect(weatherPill).toContainText('Rain');
+    await expect(weatherPill).toHaveCount(0);
     await expect(streakPill).toBeVisible();
     await expect(streakPill).toContainText('🔥 2');
   });

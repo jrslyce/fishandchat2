@@ -91,7 +91,7 @@ export class PlayerCharacter {
     this.goldenRodMaterial = (this.pole.getObjectByName('rod-blank') as THREE.Mesh).material as THREE.MeshStandardMaterial;
 
     // Anchor the rod tip directly to the pole so world queries follow both fallback and clay pivots.
-    this.rodTipAnchor.position.set(0, -8.3, 29.2);
+    this.rodTipAnchor.position.set(0, -10.5, 31.8);
     this.pole.add(this.rodTipAnchor);
 
     this.poleHoldGroup.name = 'fishingPoleHoldGroup';
@@ -137,10 +137,10 @@ export class PlayerCharacter {
       this.clayBodyPivot.visible = true;
       this.player.visible = false;
 
-      // Seat the cork grip directly inside the right hand palm socket
+      // Seat the cork grip directly inside the sculpted closed fist socket
       this.poleHoldGroup.removeFromParent();
       this.poleHoldGroup.scale.setScalar(CHARACTER_SCALE);
-      this.poleHoldGroup.position.set(0.004, 10.5 * CHARACTER_SCALE, -1.0 * CHARACTER_SCALE);
+      this.poleHoldGroup.position.set(0, 10.5 * CHARACTER_SCALE, -1.0 * CHARACTER_SCALE);
       rig.rightHandSocket.add(this.poleHoldGroup);
 
       this.syncClayAccessorySockets();
@@ -306,8 +306,8 @@ export class PlayerCharacter {
   }
 
   /**
-   * Drives the articulated 7-bone clay rig while keeping `pelvisBone` and `clayBodyPivot`
-   * planted at y = 0 on the dock planks (zero floating or whole-statue tilting).
+   * Drives gentle Object3D rod & upper-body motion on the natural-stance clay figurine
+   * while keeping feet 100% planted on the dock planks at y = 0.
    */
   private updateClayFigurineAnimation(delta: number): void {
     const rig = this.clayRig;
@@ -316,144 +316,67 @@ export class PlayerCharacter {
     this.clayAnimClock += delta;
     const t = this.clayAnimClock;
 
-    // Keep feet & pelvis 100% planted on the dock at all times
+    // Keep feet & pivot 100% planted on the dock at all times
     this.clayBodyPivot.position.set(0, 0, 0);
     this.clayBodyPivot.rotation.set(0, 0, 0);
-    rig.pelvisBone.position.set(0, 0, 0);
-    rig.pelvisBone.rotation.set(0, 0, 0);
 
-    // Relaxed natural fishing stance defaults (arms brought down from 33 deg A-pose)
-    let spineRx = 0.02;
-    let spineRy = 0;
-    let spineRz = 0;
-
-    let headRx = 0;
-    let headRy = 0;
-    let headRz = 0;
-
-    // Left arm relaxed naturally by the angler's left side
-    let lUpperRx = -0.06;
-    let lUpperRy = 0;
-    let lUpperRz = -0.42;
-    let lForeRx = -0.10;
-    let lForeRz = -0.02;
-
-    // Right arm tucked down by the right ribs with forearm bent forward holding the rod
-    let rUpperRx = -0.26;
-    let rUpperRy = -0.08;
-    let rUpperRz = 0.38;
-    let rForeRx = -0.56;
-    let rForeRy = 0.10;
-    let rForeRz = 0.08;
-
-    // Rod pitch inside the gripping hand (counter-balances forearm forward bend so rod angles ~35 deg over water)
-    let rodRx = 0.28;
-    let rodRy = -0.04;
-    let rodRz = -0.10;
-    const poseKey = this.showcaseEnabled
-      ? 'showcase'
-      : this.pose === 'fishing'
-        ? `fishing:${this.fishAnim.pose}`
-        : this.pose;
+    let rodRx = -0.34;
+    let rodRy = -0.06;
+    let rodRz = 0.04;
+    let bodyRx = 0;
+    let bodyRy = 0;
 
     if (this.pose === 'idle') {
-      const breath = Math.sin(t * 2.0);
-      rodRx = 0.28 + breath * 0.025;
-      rodRy = -0.04 + Math.cos(t * 1.3) * 0.015;
+      const breath = Math.sin(t * 1.6);
+      rodRx = -0.32 + breath * 0.025;
+      rodRy = -0.06 + Math.cos(t * 1.3) * 0.015;
+      bodyRx = breath * 0.012;
     } else if (this.pose === 'walking') {
-      spineRx = 0.05;
-      lUpperRx = -0.18;
-      rUpperRx = -0.32;
-      rodRx = 0.22 + Math.sin(t * 7.0) * 0.10;
+      const stride = Math.sin(t * 7.5);
+      rodRx = -0.26 + Math.abs(stride) * 0.04;
+      bodyRx = 0.03;
+      bodyRy = stride * 0.04;
     } else if (this.pose === 'wave') {
-      // Friendly left-arm raised wave while feet stay planted on the dock
-      spineRz = -0.03;
-      headRz = 0.04;
-      headRy = 0.06;
-      lUpperRz = 0.55;
-      lUpperRx = -0.25;
-      lForeRx = -0.45;
-      lForeRz = 0.18;
-      const wavePhase = Math.max(0, 1.5 - this.waveTimer) * Math.PI * 4.0;
-      rodRx = 0.24 + Math.sin(wavePhase) * 0.06;
+      rodRx = -0.28;
+      bodyRy = Math.sin(t * 5) * 0.05;
     } else if (this.pose === 'fishing') {
       switch (this.fishAnim.pose) {
         case 'aiming':
-          // Draw right arm & rod back over the right shoulder to wind up the cast
-          spineRx = -0.08;
-          spineRy = -0.10;
-          headRx = -0.06;
-          rUpperRx = -0.68;
-          rUpperRz = 0.32;
-          rForeRx = -0.78;
-          rodRx = 0.15 + Math.sin(t * 5.5) * 0.04;
+          bodyRx = -0.06;
+          rodRx = -0.78 + Math.sin(t * 5.5) * 0.04;
           break;
         case 'casting':
-          // Snap right arm and forearm forward to launch the bobber
-          spineRx = 0.12;
-          spineRy = 0.08;
-          headRx = 0.05;
-          rUpperRx = -0.45;
-          rForeRx = -0.15;
-          rodRx = 0.85;
+          bodyRx = 0.08;
+          rodRx = 0.12;
           break;
         case 'waiting': {
           const breath = Math.sin(t * 1.7);
-          spineRx = 0.03;
-          rForeRx = -0.58;
-          rodRx = 0.26 + breath * 0.035;
+          rodRx = -0.40 + breath * 0.03;
           break;
         }
         case 'bite':
-          // Sharp tug on the line pulls the forearm & rod tip down-forward
-          spineRx = 0.06;
-          rUpperRx = -0.34;
-          rForeRx = -0.48;
-          rodRx = 0.42 + Math.sin(t * 18) * 0.18;
-          rodRz = -0.10 + Math.cos(t * 14) * 0.06;
+          bodyRx = 0.05;
+          rodRx = -0.14 + Math.sin(t * 18) * 0.16;
+          rodRz = 0.04 + Math.cos(t * 14) * 0.05;
           break;
         case 'resolving':
-          // Pumping the rod & reeling in
-          spineRx = -0.08;
-          rUpperRx = -0.52;
-          rForeRx = -0.72;
-          rodRx = 0.18 + Math.sin(t * 10) * 0.20;
+          bodyRx = -0.05;
+          rodRx = -0.52 + Math.sin(t * 10) * 0.16;
           break;
       }
     }
 
     if (this.showcaseEnabled) {
-      // Closet studio: relaxed front-facing portrait pose with rod held neatly at the right side
       const breath = Math.sin(t * 1.6);
-      spineRx = 0.01;
-      spineRy = 0;
-      spineRz = 0;
-      headRx = 0;
-      headRy = 0;
-      headRz = 0;
-      lUpperRx = -0.05;
-      lUpperRz = -0.40;
-      lForeRx = -0.10;
-      lForeRz = -0.02;
-      rUpperRx = -0.22;
-      rUpperRy = -0.12;
-      rUpperRz = 0.34;
-      rForeRx = -0.52;
-      rForeRy = 0.06;
-      rForeRz = 0.06;
-      rodRx = 0.22 + breath * 0.025;
-      rodRy = -0.18;
-      rodRz = -0.12;
+      bodyRx = 0;
+      bodyRy = 0;
+      rodRx = -0.38 + breath * 0.025;
+      rodRy = 0.46;
+      rodRz = 0;
     }
 
-    rig.spineBone.rotation.set(spineRx, spineRy, spineRz);
-    rig.headBone.rotation.set(headRx, headRy, headRz);
-    rig.leftUpperArmBone.rotation.set(lUpperRx, lUpperRy, lUpperRz);
-    rig.leftForearmBone.rotation.set(lForeRx, 0, lForeRz);
-    rig.rightUpperArmBone.rotation.set(rUpperRx, rUpperRy, rUpperRz);
-    rig.rightForearmBone.rotation.set(rForeRx, rForeRy, rForeRz);
+    rig.root.rotation.set(bodyRx, bodyRy, 0);
     rig.rightHandSocket.rotation.set(rodRx, rodRy, rodRz);
-    rig.applyPose(poseKey);
   }
 
   update(delta: number): void {
@@ -527,7 +450,7 @@ function buildFishingPole(): THREE.Group {
   reel.castShadow = true;
   pole.add(reel);
 
-  // Carved honey-bamboo shaft tapering smoothly toward tip
+  // Carved honey-bamboo shaft tapering smoothly toward tip (colinear with cork handle)
   const blankMat = new THREE.MeshStandardMaterial({
     color: CLAY_DEFAULT_ROD_COLOR,
     roughness: 0.65,
@@ -536,21 +459,21 @@ function buildFishingPole(): THREE.Group {
   const blankGeo = new THREE.CylinderGeometry(0.14, 0.40, 28, 10);
   const blank = new THREE.Mesh(blankGeo, blankMat);
   blank.name = 'rod-blank';
-  blank.rotation.x = Math.PI / 2 + 0.06;
-  blank.position.set(0, -9.6, 15.0);
+  blank.rotation.x = Math.PI / 2;
+  blank.position.set(0, -10.5, 17.5);
   blank.castShadow = true;
   pole.add(blank);
 
-  // Lacquered coral-red tip guide
+  // Lacquered coral-red tip guide seated flush on the shaft tip
   const tipMat = new THREE.MeshStandardMaterial({
     color: CLAY_DEFAULT_TIP_COLOR,
     roughness: 0.45,
   });
-  const tipRingGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.7, 10);
+  const tipRingGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.7, 10);
   const tipRing = new THREE.Mesh(tipRingGeo, tipMat);
   tipRing.name = 'rod-tip';
   tipRing.rotation.x = Math.PI / 2;
-  tipRing.position.set(0, -8.3, 29.0);
+  tipRing.position.set(0, -10.5, 31.5);
   pole.add(tipRing);
 
   return pole;

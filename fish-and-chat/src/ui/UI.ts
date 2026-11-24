@@ -40,7 +40,7 @@ import { STORY_CHAPTERS } from '../game/StoryGoals';
 import { LORE_BOTTLES, getLoreBottle } from '../game/LoreBottles';
 import { CURIO_RELICS } from '../game/RelicSystem';
 
-type ModalId = 'shop' | 'market' | 'craft' | 'collection' | 'settings' | 'candy' | 'closet' | 'skills' | 'quests' | 'debug' | null;
+type ModalId = 'shop' | 'market' | 'craft' | 'collection' | 'settings' | 'candy' | 'closet' | 'skills' | 'quests' | 'guide' | 'debug' | null;
 
 const ICON = {
   coin: './images/icons/coin.png',
@@ -146,7 +146,6 @@ export class UI {
   private readonly tutorialBubbleContent: HTMLElement;
   private readonly tutorialDownTriangle: HTMLElement;
   private readonly basketBadge: HTMLButtonElement;
-  private readonly hudWeatherPill: HTMLElement;
   private readonly hudStreakPill: HTMLElement;
   private readonly hudCommunityPill: HTMLElement;
   private readonly hudCommunityText: HTMLElement;
@@ -169,6 +168,9 @@ export class UI {
 
   private openModal: ModalId = null;
   private railExpanded = false;
+  private uiTourStep = -1;
+  private uiTourOpenedRail = false;
+  private lastUiTourHighlightStep = -2;
   private toastTimeout: number | null = null;
   private catchCardTimeout: number | null = null;
   private resetArmed = false;
@@ -205,7 +207,6 @@ export class UI {
           <div id="hud-xp-bar"><div id="hud-xp-fill"></div></div>
         </div>
         <div id="hud-pills">
-          <div class="hud-pill" id="hud-weather-pill" title="Current Weather">☀️ Clear</div>
           <div class="hud-pill hidden" id="hud-streak-pill" title="Catch Streak">🔥 0</div>
           <button class="hud-pill hud-pill-button" id="hud-community-pill" type="button" title="Channel Boss Raid">⚓ <span id="hud-community-text">Boss Raid</span><div id="hud-community-progress"><div id="hud-community-fill" style="width: 0%"></div></div></button>
           <div class="hud-pill hidden" id="hud-lucky-ducky-pill">🦆 <span id="hud-lucky-ducky-timer">0:00</span></div>
@@ -215,7 +216,10 @@ export class UI {
       </div>
 
       <div id="hud-rail">
-        <button class="rail-btn" id="rail-toggle" type="button" aria-label="Menu" aria-expanded="false"><span class="gear-glyph">&#9776;</span></button>
+        <div class="rail-toggle-stack">
+          <button class="rail-btn" id="rail-toggle" type="button" aria-label="Menu" aria-expanded="false"><span class="gear-glyph">&#9776;</span></button>
+          <button class="rail-btn rail-btn-guide" id="btn-quick-guide" type="button" aria-label="Game Guide" title="How to Play & UI Guide">?</button>
+        </div>
         <div id="hud-rail-items" class="hidden">
           <button class="rail-btn" id="btn-quests" type="button" aria-label="Story & Quests"><span class="gear-glyph">📜</span></button>
           <button class="rail-btn" id="btn-shop" type="button" aria-label="Shop">${icon(ICON.bait, 'Shop')}</button>
@@ -226,6 +230,7 @@ export class UI {
           <button class="rail-btn" id="btn-collection" type="button" aria-label="Big Fish Tails Scrap Book" title="Big Fish Tails Scrap Book"><span class="gear-glyph">📖</span></button>
           <button class="rail-btn" id="btn-skills" type="button" aria-label="Skills"><span class="gear-glyph">&#11088;</span></button>
           <button class="rail-btn" id="btn-settings" type="button" aria-label="Settings"><span class="gear-glyph">&#9881;</span></button>
+          <button class="rail-btn" id="btn-guide" type="button" aria-label="UI Guide & Tour" title="UI Guide & Tour"><span class="gear-glyph">❓</span></button>
         </div>
       </div>
 
@@ -268,7 +273,6 @@ export class UI {
     this.hudCoins = this.el('#hud-coins');
     this.hudCandyBars = this.el('#hud-candy-bars');
     this.hudBasketCount = this.el('#hud-basket-count');
-    this.hudWeatherPill = this.el('#hud-weather-pill');
     this.hudStreakPill = this.el('#hud-streak-pill');
     this.hudCommunityPill = this.el('#hud-community-pill');
     this.hudCommunityText = this.el('#hud-community-text');
@@ -313,6 +317,8 @@ export class UI {
     this.el('#btn-collection').addEventListener('click', () => railSelect('collection'));
     this.el('#btn-skills').addEventListener('click', () => railSelect('skills'));
     this.el('#btn-settings').addEventListener('click', () => railSelect('settings'));
+    this.el('#btn-guide').addEventListener('click', () => railSelect('guide'));
+    this.el('#btn-quick-guide').addEventListener('click', () => this.toggleModal('guide'));
     this.el('#btn-debug').addEventListener('click', () => this.toggleModal('debug'));
     this.el('#hud-candy-pill').addEventListener('click', () => this.toggleModal('candy'));
     this.hudCommunityPill.addEventListener('click', () => {
@@ -356,6 +362,10 @@ export class UI {
     // Clicking the bubble itself dismisses it early (or opens market if basket is full, or advances bait tutorial)
     const onTutorialBubbleClick = (e: Event) => {
       e.stopPropagation();
+      if (this.uiTourStep >= 0) {
+        this.advanceUiTour();
+        return;
+      }
       if (this.economy.basketFull() || this.inBasketTutorial) {
         this.toggleModal('market');
         return;
@@ -390,6 +400,7 @@ export class UI {
       this.renderTutorialBubble(this.gameState.getPhase());
     };
 
+    this.tutorialBubble.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.tutorialBubbleText.addEventListener('click', onTutorialBubbleClick);
     this.tutorialBubble.addEventListener('click', onTutorialBubbleClick);
 
@@ -874,21 +885,6 @@ export class UI {
       }
     }
 
-    if (this.hudWeatherPill) {
-      const weather = this.livingWorld ? this.livingWorld.getWeather() : 'clear';
-      const weatherLabels: Record<WeatherType, string> = {
-        clear: '☀️ Clear',
-        rain: '🌧️ Rain',
-        fog: '🌫️ Fog',
-        'golden-hour': '🌅 Golden',
-        rainbow: '🌈 Rainbow',
-      };
-      const text = weatherLabels[weather] ?? '☀️ Clear';
-      if (this.hudWeatherPill.textContent !== text) {
-        this.hudWeatherPill.textContent = text;
-      }
-    }
-
     if (this.hudStreakPill) {
       const streak = this.economy.catchStreak();
       const text = `🔥 ${streak}`;
@@ -957,7 +953,16 @@ export class UI {
       !this.dismissedFirstEscapeBubble &&
       (phase === 'missed' || phase === 'idle' || phase === 'aiming');
 
-    if (!this.openModal && (this.economy.basketFull() || (this.inBasketTutorial && this.economy.snapshot.basket.length > 0))) {
+    if (!this.openModal && this.uiTourStep >= 0) {
+      const step = this.getUiTourSteps()[this.uiTourStep];
+      if (step) {
+        text = `(${this.uiTourStep + 1}/${this.getUiTourSteps().length}) ${step.text} Tap to continue.`;
+        showDownTriangle = true;
+      }
+      if (this.lastUiTourHighlightStep !== this.uiTourStep) {
+        this.syncUiTourHighlights();
+      }
+    } else if (!this.openModal && (this.economy.basketFull() || (this.inBasketTutorial && this.economy.snapshot.basket.length > 0))) {
       text = 'Your basket is full! Tap the basket in the bottom left to visit the market.';
       isBasketTutorial = true;
     } else if (!this.openModal && inBaitTutorial) {
@@ -994,7 +999,9 @@ export class UI {
     }
 
     if (text) {
-      this.tutorialBubbleContent.textContent = text;
+      if (this.tutorialBubbleContent.textContent !== text) {
+        this.tutorialBubbleContent.textContent = text;
+      }
       this.tutorialBubble.dataset.clothingTip = text.includes('Tap here to find it.') ? this.weatherClothingTipId ?? '' : '';
       this.tutorialBubble.classList.remove('hidden');
       if (showDownTriangle) {
@@ -1292,6 +1299,7 @@ export class UI {
     else if (this.openModal === 'settings') this.renderSettings();
     else if (this.openModal === 'skills') this.renderSkills();
     else if (this.openModal === 'quests') this.renderQuests();
+    else if (this.openModal === 'guide') this.renderGuide();
     else if (this.openModal === 'debug') this.renderDebug();
     const newModalBody = this.modalHost.querySelector('.modal-body');
     if (newModalBody) newModalBody.scrollTop = scrollTop;
@@ -1744,6 +1752,158 @@ export class UI {
     this.bindModalActions();
   }
 
+  private getUiTourSteps(): Array<{ text: string; selectors: string[]; expandRail?: boolean }> {
+    return [
+      {
+        text: 'Anchor (⚓) is the Channel Boss Raid! Every fish you & chat catch fills this gauge for a group reward. Tap ⚓ anytime to open Boss Raids.',
+        selectors: ['#hud-community-pill'],
+      },
+      {
+        text: 'Top Bar shows your Level & XP (unlocking Sunset Pier at Lv 10 & Moonlit Cove at Lv 20), plus Coins and Candy Bars.',
+        selectors: ['#hud-level-block', '#hud-coins-pill', '#hud-candy-pill'],
+      },
+      {
+        text: 'Tap ☰ Menu anytime to open or close all game areas — Shops, Closet, Quests, Crafting, Skills, and more!',
+        selectors: ['#rail-toggle'],
+      },
+      {
+        text: 'Economy & Gear: 📜 Story/Quests & Boss Raids, 🪱 Shop (bait & Fishbots), 🪙 Market (sell fish), 🔨 Craft upgrades, 🍫 Candy Shop.',
+        selectors: ['#btn-quests', '#btn-shop', '#btn-market', '#btn-craft', '#btn-candy'],
+        expandRail: true,
+      },
+      {
+        text: 'Character & Progress: 👤 Closet (Boy/Girl & outfits), 📖 Scrap Book (catch log), ⭐ Skills, ⚙️ Settings, and ❓ Guide.',
+        selectors: ['#btn-closet', '#btn-collection', '#btn-skills', '#btn-settings', '#btn-guide'],
+        expandRail: true,
+      },
+      {
+        text: 'Right Bait Bar lets you quick-switch lures anytime. Tap a bait to equip it!',
+        selectors: ['#hud-bait-bar'],
+      },
+      {
+        text: 'Bottom-left Fish Basket holds your catch. Tap it anytime to inspect fish or sell them at the Market! Reopen ❓ Guide anytime.',
+        selectors: ['#basket-badge'],
+      },
+    ];
+  }
+
+  private startUiTour(): void {
+    this.closeModal();
+    this.uiTourStep = 0;
+    this.uiTourOpenedRail = false;
+    this.renderTutorialBubble(this.gameState.getPhase());
+  }
+
+  private advanceUiTour(): void {
+    const steps = this.getUiTourSteps();
+    if (this.uiTourStep < 0) return;
+    if (this.uiTourStep + 1 >= steps.length) {
+      this.endUiTour();
+      return;
+    }
+    this.uiTourStep += 1;
+    this.renderTutorialBubble(this.gameState.getPhase());
+  }
+
+  private endUiTour(): void {
+    this.uiTourStep = -1;
+    this.lastUiTourHighlightStep = -2;
+    if (this.uiTourOpenedRail) {
+      this.collapseRail();
+      this.uiTourOpenedRail = false;
+    }
+    this.clearUiTourHighlights();
+    this.renderTutorialBubble(this.gameState.getPhase());
+  }
+
+  private clearUiTourHighlights(): void {
+    this.root.querySelectorAll('.tour-highlight-target').forEach((el) => {
+      el.classList.remove('tutorial-flash-stroke', 'tour-highlight-target');
+    });
+  }
+
+  private syncUiTourHighlights(): void {
+    this.clearUiTourHighlights();
+    this.lastUiTourHighlightStep = this.uiTourStep;
+    if (this.uiTourStep < 0 || this.openModal) return;
+    const step = this.getUiTourSteps()[this.uiTourStep];
+    if (!step) return;
+    if (step.expandRail && !this.railExpanded) {
+      this.railExpanded = true;
+      this.railItems.classList.remove('hidden');
+      this.railToggle.setAttribute('aria-expanded', 'true');
+      this.uiTourOpenedRail = true;
+    } else if (!step.expandRail && this.uiTourOpenedRail) {
+      this.collapseRail();
+      this.uiTourOpenedRail = false;
+    }
+    for (const selector of step.selectors) {
+      const target = this.root.querySelector(selector);
+      if (target) {
+        target.classList.add('tutorial-flash-stroke', 'tour-highlight-target');
+      }
+    }
+  }
+
+  private renderGuide(): void {
+    const body = `
+      <div class="guide-hero-card">
+        <div class="guide-hero-row">
+          <img class="barnaby-portrait" src="./images/barnaby-portrait.png" alt="Old Barnaby" />
+          <div>
+            <strong>Old Barnaby&rsquo;s Dock Guide</strong>
+            <p class="row-meta" style="margin:2px 0 0;">Learn what every icon, gauge, and menu section does.</p>
+          </div>
+        </div>
+        <div class="tour-actions-row">
+          <button type="button" class="btn-small" id="btn-start-ui-tour" style="flex:1;">🧭 Start Interactive UI Tour</button>
+        </div>
+      </div>
+
+      <h4 class="guide-section-title">Top HUD &amp; Anchor</h4>
+      <div class="guide-list">
+        <div class="guide-item">
+          <span class="guide-item-icon">⚓</span>
+          <div class="guide-item-copy"><strong>Anchor Pill (Channel Boss Raid):</strong> Tracks the shared Boss Raid progress! Every fish you and stream chat catch (plus Cheers) fills this gauge. Reach 100% to defeat the Boss for a group reward. Tap <strong>⚓</strong> anytime to open the <strong>Boss Raids</strong> tab.</div>
+        </div>
+        <div class="guide-item">
+          <span class="guide-item-icon">⭐</span>
+          <div class="guide-item-copy"><strong>Level &amp; XP Bar:</strong> Catching fish earns XP. Reaching <strong>Lv 10</strong> unlocks Sunset Pier and <strong>Lv 20</strong> unlocks Moonlit Cove!</div>
+        </div>
+        <div class="guide-item">
+          <span class="guide-item-icon">🪙</span>
+          <div class="guide-item-copy"><strong>Coins &amp; 🍫 Candy Bars:</strong> Sell fish at the Market for Coins, and use Candy Bars (tap 🍫) for cosmetics &amp; stream boosts.</div>
+        </div>
+      </div>
+
+      <h4 class="guide-section-title">Opening the Menu (☰) &amp; Sections</h4>
+      <div class="guide-list">
+        <div class="guide-item">
+          <span class="guide-item-icon">☰</span>
+          <div class="guide-item-copy"><strong>Menu Button:</strong> Tap <strong>☰</strong> on the upper right to expand or collapse all 10 game sections below:</div>
+        </div>
+        <div class="guide-item"><span class="guide-item-icon">📜</span><div class="guide-item-copy"><strong>Story &amp; Quests:</strong> Barnaby&rsquo;s story chapters, daily quests, milestones, Channel Boss Raids, and lore bottles.</div></div>
+        <div class="guide-item"><span class="guide-item-icon">🪱</span><div class="guide-item-copy"><strong>Shop:</strong> Buy stronger baits for rarer fish, hire automated Fishbots, and recycle pond trash.</div></div>
+        <div class="guide-item"><span class="guide-item-icon">🪙</span><div class="guide-item-copy"><strong>Market:</strong> Sell caught fish from your basket for Coins and use the Sorter Tray.</div></div>
+        <div class="guide-item"><span class="guide-item-icon">🔨</span><div class="guide-item-copy"><strong>Crafting Bench:</strong> Turn recycled trash into materials and craft Rod, Line, Reel, and Luck upgrades.</div></div>
+        <div class="guide-item"><span class="guide-item-icon">🍫</span><div class="guide-item-copy"><strong>Candy Bar Shop:</strong> Unlock premium outfits, the Bottomless Tackle Box, and channel-wide cheers.</div></div>
+        <div class="guide-item"><span class="guide-item-icon">👤</span><div class="guide-item-copy"><strong>Closet:</strong> Switch between Boy &amp; Girl Angler, pick skin tones, and equip hats &amp; outfits in 3D.</div></div>
+        <div class="guide-item"><span class="guide-item-icon">📖</span><div class="guide-item-copy"><strong>Scrap Book:</strong> Big Fish Tails collection log showing every species caught and your heaviest records.</div></div>
+        <div class="guide-item"><span class="guide-item-icon">⭐</span><div class="guide-item-copy"><strong>Skills:</strong> Spend Skill Points on perks (Brawler, Patience, Trapper, Charmer, Tactician) and Prestige.</div></div>
+        <div class="guide-item"><span class="guide-item-icon">⚙️</span><div class="guide-item-copy"><strong>Settings:</strong> Adjust Master, SFX, and Ambience volume sliders or set a display name.</div></div>
+      </div>
+
+      <h4 class="guide-section-title">Dock Controls</h4>
+      <div class="guide-list">
+        <div class="guide-item"><span class="guide-item-icon">🎣</span><div class="guide-item-copy"><strong>Bait Bar (Right Edge):</strong> Tap any owned bait icon to equip it immediately before casting.</div></div>
+        <div class="guide-item"><span class="guide-item-icon">🧺</span><div class="guide-item-copy"><strong>Fish Basket (Bottom-Left):</strong> Shows how full your basket is. Tap it anytime to open the Market and sell!</div></div>
+      </div>
+    `;
+    this.modalHost.innerHTML = this.modalShell('How to Play & UI Guide', body);
+    this.el('#btn-start-ui-tour').addEventListener('click', () => this.startUiTour());
+    this.bindModalActions();
+  }
+
   private renderDebug(): void {
     const perfectCastOn = this.gameState.debugPerfectCastMode;
     const autoFishOn = this.gameState.autoFishingEnabled;
@@ -1872,6 +2032,15 @@ export class UI {
           <li class="row">
             <div class="row-body"><strong>Start Tutorial</strong><span class="row-meta">Resets tutorial progress to cast 1.</span></div>
             <div class="row-actions"><button class="btn-small" data-action="debug-start-tutorial">Start</button></div>
+          </li>
+          <li class="row">
+            <div class="row-body">
+              <strong>Interactive UI Tour</strong>
+              <span class="row-meta">Step through Barnaby&rsquo;s guided tour of the Anchor, Menu, and HUD.</span>
+            </div>
+            <div class="row-actions">
+              <button class="btn-small" data-action="debug-start-ui-tour">Start Tour</button>
+            </div>
           </li>
         </ul>
       `,
@@ -2951,6 +3120,10 @@ export class UI {
           else this.craftingSystem.purchaseBoxOfNotFish(contents);
         }
         else if (action === 'buy-clothing') this.craftingSystem.purchaseClothing(id);
+        else if (action === 'debug-start-ui-tour') {
+          this.startUiTour();
+          return;
+        }
         else if (action === 'open-candy-shop-from-closet') {
           this.closetReturnPreviewId = id || this.previewClothingId;
           this.returnToClosetFromCandy = true;
